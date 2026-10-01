@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+
+{% block title %}{{ section_title }}{% endblock %}
+{% block body_class %}case-work{% endblock %}
+
+{% block content %}
+<nav class="breadcrumb" aria-label="Πλοήγηση">
+    <a href="{% url 'cases:list' %}">Αιτήσεις Κ.Σ. / Δ.Δ.</a>
+    <span>/</span>
+    <a href="{% url 'cases:detail' case.pk %}">{{ case.case_number }}</a>
+    <span>/</span>
+    <span>Γνωστοποίηση {{ cycle.announcement_date }}</span>
+</nav>
+
+<div class="case-work-layout">
+<div class="case-work-layout__main">
+
+<div class="page-header">
+    <h1>{{ section_title }}</h1>
+    <p class="page-header__lead">
+        {{ cycle.community.name }} · περίοδος υποβολής {{ cycle.submission_start_date }} –
+        {{ cycle.submission_end_date }} · διαθέσιμα οικόπεδα {{ cycle.available_plots_count }}
+    </p>
+</div>
+
+<div class="card">
+    <h2 class="card__title">9.1 Στοιχεία γνωστοποίησης</h2>
+    <dl class="detail-grid">
+        <div>
+            <dt>Κατάσταση</dt>
+            <dd>
+                {% if cycle.is_published %}
+                <span class="badge badge--pass">Εκδόθηκε {{ cycle.published_at }}</span>
+                {% else %}
+                <span class="badge badge--pending">Προσχέδιο</span>
+                {% endif %}
+            </dd>
+        </div>
+        <div>
+            <dt>Ημερομηνία γνωστοποίησης</dt>
+            <dd>{{ cycle.announcement_date }}</dd>
+        </div>
+        <div>
+            <dt>Αριθμός διαθέσιμων οικοπέδων</dt>
+            <dd>{{ cycle.available_plots_count }} <span class="text-muted">(αυτόματα από 8.8)</span></dd>
+        </div>
+        <div>
+            <dt>Υποθέσεις</dt>
+            <dd>
+                {% for linked in cycle.cases.all %}
+                {{ linked.case_number }} <span class="text-muted">({{ linked.get_case_type_display }})</span><br>
+                {% endfor %}
+            </dd>
+        </div>
+    </dl>
+</div>
+
+<div class="card">
+    <h2 class="card__title">9.4 Έλεγχος ετοιμότητας ανά υπόθεση</h2>
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead>
+            <tr>
+                <th>Υπόθεση</th>
+                {% for label, ready in readiness_by_case.0.1.rows %}<th>{{ label }}</th>{% endfor %}
+                <th>Δυνατότητα έναρξης</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for linked, readiness in readiness_by_case %}
+                <tr>
+                    <td><strong>{{ linked.case_number }}</strong></td>
+                    {% for label, ready in readiness.rows %}
+                    <td>{% if ready %}<span class="badge badge--pass">ΝΑΙ</span>{% else %}<span class="badge badge--fail">ΟΧΙ</span>{% endif %}</td>
+                    {% endfor %}
+                    <td>{% if readiness.can_start %}<span class="badge badge--pass">ΝΑΙ</span>{% else %}<span class="badge badge--fail">ΟΧΙ</span>{% endif %}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<form method="post" class="app-form" novalidate>
+    {% csrf_token %}
+
+    <div class="card">
+        <h2 class="card__title">9.2 Τρόποι δημοσίευσης / γνωστοποίησης</h2>
+        <fieldset class="child-formset">
+            <legend>Πολλαπλή επιλογή, με ημερομηνία ανά τρόπο</legend>
+            {{ publications.management_form }}
+            {% if publications.non_form_errors %}
+            <div class="alert alert--error">
+                {% for error in publications.non_form_errors %}{{ error }}{% endfor %}
+            </div>
+            {% endif %}
+            {% for child in publications %}
+            <div class="formset-row">
+                {% for hidden in child.hidden_fields %}{{ hidden }}{% endfor %}
+                <div class="form-grid">
+                    {% for field in child.visible_fields %}
+                        {% include "includes/form_field.html" with field=field %}
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </fieldset>
+    </div>
+
+    <div class="card">
+        <h2 class="card__title">9.3 Δημιουργία και έκδοση ανακοίνωσης</h2>
+        <p class="text-muted">
+            Το προσχέδιο παράγεται αυτόματα από τα στοιχεία της υπόθεσης και την περίοδο υποβολής.
+            Το ακριβές εγκεκριμένο πρότυπο κείμενο εκκρεμεί (Ε-68).
+        </p>
+        <div class="form-grid">
+            {% include "includes/form_field.html" with field=text_form.announcement_text wide=True %}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="form-actions" style="margin-top: 0; padding-top: 0; border-top: none;">
+            {% if not cycle.is_published %}
+            <button type="submit" class="btn btn-primary">Αποθήκευση</button>
+            {% endif %}
+            <a href="{% url 'cases:detail' case.pk %}" class="btn btn-secondary">Πίσω στην υπόθεση</a>
+        </div>
+    </div>
+</form>
+
+{% if not cycle.is_published %}
+<div class="card">
+    <h2 class="card__title">Ενέργειες ανακοίνωσης</h2>
+    <div class="toolbar">
+        <form method="post" action="{% url 'cases:announcement_regenerate' case.pk cycle.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-secondary">Νέο προσχέδιο από τα στοιχεία</button>
+        </form>
+        <form method="post" action="{% url 'cases:announcement_publish' case.pk cycle.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-primary">Οριστικοποίηση και έκδοση</button>
+        </form>
+    </div>
+    <p class="helptext">
+        Η έκδοση επιτρέπεται μόνο όταν ο έλεγχος ετοιμότητας (9.4) δίνει ΝΑΙ για κάθε
+        συνδεδεμένη υπόθεση.
+    </p>
+</div>
+{% else %}
+<div class="card">
+    <h2 class="card__title">Εκδοθείσα ανακοίνωση</h2>
+    <p class="form-readonly" style="white-space: pre-wrap;">{{ cycle.announcement_text }}</p>
+</div>
+{% endif %}
+
+</div>
+{% include "cases/_case_actions_sidebar.html" %}
+</div>
+{% endblock %}

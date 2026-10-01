@@ -1,0 +1,15 @@
+---
+description: View/template behavior and UI conventions
+globs:
+  - "**/views*.py"
+  - "**/templates/**/*.html"
+alwaysApply: false
+---
+
+# Views and Templates Rule
+
+- Use Greek labels and section headings for user-facing screens.
+- Keep section numbering visible in relevant screens (for example `10.1`, `10.4.6`).
+- Record pages should expose history access (direct tab/section or link to filtered history).
+- Enforce role/permission checks in views and actions.
+- Keep forms explicit and traceable to requirement fields; avoid hidden business logic in templates.

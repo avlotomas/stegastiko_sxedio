@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}{{ section_title }}{% endblock %}
+{% block body_class %}case-work{% endblock %}
+
+{% block content %}
+<nav class="breadcrumb" aria-label="Πλοήγηση">
+    <a href="{% url 'cases:list' %}">Αιτήσεις Κ.Σ. / Δ.Δ.</a>
+    <span>/</span>
+    <a href="{% url 'cases:detail' case.pk %}">{{ case.case_number }}</a>
+    <span>/</span>
+    <span>Νέα γνωστοποίηση</span>
+</nav>
+
+<div class="case-work-layout">
+<div class="case-work-layout__main">
+
+<div class="page-header">
+    <h1>{{ section_title }}</h1>
+    <p class="page-header__lead">
+        Η γνωστοποίηση καταχωρείται σε επίπεδο Κοινότητας και μπορεί να καλύπτει περισσότερες
+        υποθέσεις της {{ case.community.name }}, ώστε τα διαθέσιμα οικόπεδα να προέρχονται
+        τόσο από παλαιό όσο και από νέο διαχωρισμό.
+    </p>
+</div>
+
+<div class="card">
+    <h2 class="card__title">9.4 Έλεγχος ετοιμότητας — {{ case.case_number }}</h2>
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead><tr><th>Προϋπόθεση</th><th>Αποτέλεσμα</th></tr></thead>
+            <tbody>
+            {% for label, ready in readiness.rows %}
+                <tr>
+                    <td>{{ label }}</td>
+                    <td>{% if ready %}<span class="badge badge--pass">ΝΑΙ</span>{% else %}<span class="badge badge--fail">ΟΧΙ</span>{% endif %}</td>
+                </tr>
+            {% endfor %}
+            <tr>
+                <td><strong>Δυνατότητα έναρξης</strong></td>
+                <td>{% if readiness.can_start %}<span class="badge badge--pass">ΝΑΙ</span>{% else %}<span class="badge badge--fail">ΟΧΙ</span>{% endif %}</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+    {% if not readiness.can_start %}
+    <div class="alert alert--warning" style="margin-top: 1rem;">
+        Η γνωστοποίηση μπορεί να καταχωριστεί ως προσχέδιο, αλλά <strong>δεν εκδίδεται</strong>
+        μέχρι να πληρούνται όλες οι προϋποθέσεις της 9.4.
+    </div>
+    {% endif %}
+</div>
+
+<div class="card">
+<form method="post" class="app-form" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+    <div class="alert alert--error form-span-all">
+        {% for error in form.non_field_errors %}{{ error }}{% endfor %}
+    </div>
+    {% endif %}
+
+    <h3 class="form-section-title">9.1 Βασικά στοιχεία</h3>
+    <p class="form-readonly">
+        Επαρχία {{ case.community.district }} · Κοινότητα/Δ.Δ. {{ case.community.name }} ·
+        τύπος διαδικασίας {{ case.get_case_type_display }} ·
+        ο αριθμός διαθέσιμων οικοπέδων υπολογίζεται αυτόματα από τις συνδεδεμένες υποθέσεις.
+    </p>
+    <div class="form-grid">
+        {% include "includes/form_field.html" with field=form.cases wide=True %}
+        {% include "includes/form_field.html" with field=form.announcement_date %}
+        {% include "includes/form_field.html" with field=form.submission_start_date %}
+        {% include "includes/form_field.html" with field=form.submission_end_date %}
+        {% include "includes/form_field.html" with field=form.comments wide=True %}
+    </div>
+
+    <div class="form-actions form-span-all">
+        <button type="submit" class="btn btn-primary">Δημιουργία γνωστοποίησης</button>
+        <a href="{% url 'cases:detail' case.pk %}" class="btn btn-secondary">Ακύρωση</a>
+    </div>
+</form>
+</div>
+
+</div>
+{% include "cases/_case_actions_sidebar.html" %}
+</div>
+{% endblock %}

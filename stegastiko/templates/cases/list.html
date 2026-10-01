@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}Αιτήσεις Κ.Σ. / Δ.Δ.{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Αιτήσεις Κ.Σ. / Δ.Δ. — Διαχωρισμός</h1>
+    <p class="page-header__lead">
+        Ενότητες 1–9: αιτήσεις Κοινοτικού Συμβουλίου / Δημοτικού Διαμερίσματος για διαχωρισμό
+        κρατικής γης σε οικόπεδα, και υποθέσεις αδιάθετων οικοπέδων.
+    </p>
+</div>
+
+<div class="toolbar">
+    <a href="{% url 'cases:create' %}" class="btn btn-primary">Νέα αίτηση Κ.Σ. / Δ.Δ.</a>
+</div>
+
+<div class="card">
+    <h2 class="card__title">Αναζήτηση</h2>
+    <form method="get" class="filter-form">
+        <div>
+            <label for="community_id">Κοινότητα</label>
+            <select name="community_id" id="community_id">
+                <option value="">Όλες</option>
+                {% for community in communities %}
+                    <option value="{{ community.id }}" {% if community_id == community.id|stringformat:"s" %}selected{% endif %}>
+                        {{ community.name }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="case_type">Τύπος διαδικασίας</label>
+            <select name="case_type" id="case_type">
+                <option value="">Όλοι</option>
+                {% for value, label in case_types %}
+                    <option value="{{ value }}" {% if case_type == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="q">Αρ. υπόθεσης</label>
+            <input type="text" name="q" id="q" value="{{ q }}" placeholder="π.χ. CASE-001-2026-01">
+        </div>
+        <div>
+            <button type="submit" class="btn btn-primary">Αναζήτηση</button>
+        </div>
+    </form>
+</div>
+
+<div class="table-wrap">
+    <table class="data-table">
+        <thead>
+        <tr>
+            <th>Αρ. υπόθεσης</th>
+            <th>Κοινότητα</th>
+            <th>Τύπος διαδικασίας</th>
+            <th>Έναρξη</th>
+            <th>Υποβολή Κ.Σ.</th>
+            <th>Πληρότητα (2)</th>
+            <th>Απόφαση ΥΠΕΣ (7)</th>
+            <th>Τεμάχια</th>
+            <th>Οικόπεδα</th>
+            <th></th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for item in cases %}
+            <tr>
+                <td><a href="{% url 'cases:detail' item.pk %}"><strong>{{ item.case_number }}</strong></a></td>
+                <td>{{ item.community.name }}</td>
+                <td>{{ item.get_case_type_display }}</td>
+                <td>{{ item.start_date }}</td>
+                <td>{{ item.submitted_at|default:"—" }}</td>
+                <td>
+                    {% if not item.is_new_division %}
+                    <span class="text-muted">δεν εφαρμόζεται</span>
+                    {% elif item.completeness_result == 'yes' %}
+                    <span class="badge badge--pass">{{ item.completeness_result_display }}</span>
+                    {% elif item.completeness_result == 'no' %}
+                    <span class="badge badge--fail">{{ item.completeness_result_display }}</span>
+                    {% else %}
+                    <span class="badge badge--pending">ΕΚΚΡΕΜΕΙ</span>
+                    {% endif %}
+                </td>
+                <td>{{ item.get_ministry_decision_display|default:"—" }}</td>
+                <td>{{ item.land_plots.count }}</td>
+                <td>{{ item.parcels.count }}</td>
+                <td><a href="{% url 'cases:detail' item.pk %}" class="btn btn-ghost btn-sm">Άνοιγμα</a></td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="10">Δεν υπάρχουν αιτήσεις Κ.Σ. / Δ.Δ.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

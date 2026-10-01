@@ -1,0 +1,15 @@
+---
+description: Django model and migration standards for this project
+globs:
+  - "**/models*.py"
+  - "**/migrations/**/*.py"
+alwaysApply: false
+---
+
+# Django Models Rule
+
+- Domain entities must inherit from the shared audited base model.
+- Avoid `QuerySet.update()` and `bulk_update()` for audited entities because they bypass audit events.
+- Use cancel/status transitions instead of hard delete where the specification requires `CANCEL`.
+- `Person` identity-linked fixed fields are immutable per identity number unless changed through an explicit correction workflow that is audited.
+- Every schema change must include migration files and related requirements document updates.

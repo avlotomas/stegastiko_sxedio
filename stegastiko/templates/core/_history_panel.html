@@ -1,0 +1,33 @@
+<section>
+    <h2>Ιστορικό Ενεργειών</h2>
+    {% if history_entries %}
+        <table>
+            <thead>
+            <tr>
+                <th>Ημερομηνία/Ώρα</th>
+                <th>Οντότητα</th>
+                <th>Ενέργεια</th>
+                <th>Πεδίο</th>
+                <th>Παλιά τιμή</th>
+                <th>Νέα τιμή</th>
+                <th>Χρήστης</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for entry in history_entries %}
+                <tr>
+                    <td>{{ entry.timestamp }}</td>
+                    <td>{{ entry.entity_type }} #{{ entry.entity_id }}</td>
+                    <td>{{ entry.action }}</td>
+                    <td>{{ entry.field_name|default:"-" }}</td>
+                    <td>{{ entry.old_value|default:"-" }}</td>
+                    <td>{{ entry.new_value|default:"-" }}</td>
+                    <td>{{ entry.user_id|default:"-" }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p>Δεν υπάρχουν εγγραφές ιστορικού.</p>
+    {% endif %}
+</section>

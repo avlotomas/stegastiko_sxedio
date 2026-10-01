@@ -1,0 +1,22 @@
+---
+description: Keep requirement documents synchronized with implementation
+alwaysApply: true
+---
+
+# Requirements Synchronization Rule
+
+After any code change that affects behavior, entities, fields, validations, workflows, or assumptions, update all related requirement markdown files:
+
+- `requirements/Απαιτήσεις_Λογισμικού_Στεγαστικό_v1.md`
+- `requirements/Ερωτήσεις_προς_Λειτουργούς.md`
+- `requirements/Παράδειγμα_Οντοτήτων_Κοινότητα_ΑΒΓ.md`
+
+Required updates:
+
+1. Bump patch version consistently across all three files.
+2. Add a concise changelog note ("Αλλαγές έναντι vX").
+3. Update affected sections in functional/technical parts.
+4. Add or update open questions for any implementation assumptions.
+5. Keep entity counts/relations example aligned with model changes.
+
+Do not update Word copies unless explicitly requested.

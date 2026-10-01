@@ -1,0 +1,13 @@
+---
+description: Testing standards aligned to UAT scenarios
+globs:
+  - "**/tests/**/*.py"
+alwaysApply: false
+---
+
+# Testing Rule
+
+- Use `pytest` + `pytest-django`.
+- Map tests to UAT scenarios from Μέρος Β §7 where possible (include scenario IDs in test names or comments).
+- Cover both validation rules and persistence side effects (especially audit history).
+- Add regression tests for each bug fix and each critical business rule.

@@ -1,0 +1,13 @@
+---
+description: Project overview and implementation guardrails
+alwaysApply: true
+---
+
+# Housing Scheme App Guidance
+
+- Domain: Cyprus housing-lot allocation workflow based on `requirements/`.
+- Stack: Django + PostgreSQL (production) and SQLite (local development).
+- Code and identifiers must be in English.
+- End-user UI labels and workflow text must be in Greek.
+- Keep section references (for example `10.4.6`) in model/form `help_text` when a field maps directly to the specification.
+- New work belongs in `stegastiko/` and must not modify the legacy prototype under `Στεγαστικό_Λευκωσίας_Codex (1)/` unless explicitly requested.

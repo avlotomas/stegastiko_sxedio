@@ -1,0 +1,68 @@
+{% load static %}
+<!doctype html>
+<html lang="el">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Στεγαστικό Σχέδιο{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=4">
+    <script src="{% static 'vendor/htmx.min.js' %}" defer></script>
+    <script src="{% static 'js/app.js' %}" defer></script>
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+{% if user.is_authenticated %}
+<header class="site-header">
+    <div class="site-header__inner">
+        <a href="{% url 'home' %}" class="site-brand">
+            <span class="site-brand__title">Στεγαστικό Σχέδιο</span>
+            <span class="site-brand__sub">Επαρχία Λευκωσίας</span>
+        </a>
+        <button type="button" class="nav-toggle" data-nav-toggle aria-expanded="false" aria-label="Μενού">
+            ☰
+        </button>
+        <nav class="site-nav" data-site-nav aria-label="Κύρια πλοήγηση">
+            <a href="{% url 'home' %}" class="site-nav__link{% if request.resolver_match.url_name == 'home' %} is-active{% endif %}">Αρχική</a>
+            <a href="{% url 'cases:list' %}" class="site-nav__link{% if request.resolver_match.namespace == 'cases' %} is-active{% endif %}">Αιτήσεις Κ.Σ. / Δ.Δ.</a>
+            <a href="{% url 'applications:list' %}" class="site-nav__link{% if request.resolver_match.namespace == 'applications' %} is-active{% endif %}">Αιτήσεις Πολιτών</a>
+            <a href="{% url 'applications:import' %}" class="site-nav__link">Εισαγωγή Excel</a>
+            {% if user_is_system_admin %}
+            <a href="{% url 'system_configuration' %}" class="site-nav__link{% if request.resolver_match.url_name == 'system_configuration' %} is-active{% endif %}">Ρυθμίσεις</a>
+            {% endif %}
+            <a href="/admin/" class="site-nav__link">Διαχείριση</a>
+            <div class="site-nav__user">
+                <span class="site-nav__username" title="{{ user.get_username }}">{{ user.get_username }}</span>
+                <form method="post" action="{% url 'logout' %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn-logout">Έξοδος</button>
+                </form>
+            </div>
+        </nav>
+    </div>
+</header>
+{% elif request.resolver_match.url_name != 'login' %}
+<header class="site-header site-header--minimal">
+    <div class="site-header__inner">
+        <span class="site-brand site-brand--static">
+            <span class="site-brand__title">Στεγαστικό Σχέδιο</span>
+            <span class="site-brand__sub">Επαρχία Λευκωσίας</span>
+        </span>
+    </div>
+</header>
+{% endif %}
+
+<main class="page">
+    {% if messages %}
+    <div class="messages-stack">
+        {% for message in messages %}
+        <div class="alert alert--{% if message.tags == 'error' %}error{% elif message.tags == 'success' %}success{% else %}warning{% endif %}" role="alert">
+            {{ message }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% block content %}{% endblock %}
+</main>
+</body>
+</html>

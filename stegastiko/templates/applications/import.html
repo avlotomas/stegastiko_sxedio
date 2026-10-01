@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}Εισαγωγή αίτησης{% endblock %}
+
+{% block content %}
+<nav class="breadcrumb" aria-label="Πλοήγηση">
+    <a href="{% url 'applications:list' %}">Αιτήσεις</a>
+    <span>/</span>
+    <span>Εισαγωγή Excel</span>
+</nav>
+
+<div class="page-header">
+    <h1>Εισαγωγή αίτησης από Excel (§9)</h1>
+    <p class="page-header__lead">Πρότυπο <code>application_import_appendix3_v1.0.1.xlsx</code> · δείγμα <code>application_import_appendix3_v1.0.1_SAMPLE.xlsx</code></p>
+</div>
+
+<div class="card">
+    <p>Πριν την πρώτη δοκιμή, εκτελέστε: <code>python manage.py seed_import_demo</code></p>
+    <form method="post" enctype="multipart/form-data" class="filter-form" style="margin-top:1rem">
+        {% csrf_token %}
+        <div style="grid-column: 1 / -1">
+            <label for="import_file">Αρχείο .xlsx</label>
+            <input type="file" name="import_file" id="import_file" accept=".xlsx" required>
+        </div>
+        <div>
+            <button type="submit" class="btn btn-primary">Ανάλυση και προεπισκόπηση</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+
+{% block title %}{{ section_title }}{% endblock %}
+{% block body_class %}case-work{% endblock %}
+
+{% block content %}
+<nav class="breadcrumb" aria-label="Πλοήγηση">
+    <a href="{% url 'cases:list' %}">Αιτήσεις Κ.Σ. / Δ.Δ.</a>
+    <span>/</span>
+    <a href="{% url 'cases:detail' case.pk %}">{{ case.case_number }}</a>
+    <span>/</span>
+    <span>{{ section_title }}</span>
+</nav>
+
+<div class="case-work-layout">
+<div class="case-work-layout__main">
+
+<div class="page-header">
+    <h1>{{ section_title }}</h1>
+    <p class="page-header__lead">
+        Υπόθεση {{ case.case_number }} · {{ case.community.name }} · {{ case.get_case_type_display }}
+    </p>
+</div>
+
+{% if section == '6' and summary %}
+<div class="card">
+    <h2 class="card__title">6.1 Συνοπτική εικόνα προτεραιότητας Κοινότητας</h2>
+    <dl class="detail-grid">
+        <div>
+            <dt>Κοινότητα / Δ.Δ.</dt>
+            <dd>{{ case.community.name }}</dd>
+        </div>
+        <div>
+            <dt>Χαρακτηριστικά προτεραιότητας</dt>
+            <dd>{% for item in summary.priority_characteristics %}{{ item }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</dd>
+        </div>
+        <div>
+            <dt>Τεκμηρίωση</dt>
+            <dd>{{ summary.priority_documentation|default:"—" }}</dd>
+        </div>
+    </dl>
+
+    <h3 class="form-section-title">6.2 Συνοπτικός πίνακας τεμαχίων</h3>
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead>
+            <tr>
+                <th>Τεμάχιο</th><th>Εμβαδόν</th><th>Ζώνη</th><th>Εντός Ορίου</th>
+                <th>Μορφολογία</th><th>Αξιοποιήσιμο</th><th>Τεχνική Καταλληλότητα</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for plot in summary.land_plots %}
+                <tr>
+                    <td>{{ plot.parcel_number }}</td>
+                    <td>{{ plot.area_sqm|default:"—" }}</td>
+                    <td>{{ plot.zone|default:"—" }}</td>
+                    <td>{{ plot.inside_development_zone|yesno:"ΝΑΙ,ΟΧΙ" }}</td>
+                    <td>{{ plot.get_morphology_display|default:"—" }}</td>
+                    <td>{{ plot.usable_area_sqm|default:"—" }}</td>
+                    <td>{{ plot.get_technical_suitability_display|default:"—" }}</td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="7">Δεν έχουν καταχωριστεί τεμάχια (Ενότητα 3).</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <p class="helptext">6.2 Τεχνική Αξιολόγηση Πρόσβασης (4.3): {{ summary.access_technical_evaluation|default:"—" }}</p>
+
+    <h3 class="form-section-title">6.3 Συνοπτικός πίνακας υπηρεσιών κοινής ωφέλειας</h3>
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead><tr><th>Υπηρεσία</th><th>Εγγύτητα</th><th>Σχόλια</th></tr></thead>
+            <tbody>
+            {% for service in summary.utility_services %}
+                <tr>
+                    <td>{{ service.service_name }}</td>
+                    <td>{{ service.proximity|default:"—" }}</td>
+                    <td>{{ service.comments|default:"—" }}</td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="3">Δεν έχουν καταχωριστεί υπηρεσίες (4.2).</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <h3 class="form-section-title">6.4 Συνοπτικός πίνακας διαβουλεύσεων</h3>
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead><tr><th>Τμήμα / Υπηρεσία</th><th>Θέμα</th><th>Άποψη / Απάντηση</th><th>Κατάσταση</th></tr></thead>
+            <tbody>
+            {% for consultation in summary.consultations %}
+                <tr>
+                    <td>{{ consultation.department }}</td>
+                    <td>{{ consultation.topic|default:"—" }}</td>
+                    <td>{{ consultation.response_text|default:"—" }}</td>
+                    <td>{{ consultation.get_status_display }}</td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="4">Δεν έχουν καταχωριστεί διαβουλεύσεις (Ενότητα 5).</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <h3 class="form-section-title">6.5 Έλεγχος κρατικής γης</h3>
+    <p class="form-readonly">
+        {{ summary.state_land_remains_sufficient|default:"—" }}
+        {% if summary.state_land_comments %}— {{ summary.state_land_comments }}{% endif %}
+    </p>
+</div>
+{% endif %}
+
+{% if section == '2' and completeness_checks %}
+<div class="card">
+    <h2 class="card__title">Τρέχουσα κατάσταση πληρότητας</h2>
+    <p class="form-readonly">
+        Από τον τελευταίο έλεγχο ({{ case.latest_completeness_check.sequence }}ος,
+        {{ case.latest_completeness_check.check_date }}):
+        <strong>{{ case.completeness_result_display }}</strong>
+    </p>
+</div>
+{% endif %}
+
+{% if section == '8-plots' and completion %}
+<div class="card">
+    <h2 class="card__title">8.8.2 Έλεγχος ολοκλήρωσης (αυτόματο)</h2>
+    <dl class="detail-grid">
+        <div>
+            <dt>Οικόπεδα</dt>
+            <dd>{{ completion.parcels_count }}</dd>
+        </div>
+        <div>
+            <dt>Αξία σε όλα</dt>
+            <dd>{% if completion.all_valued %}<span class="badge badge--pass">ΝΑΙ</span>{% else %}<span class="badge badge--fail">ΟΧΙ</span>{% endif %}</dd>
+        </div>
+        <div>
+            <dt>Υπολογισμένες τιμές</dt>
+            <dd>{% if completion.all_priced %}<span class="badge badge--pass">ΝΑΙ</span>{% else %}<span class="badge badge--fail">ΟΧΙ</span>{% endif %}</dd>
+        </div>
+        <div>
+            <dt>Ολοκλήρωση Ενότητας 8</dt>
+            <dd>{% if completion.is_complete %}<span class="badge badge--pass">ΝΑΙ</span>{% else %}<span class="badge badge--fail">ΟΧΙ</span>{% endif %}</dd>
+        </div>
+    </dl>
+</div>
+{% endif %}
+
+<div class="card">
+<form method="post" class="app-form" novalidate>
+    {% csrf_token %}
+
+    {% if form %}
+        {% if form.non_field_errors %}
+        <div class="alert alert--error form-span-all">
+            {% for error in form.non_field_errors %}{{ error }}{% endfor %}
+        </div>
+        {% endif %}
+        {% if section == '1' %}
+            {% include "cases/_section_1_form.html" %}
+        {% else %}
+        <div class="form-grid">
+            {% for field in form %}
+                {% include "includes/form_field.html" with field=field %}
+            {% endfor %}
+        </div>
+        {% endif %}
+    {% endif %}
+
+    {% for legend, formset in formsets %}
+    <fieldset class="child-formset">
+        <legend>{{ legend }}</legend>
+        {{ formset.management_form }}
+        {% if formset.non_form_errors %}
+        <div class="alert alert--error">
+            {% for error in formset.non_form_errors %}{{ error }}{% endfor %}
+        </div>
+        {% endif %}
+        {% for child in formset %}
+        <div class="formset-row">
+            {% for hidden in child.hidden_fields %}{{ hidden }}{% endfor %}
+            {% if child.instance.pk and child.instance.row_label %}
+            <p class="formset-row__label">{{ child.instance.row_label }}</p>
+            {% endif %}
+            <div class="form-grid">
+                {% for field in child.visible_fields %}
+                    {% include "includes/form_field.html" with field=field %}
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </fieldset>
+    {% endfor %}
+
+    <div class="form-actions form-span-all">
+        <button type="submit" class="btn btn-primary">Αποθήκευση</button>
+        <a href="{% url 'cases:detail' case.pk %}" class="btn btn-secondary">Ακύρωση</a>
+    </div>
+</form>
+</div>
+
+</div>
+{% include "cases/_case_actions_sidebar.html" %}
+</div>
+{% endblock %}

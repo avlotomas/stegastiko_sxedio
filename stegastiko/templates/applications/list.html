@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block title %}Αιτήσεις{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Ενότητα 10 — Αιτήσεις</h1>
+    <p class="page-header__lead">Φάκελοι αιτητών ανά κοινότητα και κύκλο υποβολής.</p>
+</div>
+
+<div class="toolbar">
+    <a href="{% url 'applications:create' %}" class="btn btn-primary">Νέα αίτηση</a>
+    <a href="{% url 'applications:import' %}" class="btn btn-secondary">Εισαγωγή Excel</a>
+</div>
+
+<div class="card">
+    <h2 class="card__title">Αναζήτηση</h2>
+    <form method="get" class="filter-form">
+        <div>
+            <label for="community_id">Κοινότητα</label>
+            <select name="community_id" id="community_id">
+                <option value="">Όλες</option>
+                {% for community in communities %}
+                    <option value="{{ community.id }}" {% if community_id == community.id|stringformat:"s" %}selected{% endif %}>
+                        {{ community.name }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="cycle_id">Κύκλος υποβολής</label>
+            <select name="cycle_id" id="cycle_id">
+                <option value="">Όλοι</option>
+                {% for cycle in cycles %}
+                    <option value="{{ cycle.id }}" {% if cycle_id == cycle.id|stringformat:"s" %}selected{% endif %}>
+                        {{ cycle.community.name }} — {{ cycle.announcement_date }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="q">Αρ. φακέλου</label>
+            <input type="text" name="q" id="q" value="{{ q }}" placeholder="π.χ. 12001001">
+        </div>
+        <div>
+            <button type="submit" class="btn btn-primary">Αναζήτηση</button>
+        </div>
+    </form>
+</div>
+
+<div class="table-wrap">
+    <table class="data-table">
+        <thead>
+        <tr>
+            <th>Αρ. φακέλου</th>
+            <th>Ημ. υποβολής</th>
+            <th>Κοινότητα</th>
+            <th>Αιτητής</th>
+            <th>Κατάληξη 10.4</th>
+            <th></th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for item in applications %}
+            <tr>
+                <td>
+                    <a href="{% url 'applications:detail' item.pk %}"><strong>{{ item.folder_number }}</strong></a>
+                </td>
+                <td>{{ item.submitted_on }}</td>
+                <td>{{ item.submission_cycle.community.name }}</td>
+                <td>{{ item.person.first_name }} {{ item.person.last_name }}</td>
+                <td>
+                    {% if item.outcome_104 == 'pass' %}
+                    <span class="badge badge--pass">{{ item.get_outcome_104_display }}</span>
+                    {% elif item.outcome_104 == 'fail' %}
+                    <span class="badge badge--fail">{{ item.get_outcome_104_display }}</span>
+                    {% else %}
+                    <span class="badge badge--pending">{{ item.get_outcome_104_display }}</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{% url 'applications:edit' item.pk %}" class="btn btn-ghost btn-sm">Επεξεργασία</a>
+                </td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="6">Δεν υπάρχουν αιτήσεις.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Ιστορικό — {{ case.case_number }}{% endblock %}
+{% block body_class %}case-work{% endblock %}
+
+{% block content %}
+<nav class="breadcrumb" aria-label="Πλοήγηση">
+    <a href="{% url 'cases:list' %}">Αιτήσεις Κ.Σ. / Δ.Δ.</a>
+    <span>/</span>
+    <a href="{% url 'cases:detail' case.pk %}">{{ case.case_number }}</a>
+    <span>/</span>
+    <span>Ιστορικό ενεργειών</span>
+</nav>
+
+<div class="case-work-layout">
+<div class="case-work-layout__main">
+
+<div class="page-header">
+    <h1>Ιστορικό ενεργειών</h1>
+    <p class="page-header__lead">
+        Συγκεντρωτικό ιστορικό του φακέλου {{ case.case_number }} και των σχετικών εγγραφών (§Β.1.3).
+    </p>
+</div>
+
+<div class="toolbar">
+    <a href="{% url 'cases:detail' case.pk %}" class="btn btn-secondary">Πίσω στην υπόθεση</a>
+</div>
+
+<div class="table-wrap">
+    <table class="data-table">
+        <thead>
+        <tr>
+            <th>Ημερομηνία / Ώρα</th>
+            <th>Οντότητα</th>
+            <th>Ενέργεια</th>
+            <th>Πεδίο</th>
+            <th>Παλιά τιμή</th>
+            <th>Νέα τιμή</th>
+            <th>Ενότητα</th>
+            <th>Χρήστης</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for entry in history_entries %}
+            <tr>
+                <td>{{ entry.timestamp }}</td>
+                <td>{{ entry.entity_type }} #{{ entry.entity_id }}</td>
+                <td>{{ entry.get_action_display }}</td>
+                <td>{{ entry.field_name|default:"—" }}</td>
+                <td>{{ entry.old_value|default:"—" }}</td>
+                <td>{{ entry.new_value|default:"—" }}</td>
+                <td>{{ entry.section_ref|default:"—" }}</td>
+                <td>{{ entry.user_id|default:"—" }}</td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="8">Δεν υπάρχουν εγγραφές ιστορικού.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+</div>
+{% include "cases/_case_actions_sidebar.html" %}
+</div>
+{% endblock %}

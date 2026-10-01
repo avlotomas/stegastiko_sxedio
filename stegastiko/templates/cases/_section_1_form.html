@@ -1,0 +1,57 @@
+{% comment %}
+Ενότητα 1 — μόνο πεδία §1.1 και §1.2 (και §1.3 σχόλια). Τα βασικά στοιχεία 1.1
+εμφανίζονται όλα· επεξεργάσιμα από τον λειτουργό είναι μόνο email, ημερομηνία υποβολής
+(νέο διαχωρισμό) και τα πεδία προτεραιότητας 1.2.
+{% endcomment %}
+<h3 class="form-section-title">1.1 Βασικά στοιχεία</h3>
+<dl class="detail-grid spec-readonly-grid form-span-all">
+    <div>
+        <dt>1.1 Τύπος διαδικασίας</dt>
+        <dd>{{ case.get_case_type_display }}</dd>
+    </div>
+    <div>
+        <dt>1.1 Κοινότητα / Δημοτικό Διαμέρισμα</dt>
+        <dd>{{ case.community.name }}</dd>
+    </div>
+    <div>
+        <dt>1.1 Επαρχία</dt>
+        <dd>{{ case.community.district }}</dd>
+    </div>
+    <div>
+        <dt>1.1 Μοναδικός αριθμός υπόθεσης (Αρ. Φακέλου Κ.Σ./Δ.Δ.)</dt>
+        <dd>{{ case.case_number }}</dd>
+    </div>
+    <div>
+        <dt>1.1 Ημερομηνία έναρξης διαδικασίας</dt>
+        <dd>{{ case.start_date }}</dd>
+    </div>
+</dl>
+<p class="helptext form-span-all">
+    Για νέο αίτημα, ο αριθμός υπόθεσης λειτουργεί ως Αρ. Φακέλου Αίτησης Κ.Σ./Δ.Δ.
+    Για αδιάθετα παραμένει αριθμός της υπόθεσης αδιάθετων.
+</p>
+
+<div class="form-grid">
+    {% include "includes/form_field.html" with field=form.contact_email wide=True %}
+    {% if case.is_new_division %}
+        {% include "includes/form_field.html" with field=form.submitted_at %}
+    {% endif %}
+</div>
+
+{% if case.is_new_division %}
+<h3 class="form-section-title">1.2 Χαρακτηριστικά Κοινότητας για σκοπούς προτεραιότητας νέου διαχωρισμού</h3>
+<p class="helptext form-span-all">Πολλαπλή επιλογή — το σύστημα δεν αποδίδει αυτόματα προτεραιότητα.</p>
+<div class="form-grid form-grid--priority">
+    {% include "includes/form_field.html" with field=form.priority_turkish_cypriot_properties %}
+    {% include "includes/form_field.html" with field=form.priority_protection_zones %}
+    {% include "includes/form_field.html" with field=form.priority_nuisance_developments %}
+    {% include "includes/form_field.html" with field=form.priority_limited_private_land %}
+    {% include "includes/form_field.html" with field=form.priority_other wide=True %}
+    {% include "includes/form_field.html" with field=form.priority_documentation wide=True %}
+</div>
+{% endif %}
+
+<h3 class="form-section-title">1.3 Σχόλια / Παρατηρήσεις Ενότητας 1</h3>
+<div class="form-grid">
+    {% include "includes/form_field.html" with field=form.comments wide=True %}
+</div>

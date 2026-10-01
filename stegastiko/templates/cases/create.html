@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block title %}Νέα υπόθεση{% endblock %}
+
+{% block content %}
+<nav class="breadcrumb" aria-label="Πλοήγηση">
+    <a href="{% url 'cases:list' %}">Αιτήσεις Κ.Σ. / Δ.Δ.</a>
+    <span>/</span>
+    <span>Νέα αίτηση</span>
+</nav>
+
+<div class="page-header">
+    <h1>Ενότητα 1 — Δεδομένα αίτησης Κ.Σ. / Δ.Δ.</h1>
+    <p class="page-header__lead">
+        Καταχώριση βασικών στοιχείων (1.1). Ο αριθμός υπόθεσης και η ημερομηνία έναρξης
+        συμπληρώνονται αυτόματα μετά τη δημιουργία της διαδικασίας.
+    </p>
+</div>
+
+<div class="card">
+<form method="post" class="app-form" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+    <div class="alert alert--error form-span-all">
+        {% for error in form.non_field_errors %}{{ error }}{% endfor %}
+    </div>
+    {% endif %}
+
+    <h3 class="form-section-title">1.1 Βασικά στοιχεία</h3>
+    <div class="form-grid">
+        {% include "includes/form_field.html" with field=form.case_type %}
+        {% include "includes/form_field.html" with field=form.community %}
+    </div>
+    <dl class="detail-grid spec-readonly-grid form-span-all">
+        <div>
+            <dt>1.1 Επαρχία</dt>
+            <dd id="district-preview">—</dd>
+        </div>
+        <div>
+            <dt>1.1 Μοναδικός αριθμός υπόθεσης</dt>
+            <dd class="text-muted">Αυτόματα μετά τη δημιουργία της διαδικασίας</dd>
+        </div>
+        <div>
+            <dt>1.1 Ημερομηνία έναρξης διαδικασίας</dt>
+            <dd class="text-muted">Αυτόματη</dd>
+        </div>
+    </dl>
+    <div class="form-grid">
+        <div id="submitted-at-field">
+            {% include "includes/form_field.html" with field=form.submitted_at %}
+        </div>
+        {% include "includes/form_field.html" with field=form.contact_email wide=True %}
+    </div>
+
+    <div class="form-actions form-span-all">
+        <button type="submit" class="btn btn-primary">Δημιουργία</button>
+        <a href="{% url 'cases:list' %}" class="btn btn-secondary">Ακύρωση</a>
+    </div>
+</form>
+</div>
+
+{{ community_emails|json_script:"community-emails" }}
+{{ community_districts|json_script:"community-districts" }}
+<script>
+const COMMUNITY_EMAILS = JSON.parse(document.getElementById("community-emails").textContent);
+const COMMUNITY_DISTRICTS = JSON.parse(document.getElementById("community-districts").textContent);
+const communitySelect = document.getElementById("id_community");
+const contactEmailInput = document.getElementById("id_contact_email");
+const caseTypeSelect = document.getElementById("id_case_type");
+const submittedAtWrap = document.getElementById("submitted-at-field");
+const districtPreview = document.getElementById("district-preview");
+
+function syncDistrict() {
+    if (!communitySelect || !districtPreview) return;
+    const district = COMMUNITY_DISTRICTS[communitySelect.value];
+    districtPreview.textContent = district || "—";
+}
+
+function syncSubmittedAtVisibility() {
+    if (!caseTypeSelect || !submittedAtWrap) return;
+    const isNewDivision = caseTypeSelect.value === "new_division";
+    submittedAtWrap.hidden = !isNewDivision;
+}
+
+if (communitySelect && contactEmailInput) {
+    communitySelect.addEventListener("change", () => {
+        syncDistrict();
+        const email = COMMUNITY_EMAILS[communitySelect.value];
+        if (email && !contactEmailInput.dataset.touched) {
+            contactEmailInput.value = email;
+        }
+    });
+    contactEmailInput.addEventListener("input", () => {
+        contactEmailInput.dataset.touched = "1";
+    });
+    syncDistrict();
+}
+if (caseTypeSelect) {
+    caseTypeSelect.addEventListener("change", syncSubmittedAtVisibility);
+    syncSubmittedAtVisibility();
+}
+</script>
+{% endblock %}

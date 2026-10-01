@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}Προεπισκόπηση εισαγωγής{% endblock %}
+
+{% block content %}
+<nav class="breadcrumb" aria-label="Πλοήγηση">
+    <a href="{% url 'applications:list' %}">Αιτήσεις</a>
+    <span>/</span>
+    <a href="{% url 'applications:import' %}">Εισαγωγή</a>
+    <span>/</span>
+    <span>Προεπισκόπηση</span>
+</nav>
+
+<div class="page-header">
+    <h1>Προεπισκόπηση εισαγωγής</h1>
+</div>
+
+{% if validation.errors %}
+<div class="alert alert--error">
+    <strong>Σφάλματα (δεν μπορεί να αποθηκευτεί):</strong>
+    <ul>
+        {% for err in validation.errors %}
+        <li>{{ err }}</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+{% if validation.person_conflicts %}
+<div class="alert alert--warning">
+    <strong>Υπάρχον άτομο — διαφορές πεδίων:</strong>
+    {% for conflict in validation.person_conflicts %}
+        {% if conflict.differences %}
+        <p>{{ conflict.slot }} (ΑΔΤ {{ conflict.identity_number }}):</p>
+        <ul>
+            {% for d in conflict.differences %}
+            <li>{{ d.label }}: καταχωρημένο «{{ d.stored_value }}» · αρχείο «{{ d.incoming_value }}»</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="card">
+    <h2 class="card__title">Στοιχεία αίτησης</h2>
+    <ul>
+        <li>Κοινότητα: {{ parsed.metadata.community_name }} (κωδ. {{ parsed.metadata.community_code }})</li>
+        <li>Κύκλος υποβολής: {{ parsed.metadata.submission_cycle_id }}</li>
+        <li>Ημ. υποβολής: {{ parsed.fields.submitted_on }}</li>
+        <li>Email: {{ parsed.fields.applicant_email }}</li>
+        <li>Τύπος οικογένειας: {{ parsed.fields.family_type }}</li>
+    </ul>
+</div>
+
+<div class="card">
+    <h2 class="card__title">Πρόσωπα</h2>
+    <p><strong>Πρόσωπο 1:</strong> {{ parsed.fields.p1_first_name }} {{ parsed.fields.p1_last_name }} · ΑΔΤ {{ parsed.fields.p1_identity_number }}</p>
+    {% if parsed.fields.p2_identity_number %}
+    <p><strong>Πρόσωπο 2:</strong> {{ parsed.fields.p2_first_name }} {{ parsed.fields.p2_last_name }} · ΑΔΤ {{ parsed.fields.p2_identity_number }}</p>
+    {% endif %}
+</div>
+
+{% if parsed.children %}
+<div class="card">
+    <h2 class="card__title">Τέκνα ({{ parsed.children|length }})</h2>
+    <ul>
+        {% for c in parsed.children %}
+        <li>{{ c.child_first_name }} {{ c.child_last_name }} · {{ c.child_date_of_birth }}</li>
+        {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+{% if can_save %}
+<form method="post" class="toolbar">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="confirm">
+    <button type="submit" class="btn btn-primary">Αποθήκευση αίτησης</button>
+    <a href="{% url 'applications:import' %}" class="btn btn-secondary">Ακύρωση</a>
+</form>
+{% else %}
+<p class="alert alert--warning"><em>Διορθώστε το αρχείο και ανεβάστε ξανά.</em></p>
+{% endif %}
+{% endblock %}

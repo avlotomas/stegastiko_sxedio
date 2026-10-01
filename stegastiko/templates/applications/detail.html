@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block title %}Αίτηση {{ application.folder_number }}{% endblock %}
+
+{% block content %}
+<nav class="breadcrumb" aria-label="Πλοήγηση">
+    <a href="{% url 'applications:list' %}">Αιτήσεις</a>
+    <span>/</span>
+    <span>{{ application.folder_number }}</span>
+</nav>
+
+<div class="page-header">
+    <h1>Αίτηση {{ application.folder_number }}</h1>
+    <p class="page-header__lead">{{ application.submission_cycle.community.name }} · υποβολή {{ application.submitted_on }}</p>
+</div>
+
+<div class="toolbar">
+    <a href="{% url 'applications:edit' application.pk %}" class="btn btn-primary">Επεξεργασία</a>
+    <a href="{% url 'applications:list' %}" class="btn btn-secondary">Πίσω στον κατάλογο</a>
+</div>
+
+<div class="card">
+    <h2 class="card__title">Στοιχεία αίτησης</h2>
+    <dl class="detail-grid">
+        <div>
+            <dt>Κατάληξη 10.4</dt>
+            <dd>
+                {% if application.outcome_104 == 'pass' %}
+                <span class="badge badge--pass">{{ application.get_outcome_104_display }}</span>
+                {% elif application.outcome_104 == 'fail' %}
+                <span class="badge badge--fail">{{ application.get_outcome_104_display }}</span>
+                {% else %}
+                <span class="badge badge--pending">{{ application.get_outcome_104_display }}</span>
+                {% endif %}
+            </dd>
+        </div>
+        <div>
+            <dt>Email αιτητή</dt>
+            <dd>{{ application.applicant_email }}</dd>
+        </div>
+    </dl>
+</div>
+
+<div class="card">
+    <h2 class="card__title">Πρόσωπα (10.3.1)</h2>
+    <dl class="detail-grid">
+        <div>
+            <dt>Πρόσωπο 1</dt>
+            <dd>{{ application.person.first_name }} {{ application.person.last_name }}<br>
+                <span class="text-muted">ΑΔΤ {{ application.person.identity_number }}</span></dd>
+        </div>
+        {% if application.person2 %}
+        <div>
+            <dt>Πρόσωπο 2</dt>
+            <dd>{{ application.person2.first_name }} {{ application.person2.last_name }}<br>
+                <span class="text-muted">ΑΔΤ {{ application.person2.identity_number }}</span></dd>
+        </div>
+        {% endif %}
+    </dl>
+</div>
+
+<div class="card">
+    <h2 class="card__title">Τέκνα (10.3.2)</h2>
+    <ul>
+        {% for child in application.dependent_children.all %}
+            <li>{{ child.full_name }} — {{ child.get_category_display }} — εξαρτώμενο: {{ child.is_recognized_dependent|yesno:"ΝΑΙ,ΟΧΙ" }}</li>
+        {% empty %}
+            <li>Δεν υπάρχουν καταχωρημένα τέκνα.</li>
+        {% endfor %}
+    </ul>
+</div>
+
+<div class="card">
+    <h2 class="card__title">Έλεγχος κριτηρίων 10.4</h2>
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead>
+            <tr><th>Κριτήριο</th><th>Αποτέλεσμα</th><th>Σχόλια</th></tr>
+            </thead>
+            <tbody>
+            {% for check in checks %}
+                <tr>
+                    <td>{{ check.get_criterion_display }}</td>
+                    <td>{{ check.get_overall_result_display }}</td>
+                    <td>{{ check.comments|default:"—" }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

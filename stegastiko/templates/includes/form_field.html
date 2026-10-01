@@ -1,0 +1,30 @@
+{% if field.field.widget.input_type == 'checkbox' and not field.field.widget.allow_multiple_selected %}
+{% comment %}A lone checkbox is wrapped in its own clickable label.{% endcomment %}
+<div class="form-field form-field--checkbox{% if wide %} form-field--wide{% endif %}">
+    <label class="checkbox-label" for="{{ field.id_for_label }}">
+        {{ field }}
+        <span>{{ field.label }}</span>
+    </label>
+    {% if field.errors %}
+    <ul class="errorlist">
+        {% for error in field.errors %}<li>{{ error }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    {% if field.help_text %}
+    <p class="helptext">{{ field.help_text|safe }}</p>
+    {% endif %}
+</div>
+{% else %}
+<div class="form-field{% if wide %} form-field--wide{% endif %}{% if field.field.widget.allow_multiple_selected %} form-field--choices{% endif %}">
+    {{ field.label_tag }}
+    {{ field }}
+    {% if field.errors %}
+    <ul class="errorlist">
+        {% for error in field.errors %}<li>{{ error }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+    {% if field.help_text %}
+    <p class="helptext">{{ field.help_text|safe }}</p>
+    {% endif %}
+</div>
+{% endif %}

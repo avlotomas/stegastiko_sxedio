@@ -1,0 +1,9 @@
+submitted_at: 1.1 Ημερομηνία υποβολής αίτησης Κ.Σ./Δ.Δ.
+contact_email: 1.1 Email επικοινωνίας Κ.Σ./Δ.Δ.
+priority_turkish_cypriot_properties: 1.2 Μεγάλες εκτάσεις τουρκοκυπριακών περιουσιών
+priority_protection_zones: 1.2 Επηρεασμός συνολικής έκτασης γης από Ζώνες Προστασίας
+priority_nuisance_developments: 1.2 Οχληρές αναπτύξεις στα διοικητικά όρια της Κοινότητας
+priority_limited_private_land: 1.2 Μειωμένη διαθεσιμότητα ιδιωτικής γης για οικιστική ανάπτυξη
+priority_other: 1.2 Άλλο ιδιαίτερο χαρακτηριστικό (περιγραφή)
+priority_documentation: 1.2 Στοιχεία τεκμηρίωσης
+comments: 1.3 Σχόλια / Παρατηρήσεις Ενότητας 1

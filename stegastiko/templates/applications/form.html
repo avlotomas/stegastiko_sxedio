@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+
+{% block title %}{% if is_create %}Νέα αίτηση{% else %}Επεξεργασία {{ application.folder_number }}{% endif %}{% endblock %}
+
+{% block content %}
+<nav class="breadcrumb" aria-label="Πλοήγηση">
+    <a href="{% url 'applications:list' %}">Αιτήσεις</a>
+    <span>/</span>
+    <span>{% if is_create %}Νέα αίτηση{% else %}{{ application.folder_number }}{% endif %}</span>
+</nav>
+
+<div class="page-header">
+    <h1>{% if is_create %}Νέα αίτηση{% else %}Επεξεργασία {{ application.folder_number }}{% endif %}</h1>
+    <p class="page-header__lead">Ενότητες 10.1–10.4 — καταχώριση και έλεγχος επιλεξιμότητας.</p>
+</div>
+
+<div class="card">
+<form method="post" class="app-form" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+    <div class="alert alert--error form-span-all">
+        {% for error in form.non_field_errors %}{{ error }}{% endfor %}
+    </div>
+    {% endif %}
+
+    <h3 class="form-section-title">10.1 Υποβολή αίτησης</h3>
+    {% if not is_create %}
+    <p class="form-readonly form-span-all"><strong>Αρ. Φακέλου (10.1.1):</strong> {{ application.folder_number }}</p>
+    {% endif %}
+    <div class="form-grid">
+        {% include "includes/form_field.html" with field=form.submission_cycle %}
+        {% include "includes/form_field.html" with field=form.submitted_on %}
+        {% include "includes/form_field.html" with field=form.family_type %}
+        {% include "includes/form_field.html" with field=form.family_type_other %}
+        {% include "includes/form_field.html" with field=form.applicant_email %}
+        {% include "includes/form_field.html" with field=form.comments wide=True %}
+    </div>
+
+    <h3 class="form-section-title">10.2 Πληρότητα</h3>
+    <div class="form-grid">
+        {% include "includes/form_field.html" with field=form.is_family_type_correct %}
+        {% include "includes/form_field.html" with field=form.corrected_family_type %}
+        {% include "includes/form_field.html" with field=form.signatures_status %}
+        {% include "includes/form_field.html" with field=form.completeness_result %}
+        {% include "includes/form_field.html" with field=form.completeness_comments wide=True %}
+    </div>
+
+    <h3 class="form-section-title">10.3.1 Πρόσωπο 1</h3>
+    <div class="lookup-row form-span-all">
+        {% include "includes/form_field.html" with field=form.person1_identity_number %}
+        <button type="button" class="btn btn-secondary" id="lookup-p1">Έλεγχος ΑΔΤ</button>
+    </div>
+    <div class="form-grid">
+        {% include "includes/form_field.html" with field=form.person1_first_name %}
+        {% include "includes/form_field.html" with field=form.person1_last_name %}
+        {% include "includes/form_field.html" with field=form.person1_date_of_birth %}
+        {% include "includes/form_field.html" with field=form.person1_birth_place %}
+        {% include "includes/form_field.html" with field=form.person1_birth_country %}
+        {% include "includes/form_field.html" with field=form.person1_parents_birth_place %}
+        {% include "includes/form_field.html" with field=form.person1_parents_birth_country %}
+        {% include "includes/form_field.html" with field=form.person1_refugee_identity_number %}
+        {% include "includes/form_field.html" with field=form.person1_citizenship_cypriot %}
+        {% include "includes/form_field.html" with field=form.person1_citizenship_repatriated %}
+        {% include "includes/form_field.html" with field=form.person1_citizenship_eu %}
+        {% include "includes/form_field.html" with field=form.person1_citizenship_other %}
+    </div>
+
+    <h3 class="form-section-title">10.3.1 Πρόσωπο 2 (όπου εφαρμόζεται)</h3>
+    <div class="lookup-row form-span-all">
+        {% include "includes/form_field.html" with field=form.person2_identity_number %}
+        <button type="button" class="btn btn-secondary" id="lookup-p2">Έλεγχος ΑΔΤ</button>
+    </div>
+    <div class="form-grid">
+        {% include "includes/form_field.html" with field=form.person2_first_name %}
+        {% include "includes/form_field.html" with field=form.person2_last_name %}
+        {% include "includes/form_field.html" with field=form.person2_date_of_birth %}
+        {% include "includes/form_field.html" with field=form.person2_birth_place %}
+        {% include "includes/form_field.html" with field=form.person2_birth_country %}
+        {% include "includes/form_field.html" with field=form.person2_parents_birth_place %}
+        {% include "includes/form_field.html" with field=form.person2_parents_birth_country %}
+        {% include "includes/form_field.html" with field=form.person2_refugee_identity_number %}
+        {% include "includes/form_field.html" with field=form.person2_citizenship_cypriot %}
+        {% include "includes/form_field.html" with field=form.person2_citizenship_repatriated %}
+        {% include "includes/form_field.html" with field=form.person2_citizenship_eu %}
+        {% include "includes/form_field.html" with field=form.person2_citizenship_other %}
+    </div>
+
+    <h3 class="form-section-title">10.3.2 Τέκνα</h3>
+    {{ formset.management_form }}
+    {% for child_form in formset %}
+    <fieldset class="child-formset form-span-all">
+        <legend>Τέκνο {{ forloop.counter }}</legend>
+        {{ child_form.id }}
+        <div class="form-grid">
+            {% include "includes/form_field.html" with field=child_form.full_name %}
+            {% include "includes/form_field.html" with field=child_form.date_of_birth %}
+            {% include "includes/form_field.html" with field=child_form.category %}
+            {% include "includes/form_field.html" with field=child_form.is_recognized_dependent %}
+            {% if child_form.DELETE %}{% include "includes/form_field.html" with field=child_form.DELETE %}{% endif %}
+        </div>
+    </fieldset>
+    {% endfor %}
+
+    <h3 class="form-section-title">10.3.4 Διαμονή / 10.4 Κριτήρια</h3>
+    <div class="form-grid">
+        {% include "includes/form_field.html" with field=form.person1_relationship %}
+        {% include "includes/form_field.html" with field=form.person2_relationship %}
+        {% include "includes/form_field.html" with field=form.person1_residence_community %}
+        {% include "includes/form_field.html" with field=form.person2_residence_community %}
+        {% include "includes/form_field.html" with field=form.person1_residence_address %}
+        {% include "includes/form_field.html" with field=form.person2_residence_address %}
+        {% include "includes/form_field.html" with field=form.person1_residence_start %}
+        {% include "includes/form_field.html" with field=form.person2_residence_start %}
+        {% include "includes/form_field.html" with field=form.residence_category %}
+        {% include "includes/form_field.html" with field=form.person1_has_property %}
+        {% include "includes/form_field.html" with field=form.person2_has_property %}
+        {% include "includes/form_field.html" with field=form.person1_non_alienation_clear %}
+        {% include "includes/form_field.html" with field=form.person2_non_alienation_clear %}
+        {% include "includes/form_field.html" with field=form.person1_previous_aid_clear %}
+        {% include "includes/form_field.html" with field=form.person2_previous_aid_clear %}
+        {% include "includes/form_field.html" with field=form.person1_income %}
+        {% include "includes/form_field.html" with field=form.person2_income %}
+        {% include "includes/form_field.html" with field=form.children_income %}
+    </div>
+
+    <div class="form-actions form-span-all">
+        <button type="submit" class="btn btn-primary">Αποθήκευση</button>
+        <a href="{% if is_create %}{% url 'applications:list' %}{% else %}{% url 'applications:detail' application.pk %}{% endif %}" class="btn btn-secondary">Ακύρωση</a>
+    </div>
+</form>
+</div>
+
+<div class="card" style="margin-top:1rem">
+<pre id="lookup-result" class="lookup-result" style="margin:0;border:none;background:transparent;padding:0" aria-live="polite"></pre>
+</div>
+<script>
+const PERSON_FIELD_KEYS = [
+    "first_name", "last_name", "refugee_identity_number",
+    "citizenship_cypriot", "citizenship_repatriated", "citizenship_eu", "citizenship_other",
+    "date_of_birth", "birth_place", "birth_country",
+    "parents_birth_place", "parents_birth_country"
+];
+
+function readPersonPayload(prefix) {
+    const payload = {};
+    PERSON_FIELD_KEYS.forEach((key) => {
+        const el = document.getElementById(`id_${prefix}_${key}`);
+        if (!el) return;
+        if (el.type === "checkbox") {
+            payload[key] = el.checked;
+        } else {
+            payload[key] = el.value;
+        }
+    });
+    return payload;
+}
+
+function fillPersonFromStored(prefix, person) {
+    PERSON_FIELD_KEYS.forEach((key) => {
+        const el = document.getElementById(`id_${prefix}_${key}`);
+        if (!el || person[key] === undefined) return;
+        if (el.type === "checkbox") {
+            el.checked = !!person[key];
+        } else {
+            el.value = person[key] || "";
+        }
+    });
+}
+
+function runLookup(identityFieldId, prefix) {
+    const identity = document.getElementById(identityFieldId).value.trim();
+    if (!identity) return;
+    const output = document.getElementById("lookup-result");
+    const incomingPayload = readPersonPayload(prefix);
+
+    fetch("/applications/person-compare/", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": document.querySelector("[name=csrfmiddlewaretoken]").value,
+        },
+        body: JSON.stringify({ identity_number: identity, payload: incomingPayload }),
+    })
+        .then(r => r.json())
+        .then(compare => {
+            if (!compare.exists) {
+                output.textContent = "Δεν βρέθηκε υφιστάμενο άτομο με αυτό το ΑΔΤ (νέα ταυτότητα).";
+                return null;
+            }
+            return fetch(`/applications/person-lookup/?identity=${encodeURIComponent(identity)}`)
+                .then(r => r.json())
+                .then(data => ({ compare, data }));
+        })
+        .then(bundle => {
+            if (!bundle) return;
+            const { compare, data } = bundle;
+            if (compare.has_differences) {
+                const lines = compare.differences.map(
+                    d => `${d.label}: καταχωρημένο «${d.stored_value}», στη φόρμα «${d.incoming_value}»`
+                );
+                output.textContent =
+                    `Υπάρχον άτομο (ΑΔΤ ${compare.identity_number}). Τα πεδία ` +
+                    compare.differences.map(d => d.label).join(", ") +
+                    ` διαφέρουν:\n` + lines.join("\n");
+            } else {
+                fillPersonFromStored(prefix, data.person);
+                const apps = data.applications.map(a => `${a.folder_number} (${a.submitted_on}, ${a.community})`).join("\n");
+                output.textContent = `Υπάρχον άτομο — τα στοιχεία ταυτότητας συμφωνούν. Άλλες αιτήσεις: ${data.applications_count}\n${apps}`;
+            }
+            if (prefix === "person1" && data.latest_prefill) {
+                const fields = data.latest_prefill;
+                Object.keys(fields).forEach((key) => {
+                    const el = document.getElementById(`id_${key}`);
+                    if (!el) return;
+                    if (el.type === "checkbox") {
+                        el.checked = !!fields[key];
+                    } else if (el.type === "select-one") {
+                        el.value = fields[key] ?? "";
+                    } else {
+                        el.value = fields[key] ?? "";
+                    }
+                });
+            }
+        });
+}
+document.getElementById("lookup-p1").addEventListener("click", () => runLookup("id_person1_identity_number", "person1"));
+document.getElementById("lookup-p2").addEventListener("click", () => runLookup("id_person2_identity_number", "person2"));
+</script>
+{% endblock %}

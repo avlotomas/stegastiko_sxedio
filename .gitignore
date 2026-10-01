@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.sqlite3
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# Django
+staticfiles/
+media/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Office lock/temp files
+~$*
+
+# IDE/system
+.DS_Store
+Thumbs.db

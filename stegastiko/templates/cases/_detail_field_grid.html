@@ -1,0 +1,8 @@
+<dl class="detail-grid">
+    {% for row in rows %}
+    <div>
+        <dt>{{ row.label }}</dt>
+        <dd>{% if row.value %}{{ row.value|linebreaksbr }}{% else %}—{% endif %}</dd>
+    </div>
+    {% endfor %}
+</dl>
