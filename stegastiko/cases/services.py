@@ -99,7 +99,7 @@ def suitability_summary(case: Case) -> dict:
         "priority_characteristics": case.priority_characteristics,
         "priority_documentation": case.priority_documentation,
         "land_plots": list(case.land_plots.all()),
-        "utility_services": list(case.utility_services.all()),
+        "utility_services": list(case.utility_services.select_related("service_type")),
         "consultations": list(
             case.consultations.filter(stage=case.consultations.model.Stage.SUITABILITY)
         ),

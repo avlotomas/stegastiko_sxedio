@@ -95,10 +95,14 @@ class Case(AuditedModel):
         blank=True, help_text="4.3 Τεχνική αξιολόγηση πρόσβασης στο/στα τεμάχιο/α"
     )
     section4_comments = models.TextField(blank=True, help_text="4.5 Σχόλια / Παρατηρήσεις Ενότητας 4")
+    engineer_full_name = models.CharField(
+        max_length=255, blank=True, help_text="4.6 Ονοματεπώνυμο μηχανικού"
+    )
+    technical_visit_date = models.DateField(
+        null=True, blank=True, help_text="4.6 Ημερομηνία επισκεψης"
+    )
     # 4.4 files of the technical evaluation as a whole are kept on the case (section_ref "4.4").
     attachments = GenericRelation(Attachment)
-
-    section6_comments = models.TextField(blank=True, help_text="6.7 Σχόλια / Παρατηρήσεις Ενότητας 6")
 
     recommendation_letter_date = models.DateField(
         null=True, blank=True, help_text="7 Ημερομηνία αποστολής επιστολής σύστασης"
@@ -317,7 +321,6 @@ class LandPlot(AuditedModel):
 
     class Access(models.TextChoices):
         PUBLIC_ROAD = "public_road", "Πρόσβαση σε εγγεγραμμένο δημόσιο δρόμο"
-        ROAD_REQUIRED = "road_required", "Απαιτείται διάνοιξη και εγγραφή δημόσιου δρόμου"
         OTHER = "other", "Άλλο"
 
     TECHNICAL_EVALUATION_FIELDS = (
@@ -325,6 +328,7 @@ class LandPlot(AuditedModel):
         "morphology_other",
         "morphology_comments",
         "usable_area_sqm",
+        "estimated_cost",
         "estimated_plots_count",
         "technical_suitability",
     )
@@ -369,7 +373,14 @@ class LandPlot(AuditedModel):
         decimal_places=2,
         null=True,
         blank=True,
-        help_text="4.1 Κατά προσέγγιση αξιοποιήσιμο εμβαδόν (τ.μ.)",
+        help_text="4.1 Αξιοποιήσιμο εμβαδόν γης (τ.μ.)",
+    )
+    estimated_cost = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="4.1 Εκτιμώμενο κόστος",
     )
     estimated_plots_count = models.PositiveIntegerField(
         null=True, blank=True, help_text="4.1 Εκτιμώμενος αριθμός οικοπέδων"
@@ -444,20 +455,64 @@ class LandPlot(AuditedModel):
         return " · ".join(parts)
 
 
+class UtilityServiceType(AuditedModel):
+    """4.2 Values of the «Υπηρεσία» dropdown, maintained by the administrator.
+
+    Renaming a value renames it on every case row that uses it; values in use are
+    deactivated rather than deleted.
+    """
+
+    name = models.CharField(max_length=128, unique=True, help_text="4.2 Ονομασία υπηρεσίας")
+    display_order = models.PositiveIntegerField(default=0, help_text="4.2 Σειρά εμφάνισης")
+    is_active = models.BooleanField(default=True, help_text="4.2 Ενεργή (διαθέσιμη για επιλογή)")
+
+    class Meta:
+        ordering = ("display_order", "name")
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def is_in_use(self):
+        return self.case_services.exists()
+
+
 class UtilityService(AuditedModel):
+    """4.2 One row per utility service; the same service may appear more than once."""
+
     case = models.ForeignKey(Case, on_delete=models.CASCADE, related_name="utility_services")
-    service_name = models.CharField(max_length=128, help_text="4.2 Υπηρεσία")
+    service_type = models.ForeignKey(
+        UtilityServiceType,
+        on_delete=models.PROTECT,
+        related_name="case_services",
+        help_text="4.2 Υπηρεσία",
+    )
     proximity = models.CharField(max_length=255, blank=True, help_text="4.2 Εγγύτητα με το/τα τεμάχιο/α")
     comments = models.TextField(blank=True, help_text="4.2 Σχόλια")
 
     class Meta:
         ordering = ("id",)
 
+    def __str__(self):
+        return f"{self.case.case_number} - {self.service_type}"
+
+    @property
+    def row_label(self):
+        if self.proximity:
+            return f"{self.service_type} ({self.proximity})"
+        return str(self.service_type)
+
 
 class Consultation(AuditedModel):
     class Stage(models.TextChoices):
         SUITABILITY = "suitability", "Καταλληλότητα"
         DIVISION = "division", "Διαχωρισμός"
+
+    class Department(models.TextChoices):
+        TKX = "tkx", "Τ.Κ.Χ"
+        TAY = "tay", "Τ.Α.Υ"
+        AHK = "ahk", "Α.Η.Κ"
+        OTHER = "other", "Άλλο"
 
     class Status(models.TextChoices):
         PENDING = "pending", "Εκκρεμεί"
@@ -466,7 +521,16 @@ class Consultation(AuditedModel):
 
     case = models.ForeignKey(Case, on_delete=models.CASCADE, related_name="consultations")
     stage = models.CharField(max_length=16, choices=Stage.choices, help_text="5 / 8.4 Στάδιο")
-    department = models.CharField(max_length=255, help_text="5 / 8.4 Τμήμα / Υπηρεσία")
+    department = models.CharField(
+        max_length=16,
+        choices=Department.choices,
+        help_text="5 / 8.4 Τμήμα / Υπηρεσία",
+    )
+    department_other = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="5 / 8.4 Περιγραφή όταν Τμήμα / Υπηρεσία = Άλλο",
+    )
     topic = models.TextField(blank=True, help_text="5 / 8.4 Θέμα διαβούλευσης")
     sent_date = models.DateField(null=True, blank=True, help_text="5 / 8.4 Ημ. αποστολής")
     due_date = models.DateField(null=True, blank=True, help_text="5 / 8.4 Προθεσμία απάντησης")
@@ -479,9 +543,23 @@ class Consultation(AuditedModel):
         help_text="5 / 8.4 Κατάσταση (αυτόματη από την ημ. απάντησης)",
     )
     comments = models.TextField(blank=True, help_text="5 / 8.4 Σχόλια")
+    attachments = GenericRelation(Attachment)
 
     class Meta:
         ordering = ("id",)
+
+    @property
+    def department_display(self):
+        if self.department == self.Department.OTHER:
+            return (self.department_other or "").strip() or self.get_department_display()
+        return self.get_department_display()
+
+    @property
+    def row_label(self):
+        topic = (self.topic or "").strip()
+        if topic:
+            return f"{self.department_display} — {topic[:60]}"
+        return self.department_display
 
     def save(self, *args, **kwargs):
         if self.status != self.Status.CLOSED:

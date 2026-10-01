@@ -922,6 +922,14 @@ input.checkbox-list {
     margin-left: 0.35rem;
 }
 
+.inline-form {
+    display: inline;
+}
+
+.data-table__actions .inline-form {
+    margin-left: 0.35rem;
+}
+
 .data-table tbody tr:hover {
     background: #f8fafc;
 }

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load case_detail %}
 
 {% block title %}{{ section_title }}{% endblock %}
 {% block body_class %}case-work{% endblock %}
@@ -91,7 +92,7 @@
     </div>
     {% endif %}
 
-    <h3 class="form-section-title">9.1 Βασικά στοιχεία</h3>
+    <h3 class="form-section-title">{% case_subsection_heading "9.1" %}</h3>
     <p class="form-readonly">
         Επαρχία {{ case.community.district }} · Κοινότητα/Δ.Δ. {{ case.community.name }} ·
         τύπος διαδικασίας {{ case.get_case_type_display }} ·

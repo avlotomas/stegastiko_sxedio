@@ -1,46 +1,25 @@
 {% comment %}
 Ενότητα 4 — 4.1 τεχνική αξιολόγηση ανά τεμάχιο (grid με μία γραμμή ανά τεμάχιο της 3.1·
-επεξεργασία σε modal), 4.2 υπηρεσίες κοινής ωφέλειας, 4.3 πρόσβαση, 4.4 αρχεία, 4.5 σχόλια.
+επεξεργασία σε modal), 4.2 υπηρεσίες κοινής ωφέλειας (grid με προσθήκη/επεξεργασία/διαγραφή
+σε modal), 4.3 πρόσβαση, 4.4 αρχεία, 4.5 σχόλια, 4.6 επίσκεψη μηχανικού.
 {% endcomment %}
+{% load case_detail %}
 
-<h3 class="form-section-title">4.1 Τεχνική αξιολόγηση ανά τεμάχιο</h3>
+<h3 class="form-section-title">{% case_subsection_heading "4.1" %}</h3>
 
 <div class="form-span-all" data-land-plot-status></div>
 {% include "cases/_plot_evaluation_grid.html" %}
-<p class="helptext">
-    Οι γραμμές αντιστοιχούν ένα προς ένα στα τεμάχια της 3.1· η προσθήκη και η διαγραφή τεμαχίου
-    γίνονται μόνο στην <a href="{% url 'cases:section_edit' case.pk '3' %}">Ενότητα 3</a>.
-    Η επεξεργασία αξιολόγησης αποθηκεύεται αμέσως· η «Αποθήκευση» στο τέλος της σελίδας αφορά τις 4.2–4.5.
-</p>
 
-{% for legend, formset in formsets %}
-<h3 class="form-section-title">{{ legend }}</h3>
-<div class="form-span-all">
-    {{ formset.management_form }}
-    {% if formset.non_form_errors %}
-    <div class="alert alert--error">
-        {% for error in formset.non_form_errors %}{{ error }}{% endfor %}
-    </div>
-    {% endif %}
-    {% for child in formset %}
-    <div class="formset-row">
-        {% for hidden in child.hidden_fields %}{{ hidden }}{% endfor %}
-        <div class="form-grid">
-            {% for field in child.visible_fields %}
-                {% include "includes/form_field.html" with field=field %}
-            {% endfor %}
-        </div>
-    </div>
-    {% endfor %}
-</div>
-{% endfor %}
+<h3 class="form-section-title">{% case_subsection_heading "4.2" %}</h3>
+<div class="form-span-all" data-utility-service-status></div>
+{% include "cases/_utility_service_grid.html" %}
 
-<h3 class="form-section-title">4.3 Πρόσβαση</h3>
+<h3 class="form-section-title">{% case_subsection_heading "4.3" %}</h3>
 <div class="form-grid form-span-all">
     {% include "includes/form_field.html" with field=form.access_technical_evaluation wide=True %}
 </div>
 
-<h3 class="form-section-title">4.4 Επισυναπτόμενα αρχεία</h3>
+<h3 class="form-section-title">{% case_subsection_heading "4.4" %}</h3>
 <div class="form-grid form-span-all">
     <div class="form-field form-field--wide" data-file-picker>
         <label for="{{ form.new_files.id_for_label }}">Αρχεία τεχνικής αξιολόγησης (συνολικά, όχι ανά τεμάχιο)</label>
@@ -61,11 +40,23 @@
             {% for error in form.new_files.errors %}<li>{{ error }}</li>{% endfor %}
         </ul>
         {% endif %}
-        <p class="helptext">Επιλογή πολλών αρχείων μαζί ή σε διαδοχικές επιλογές· αποθηκεύονται με την «Αποθήκευση».</p>
     </div>
 </div>
 
-<h3 class="form-section-title">4.5 Σχόλια / Παρατηρήσεις Ενότητας 4</h3>
+<h3 class="form-section-title">{% case_subsection_heading "4.5" %}</h3>
 <div class="form-grid form-span-all">
-    {% include "includes/form_field.html" with field=form.section4_comments wide=True %}
+    <div class="form-field form-field--wide">
+        {{ form.section4_comments }}
+        {% if form.section4_comments.errors %}
+        <ul class="errorlist">
+            {% for error in form.section4_comments.errors %}<li>{{ error }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+</div>
+
+<h3 class="form-section-title">{% case_subsection_heading "4.6" %}</h3>
+<div class="form-grid form-span-all">
+    {% include "includes/form_field.html" with field=form.engineer_full_name wide=True %}
+    {% include "includes/form_field.html" with field=form.technical_visit_date wide=True %}
 </div>

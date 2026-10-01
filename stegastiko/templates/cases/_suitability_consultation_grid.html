@@ -1,0 +1,99 @@
+{% comment %}
+Ενότητα 5 — grid διαβουλεύσεων καταλληλότητας. Columns sort on click; re-rendered after modal
+add/edit/delete. `readonly` hides actions (case folder).
+{% endcomment %}
+<div{% if not readonly %} data-suitability-consultation-container{% endif %}>
+{% if not readonly %}
+<div class="form-actions form-span-all">
+    <button type="button"
+            class="btn btn-secondary"
+            data-suitability-consultation-open="{% url 'cases:suitability_consultation_create' case.pk %}">
+        Προσθήκη διαβούλευσης
+    </button>
+</div>
+{% endif %}
+<div class="table-wrap">
+    <table class="data-table" data-suitability-consultation-table>
+        <thead>
+        <tr>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-suitability-consultation-sort="department">
+                    Τμήμα / Υπηρεσία
+                </button>
+            </th>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-suitability-consultation-sort="topic">
+                    Θέμα διαβούλευσης
+                </button>
+            </th>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-suitability-consultation-sort="sent">
+                    Ημ. αποστολής
+                </button>
+            </th>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-suitability-consultation-sort="due">
+                    Προθεσμία απάντησης
+                </button>
+            </th>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-suitability-consultation-sort="response">
+                    Ημ. λήψης απάντησης
+                </button>
+            </th>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-suitability-consultation-sort="opinion">
+                    Άποψη / Απάντηση
+                </button>
+            </th>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-suitability-consultation-sort="status">
+                    Κατάσταση
+                </button>
+            </th>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-suitability-consultation-sort="comments">
+                    Σχόλια
+                </button>
+            </th>
+            <th>Επισυναπτόμενο αρχείο</th>
+            {% if not readonly %}<th><span class="visually-hidden">Ενέργειες</span></th>{% endif %}
+        </tr>
+        </thead>
+        <tbody>
+        {% for consultation in suitability_consultations %}
+            <tr data-suitability-consultation-row>
+                <td data-sort-department="{{ consultation.department_display }}">{{ consultation.department_display }}</td>
+                <td data-sort-topic="{{ consultation.topic }}">{{ consultation.topic|default:"—"|linebreaksbr }}</td>
+                <td data-sort-sent="{{ consultation.sent_date|date:'Y-m-d' }}">{{ consultation.sent_date|default:"—" }}</td>
+                <td data-sort-due="{{ consultation.due_date|date:'Y-m-d' }}">{{ consultation.due_date|default:"—" }}</td>
+                <td data-sort-response="{{ consultation.response_date|date:'Y-m-d' }}">{{ consultation.response_date|default:"—" }}</td>
+                <td data-sort-opinion="{{ consultation.response_text }}">{{ consultation.response_text|default:"—"|linebreaksbr }}</td>
+                <td data-sort-status="{{ consultation.get_status_display }}">{{ consultation.get_status_display }}</td>
+                <td data-sort-comments="{{ consultation.comments }}">{{ consultation.comments|default:"—"|linebreaksbr }}</td>
+                <td>
+                    {% for attachment in consultation.attachments.all %}
+                    <a href="{% url 'cases:attachment_download' case.pk attachment.pk %}">{{ attachment.filename }}</a>{% if not forloop.last %}<br>{% endif %}
+                    {% empty %}—{% endfor %}
+                </td>
+                {% if not readonly %}
+                <td class="data-table__actions">
+                    <button type="button" class="btn btn-secondary btn-sm"
+                            data-suitability-consultation-open="{% url 'cases:suitability_consultation_edit' case.pk consultation.pk %}">
+                        Επεξεργασία
+                    </button>
+                    <button type="button" class="btn btn-danger btn-sm"
+                            data-suitability-consultation-delete="{% url 'cases:suitability_consultation_delete' case.pk consultation.pk %}"
+                            data-suitability-consultation-label="{{ consultation.row_label }}">
+                        Διαγραφή
+                    </button>
+                </td>
+                {% endif %}
+            </tr>
+        {% empty %}
+            <tr><td colspan="{% if readonly %}9{% else %}10{% endif %}">Δεν έχουν καταχωριστεί διαβουλεύσεις.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+</div>

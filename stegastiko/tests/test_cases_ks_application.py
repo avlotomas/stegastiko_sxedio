@@ -10,16 +10,19 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 
 from cases.models import (
     Case,
     CompletenessCheck,
+    Consultation,
     Field,
     InfrastructureCheck,
     LandPlot,
     Parcel,
     SubmissionCycle,
+    UtilityServiceType,
     ValuationReferral,
     YesNo,
 )
@@ -502,7 +505,7 @@ def test_section_2_uses_21_22_23_structure(community, staff_client):
     assert reverse("cases:completeness_check_create", args=[case.pk]) in html
 
     detail = staff_client.get(reverse("cases:detail", args=[case.pk])).content.decode()
-    assert "2.1 Τρέχον αποτέλεσμα ελέγχου" in detail
+    assert "2.1 Έλεγχοι πληρότητας" in detail
     assert "Πίνακας ελέγχων πληρότητας" in detail
     assert "2.3 Σχόλια / Παρατηρήσεις" in detail
 
@@ -982,6 +985,7 @@ def _evaluation_values(**overrides):
         "morphology_other": "",
         "morphology_comments": "Ομαλό ανάγλυφο",
         "usable_area_sqm": "4000",
+        "estimated_cost": "125000.50",
         "estimated_plots_count": "5",
         "technical_suitability": LandPlot.SuitabilityDecision.SUITABLE,
     }
@@ -993,10 +997,6 @@ def _section4_post(**overrides):
     data = {
         "access_technical_evaluation": "Πρόσβαση σε εγγεγραμμένο δημόσιο δρόμο.",
         "section4_comments": "",
-        "utility_services-TOTAL_FORMS": "0",
-        "utility_services-INITIAL_FORMS": "0",
-        "utility_services-MIN_NUM_FORMS": "0",
-        "utility_services-MAX_NUM_FORMS": "1000",
     }
     data.update(overrides)
     return data
@@ -1015,6 +1015,7 @@ def test_section_4_uses_41_to_45_structure(community, staff_client):
         "4.3 Πρόσβαση",
         "4.4 Επισυναπτόμενα αρχεία",
         "4.5 Σχόλια / Παρατηρήσεις Ενότητας 4",
+        "4.6 Στοιχεία επίσκεψης μηχανικού",
     )
     positions = [html.index(heading) for heading in headings]
     assert positions == sorted(positions)
@@ -1028,6 +1029,9 @@ def test_section_4_uses_41_to_45_structure(community, staff_client):
     assert 'id="land-plot-dialog"' in html
     assert 'enctype="multipart/form-data"' in html
     assert "Κα4" in html
+    assert "Αξιοποιήσιμο εμβαδόν γης (τ.μ.)" in html
+    assert "Εκτιμώμενο κόστος" in html
+    assert "Κατά προσέγγιση αξιοποιήσιμο" not in html
 
     detail = staff_client.get(reverse("cases:detail", args=[case.pk])).content.decode()
     positions = [detail.index(heading) for heading in headings]
@@ -1079,6 +1083,7 @@ def test_plot_evaluation_modal_saves_41_only(community, staff_client):
     assert plot.parcel_number == "123"
     assert plot.morphology == LandPlot.Morphology.FLAT
     assert plot.usable_area_sqm == Decimal("4000")
+    assert plot.estimated_cost == Decimal("125000.50")
     assert plot.estimated_plots_count == 5
     assert plot.technical_suitability == LandPlot.SuitabilityDecision.SUITABLE
     assert case.land_plots.count() == 1
@@ -1138,12 +1143,93 @@ def test_plot_evaluation_modal_is_scoped_to_its_case(community, staff_client):
 
 
 @pytest.mark.django_db
+def test_section_4_blank_pdf_export(community, staff_client):
+    case = _make_case(community)
+    case.land_plots.create(
+        parcel_number="123", sheet_plan="30/12", area_sqm=Decimal("4500"), zone="Κα4"
+    )
+    UtilityServiceType = __import__(
+        "cases.models", fromlist=["UtilityServiceType"]
+    ).UtilityServiceType
+    UtilityServiceType.objects.get_or_create(name="ΑΗΚ", defaults={"display_order": 1})
+
+    edit_html = staff_client.get(reverse("cases:section_edit", args=[case.pk, "4"])).content.decode()
+    assert reverse("cases:section_4_blank_pdf", args=[case.pk]) in edit_html
+    assert "Εξαγωγή PDF φόρμας" in edit_html
+
+    url = reverse("cases:section_4_blank_pdf", args=[case.pk])
+    response = staff_client.get(url)
+    assert response.status_code == 200
+    assert response["Content-Type"] == "application/pdf"
+    assert response.content.startswith(b"%PDF")
+    assert "technical_evaluation_" in response["Content-Disposition"]
+    assert len(response.content) > 2000
+
+
+@pytest.mark.django_db
+def test_section_6_report_pdf_export(community, staff_client):
+    from cases.section6_report_pdf import REPORT_TITLE, section6_report_context
+
+    case = _make_case(community)
+    case.priority_protection_zones = True
+    case.state_land_remains_sufficient = YesNo.YES
+    case.access_technical_evaluation = "Πρόσβαση από τον κύριο δρόμο."
+    case.save()
+    case.land_plots.create(
+        parcel_number="123",
+        area_sqm=Decimal("4500"),
+        technical_suitability=LandPlot.SuitabilityDecision.SUITABLE,
+        suitability_decision=LandPlot.SuitabilityDecision.CONDITIONAL,
+        suitability_justification="Απαιτείται διαπλάτυνση δρόμου.",
+    )
+    case.consultations.create(
+        stage=Consultation.Stage.SUITABILITY, department=Consultation.Department.TKX, topic="Αξία"
+    )
+    case.consultations.create(
+        stage=Consultation.Stage.DIVISION, department=Consultation.Department.AHK, topic="Δίκτυο"
+    )
+
+    context = section6_report_context(case)
+    assert context["report_title"] == REPORT_TITLE
+    assert [c.topic for c in context["summary"]["consultations"]] == ["Αξία"]
+    assert context["heading_66"].startswith("6.6 ")
+    assert context["heading_41"].startswith("4.1 ")
+
+    # Ενότητα 6 shows the 4.1 grid read-only in place of the old 6.2 table.
+    section6_html = staff_client.get(reverse("cases:section_edit", args=[case.pk, "6"])).content.decode()
+    assert "Εκτιμώμενος αριθμός οικοπέδων" in section6_html
+    assert "data-land-plot-open" not in section6_html
+
+    for url_name, section in (("cases:section_edit", "6"), ("cases:detail", None)):
+        args = [case.pk, section] if section else [case.pk]
+        html = staff_client.get(reverse(url_name, args=args)).content.decode()
+        assert reverse("cases:section_6_report_pdf", args=[case.pk]) in html
+
+    response = staff_client.get(reverse("cases:section_6_report_pdf", args=[case.pk]))
+    assert response.status_code == 200
+    assert response["Content-Type"] == "application/pdf"
+    assert response.content.startswith(b"%PDF")
+    assert "pinakes_aksiologisis_" in response["Content-Disposition"]
+
+
+@pytest.mark.django_db
+def test_section_6_report_pdf_not_available_for_unallocated_plots(community, staff_client):
+    case = _make_case(community, case_type=Case.CaseType.UNALLOCATED_PLOTS)
+    response = staff_client.get(reverse("cases:section_6_report_pdf", args=[case.pk]))
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
 def test_section_4_saves_43_44_45_with_case_files(community, staff_client):
     from django.core.files.uploadedfile import SimpleUploadedFile
 
     case = _make_case(community)
     url = reverse("cases:section_edit", args=[case.pk, "4"])
-    data = _section4_post(section4_comments="Σχόλια 4.5")
+    data = _section4_post(
+        section4_comments="Σχόλια 4.5",
+        engineer_full_name="Μαρία Παπαδοπούλου",
+        technical_visit_date="2026-03-15",
+    )
     data["new_files"] = [
         SimpleUploadedFile("ekthesi.pdf", b"%PDF-1", content_type="application/pdf"),
         SimpleUploadedFile("photo.jpg", b"jpg", content_type="image/jpeg"),
@@ -1153,6 +1239,8 @@ def test_section_4_saves_43_44_45_with_case_files(community, staff_client):
     case.refresh_from_db()
     assert case.access_technical_evaluation.startswith("Πρόσβαση")
     assert case.section4_comments == "Σχόλια 4.5"
+    assert case.engineer_full_name == "Μαρία Παπαδοπούλου"
+    assert str(case.technical_visit_date) == "2026-03-15"
     attachments = {a.filename: a for a in case.attachments.all()}
     assert set(attachments) == {"ekthesi.pdf", "photo.jpg"}
     assert all(a.section_ref == "4.4" for a in attachments.values())
@@ -1237,7 +1325,6 @@ def _plot_values(**overrides):
 def _section3_post(**overrides):
     data = {
         "state_land_remains_sufficient": YesNo.YES,
-        "state_land_comments": "Παραμένουν εκτάσεις.",
         "section3_comments": "",
     }
     data.update(overrides)
@@ -1251,7 +1338,7 @@ def test_section_3_uses_31_32_33_structure(community, staff_client):
     html = staff_client.get(reverse("cases:section_edit", args=[case.pk, "3"])).content.decode()
     positions = [
         html.index("3.1 Πίνακας τεμαχίων"),
-        html.index("3.2 Έλεγχος κρατικής γης"),
+        html.index("3.2 Έλεγχος επάρκειας κρατικής γης"),
         html.index("3.3 Σχόλια / Παρατηρήσεις Ενότητας 3"),
     ]
     assert positions == sorted(positions)
@@ -1268,7 +1355,7 @@ def test_section_3_uses_31_32_33_structure(community, staff_client):
     detail = staff_client.get(reverse("cases:detail", args=[case.pk])).content.decode()
     for heading in (
         "3.1 Πίνακας τεμαχίων",
-        "3.2 Έλεγχος κρατικής γης",
+        "3.2 Έλεγχος επάρκειας κρατικής γης",
         "3.3 Σχόλια / Παρατηρήσεις Ενότητας 3",
         "Αρχεία τεμαχίου",
     ):
@@ -1452,4 +1539,232 @@ def test_land_plot_delete_removes_plot_and_files(community, staff_client):
     ).exists()
     assert ActionHistory.objects.filter(
         entity_type="Attachment", action="DELETE", case_id=case.pk, section_ref="3.1"
+    ).exists()
+
+
+# --- 4.2 Υπηρεσίες κοινής ωφέλειας: grid με modal, τιμές από κατάλογο ---
+
+
+def _service_type(name):
+    return UtilityServiceType.objects.get(name=name)
+
+
+def _service_values(service_type, **overrides):
+    values = {"service_type": str(service_type.pk), "proximity": "50 μ.", "comments": ""}
+    values.update(overrides)
+    return values
+
+
+@pytest.mark.django_db
+def test_utility_service_dropdown_is_seeded_in_order():
+    assert list(UtilityServiceType.objects.values_list("name", flat=True)) == [
+        "Τηλεπικοινωνίες",
+        "ΑΗΚ",
+        "Υδατοπρομήθεια",
+        "Αποχέτευση",
+        "Άλλο",
+    ]
+
+
+@pytest.mark.django_db
+def test_section_4_shows_utility_services_as_sortable_grid(community, staff_client):
+    case = _make_case(community)
+    case.utility_services.create(service_type=_service_type("ΑΗΚ"), proximity="20 μ.")
+    html = staff_client.get(reverse("cases:section_edit", args=[case.pk, "4"])).content.decode()
+    assert "data-utility-service-container" in html
+    assert reverse("cases:utility_service_create", args=[case.pk]) in html
+    assert 'id="utility-service-dialog"' in html
+    assert "utility_services-TOTAL_FORMS" not in html
+    for key in ("service", "proximity", "comments"):
+        assert f'data-utility-service-sort="{key}"' in html
+
+    detail = staff_client.get(reverse("cases:detail", args=[case.pk])).content.decode()
+    assert "20 μ." in detail
+    assert 'data-utility-service-sort="service"' in detail
+    assert "data-utility-service-open" not in detail
+    assert "data-utility-service-delete" not in detail
+
+
+@pytest.mark.django_db
+def test_utility_service_modal_adds_the_same_service_more_than_once(community, staff_client):
+    case = _make_case(community)
+    url = reverse("cases:utility_service_create", args=[case.pk])
+    assert staff_client.get(url).status_code == 404
+
+    form = staff_client.get(url, **JSON).json()
+    assert form["ok"] is True
+    assert "4.2 Νέα υπηρεσία" in form["html"]
+    for name in ("Τηλεπικοινωνίες", "ΑΗΚ", "Υδατοπρομήθεια", "Αποχέτευση", "Άλλο"):
+        assert name in form["html"]
+
+    water = _service_type("Υδατοπρομήθεια")
+    first = staff_client.post(url, _service_values(water, proximity="Δίπλα στο τεμάχιο 123"), **JSON)
+    second = staff_client.post(url, _service_values(water, proximity="300 μ. από το 456"), **JSON)
+    assert first.json()["ok"] is True
+    payload = second.json()
+    assert payload["ok"] is True
+    assert "Υδατοπρομήθεια" in payload["message"]
+    assert "300 μ. από το 456" in payload["grid_html"]
+    assert list(case.utility_services.values_list("service_type__name", flat=True)) == [
+        "Υδατοπρομήθεια",
+        "Υδατοπρομήθεια",
+    ]
+    assert ActionHistory.objects.filter(
+        entity_type="UtilityService", action="CREATE", case_id=case.pk, section_ref="4.2"
+    ).count() == 2
+
+    missing = staff_client.post(url, {**_service_values(water), "service_type": ""}, **JSON)
+    assert missing.status_code == 400
+    assert missing.json()["ok"] is False
+    assert case.utility_services.count() == 2
+
+
+@pytest.mark.django_db
+def test_utility_service_modal_edits_and_deletes_rows(community, staff_client):
+    case = _make_case(community)
+    service = case.utility_services.create(service_type=_service_type("ΑΗΚ"), proximity="20 μ.")
+    edit_url = reverse("cases:utility_service_edit", args=[case.pk, service.pk])
+
+    payload = staff_client.post(
+        edit_url,
+        _service_values(_service_type("Αποχέτευση"), proximity="", comments="Σύνδεση με κεντρικό αγωγό"),
+        **JSON,
+    ).json()
+    assert payload["ok"] is True
+    service.refresh_from_db()
+    assert service.service_type.name == "Αποχέτευση"
+    assert service.comments == "Σύνδεση με κεντρικό αγωγό"
+    assert ActionHistory.objects.filter(
+        entity_type="UtilityService",
+        action="UPDATE",
+        case_id=case.pk,
+        section_ref="4.2",
+        field_name="service_type",
+    ).exists()
+
+    delete_url = reverse("cases:utility_service_delete", args=[case.pk, service.pk])
+    assert staff_client.get(delete_url, **JSON).status_code == 404
+    payload = staff_client.post(delete_url, **JSON).json()
+    assert payload["ok"] is True
+    assert "Αποχέτευση" in payload["message"]
+    assert not case.utility_services.exists()
+    assert ActionHistory.objects.filter(
+        entity_type="UtilityService", action="DELETE", case_id=case.pk, section_ref="4.2"
+    ).exists()
+
+
+@pytest.mark.django_db
+def test_utility_service_modal_is_scoped_to_its_case(community, staff_client):
+    case = _make_case(community)
+    other_case = _make_case(community, number="CASE-ABG-02")
+    service = other_case.utility_services.create(service_type=_service_type("ΑΗΚ"))
+    edit_url = reverse("cases:utility_service_edit", args=[case.pk, service.pk])
+    assert staff_client.get(edit_url, **JSON).status_code == 404
+    delete_url = reverse("cases:utility_service_delete", args=[case.pk, service.pk])
+    assert staff_client.post(delete_url, **JSON).status_code == 404
+    assert other_case.utility_services.count() == 1
+
+    unallocated = _make_case(
+        community, case_type=Case.CaseType.UNALLOCATED_PLOTS, number="CASE-ABG-03"
+    )
+    url = reverse("cases:utility_service_create", args=[unallocated.pk])
+    assert staff_client.get(url, **JSON).status_code == 404
+
+
+@pytest.mark.django_db
+def test_inactive_service_is_kept_on_existing_rows_only(community, staff_client):
+    case = _make_case(community)
+    telecom = _service_type("Τηλεπικοινωνίες")
+    service = case.utility_services.create(service_type=telecom)
+    telecom.is_active = False
+    telecom.save()
+
+    new_form = staff_client.get(reverse("cases:utility_service_create", args=[case.pk]), **JSON).json()
+    assert "Τηλεπικοινωνίες" not in new_form["html"]
+    rejected = staff_client.post(
+        reverse("cases:utility_service_create", args=[case.pk]), _service_values(telecom), **JSON
+    )
+    assert rejected.status_code == 400
+
+    edit_url = reverse("cases:utility_service_edit", args=[case.pk, service.pk])
+    assert "Τηλεπικοινωνίες" in staff_client.get(edit_url, **JSON).json()["html"]
+    assert staff_client.post(edit_url, _service_values(telecom), **JSON).json()["ok"] is True
+
+
+def _consultation_values(**overrides):
+    values = {
+        "department": Consultation.Department.TKX,
+        "department_other": "",
+        "topic": "Θέμα δοκιμής",
+        "sent_date": "2026-02-01",
+        "due_date": "2026-02-15",
+        "response_date": "",
+        "response_text": "",
+        "comments": "",
+    }
+    values.update(overrides)
+    return values
+
+
+@pytest.mark.django_db
+def test_section_5_shows_consultations_as_sortable_grid(community, staff_client):
+    case = _make_case(community)
+    case.consultations.create(
+        stage=Consultation.Stage.SUITABILITY,
+        department=Consultation.Department.AHK,
+        topic="Αίτημα γνώμης",
+    )
+    html = staff_client.get(reverse("cases:section_edit", args=[case.pk, "5"])).content.decode()
+    assert "data-suitability-consultation-container" in html
+    assert reverse("cases:suitability_consultation_create", args=[case.pk]) in html
+    assert 'id="suitability-consultation-dialog"' in html
+    assert "consultations-TOTAL_FORMS" not in html
+    for key in ("department", "topic", "sent", "due", "response", "opinion", "status", "comments"):
+        assert f'data-suitability-consultation-sort="{key}"' in html
+
+    detail = staff_client.get(reverse("cases:detail", args=[case.pk])).content.decode()
+    assert "Αίτημα γνώμης" in detail
+    assert "data-suitability-consultation-open" not in detail
+
+
+@pytest.mark.django_db
+def test_suitability_consultation_modal_crud_and_attachment(community, staff_client):
+    case = _make_case(community)
+    create_url = reverse("cases:suitability_consultation_create", args=[case.pk])
+    assert staff_client.get(create_url).status_code == 404
+
+    form = staff_client.get(create_url, **JSON).json()
+    assert form["ok"] is True
+    assert "Τ.Κ.Χ" in form["html"]
+    assert "Τ.Α.Υ" in form["html"]
+
+    payload = staff_client.post(create_url, _consultation_values(), **JSON).json()
+    assert payload["ok"] is True
+    consultation = case.consultations.get()
+    assert consultation.department == Consultation.Department.TKX
+    assert consultation.get_status_display() == "Εκκρεμεί"
+
+    edit_url = reverse("cases:suitability_consultation_edit", args=[case.pk, consultation.pk])
+    with_attachment = _consultation_values(
+        department=Consultation.Department.OTHER,
+        department_other="ΤΠΟ",
+        response_date="2026-02-20",
+        response_text="Θετική",
+    )
+    staff_client.post(
+        edit_url,
+        {**with_attachment, "new_files": SimpleUploadedFile("apantisi.pdf", b"pdf", "application/pdf")},
+        **JSON,
+    )
+    consultation.refresh_from_db()
+    assert consultation.department_display == "ΤΠΟ"
+    assert consultation.get_status_display() == "Λήφθηκε"
+    assert consultation.attachments.filter(section_ref="5").count() == 1
+
+    delete_url = reverse("cases:suitability_consultation_delete", args=[case.pk, consultation.pk])
+    staff_client.post(delete_url, **JSON)
+    assert not case.consultations.exists()
+    assert not Attachment.objects.filter(section_ref="5").exists()
+    assert ActionHistory.objects.filter(
+        entity_type="Consultation", action="DELETE", case_id=case.pk, section_ref="5"
     ).exists()

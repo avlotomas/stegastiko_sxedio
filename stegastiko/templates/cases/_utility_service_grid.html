@@ -1,0 +1,63 @@
+{% comment %}
+4.2 Utility services grid: one row per service, the same service may repeat. Columns sort on
+click; re-rendered after every modal add/edit/delete. `readonly` hides the actions.
+{% endcomment %}
+<div{% if not readonly %} data-utility-service-container{% endif %}>
+{% if not readonly %}
+<div class="form-actions form-span-all">
+    <button type="button"
+            class="btn btn-secondary"
+            data-utility-service-open="{% url 'cases:utility_service_create' case.pk %}">
+        Προσθήκη υπηρεσίας
+    </button>
+</div>
+{% endif %}
+<div class="table-wrap">
+    <table class="data-table" data-utility-service-table>
+        <thead>
+        <tr>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-utility-service-sort="service">
+                    Υπηρεσία
+                </button>
+            </th>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-utility-service-sort="proximity">
+                    Εγγύτητα με το/τα τεμάχιο/α
+                </button>
+            </th>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-utility-service-sort="comments">
+                    Σχόλια
+                </button>
+            </th>
+            {% if not readonly %}<th><span class="visually-hidden">Ενέργειες</span></th>{% endif %}
+        </tr>
+        </thead>
+        <tbody>
+        {% for service in utility_services %}
+            <tr data-utility-service-row>
+                <td data-sort-service="{{ service.service_type.name }}">{{ service.service_type.name }}</td>
+                <td data-sort-proximity="{{ service.proximity }}">{{ service.proximity|default:"—" }}</td>
+                <td data-sort-comments="{{ service.comments }}">{{ service.comments|default:"—"|linebreaksbr }}</td>
+                {% if not readonly %}
+                <td class="data-table__actions">
+                    <button type="button" class="btn btn-secondary btn-sm"
+                            data-utility-service-open="{% url 'cases:utility_service_edit' case.pk service.pk %}">
+                        Επεξεργασία
+                    </button>
+                    <button type="button" class="btn btn-danger btn-sm"
+                            data-utility-service-delete="{% url 'cases:utility_service_delete' case.pk service.pk %}"
+                            data-utility-service-label="{{ service.row_label }}">
+                        Διαγραφή
+                    </button>
+                </td>
+                {% endif %}
+            </tr>
+        {% empty %}
+            <tr><td colspan="{% if readonly %}3{% else %}4{% endif %}">Δεν έχουν καταχωριστεί υπηρεσίες.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+</div>

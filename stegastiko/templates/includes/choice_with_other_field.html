@@ -2,7 +2,7 @@
 A choice whose «Άλλο» is described in the same cell (§Α.5): `field` is the select,
 `other` the free-text input shown only while "other" is selected.
 {% endcomment %}
-<div class="form-field form-field--with-other" data-other-group>
+<div class="form-field form-field--with-other{% if wide %} form-field--wide{% endif %}" data-other-group>
     {{ field.label_tag }}
     {{ field }}
     {{ other }}

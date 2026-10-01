@@ -1,6 +1,7 @@
 import hashlib
 import json
 
+from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
@@ -187,6 +188,24 @@ class SystemSetting(AuditedModel):
         if field_name == "value" and self.key in self.SECRET_KEYS and value:
             return "********"
         return value
+
+
+class ReminderRead(AuditedModel):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="reminder_reads",
+    )
+    reminder_key = models.CharField(max_length=128)
+    reminder_type = models.CharField(max_length=64)
+    read_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ("-read_at", "-id")
+        unique_together = ("user", "reminder_key")
+
+    def __str__(self):
+        return f"{self.user_id}:{self.reminder_key}"
 
 
 class DocumentCatalogItem(AuditedModel):

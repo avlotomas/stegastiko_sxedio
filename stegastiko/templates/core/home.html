@@ -4,12 +4,56 @@
 
 {% block content %}
 <div class="page-header">
-    <h1>Καλώς ήρθατε</h1>
+    <h1>Πίνακας ελέγχου</h1>
     <p class="page-header__lead">
         Πλατφόρμα διαχείρισης στεγαστικού σχεδίου διάθεσης οικοπέδων. Η διαδικασία έχει
         <strong>δύο είδη αιτήσεων</strong>: την αίτηση του Κοινοτικού Συμβουλίου για διαχωρισμό
         κρατικής γης σε οικόπεδα, και την αίτηση του πολίτη για απόκτηση οικοπέδου.
     </p>
+</div>
+
+<div class="card">
+    <h2 class="card__title">Υπενθυμίσεις</h2>
+    {% if dashboard_reminders %}
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Υπόθεση</th>
+                    <th>Υπενθύμιση</th>
+                    <th>Προθεσμία</th>
+                    <th>Ενέργεια</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for reminder in dashboard_reminders %}
+                <tr>
+                    <td>{{ reminder.case_number }}</td>
+                    <td>{{ reminder.details }}</td>
+                    <td>{{ reminder.due_date|date:"d/m/Y" }}</td>
+                    <td class="data-table__actions">
+                        <form method="post" action="{% url 'reminder_mark_read' %}" class="inline-form">
+                            {% csrf_token %}
+                            <input type="hidden" name="reminder_key" value="{{ reminder.key }}">
+                            <input type="hidden" name="reminder_type" value="{{ reminder.reminder_type }}">
+                            <input type="hidden" name="next" value="{{ request.path }}">
+                            <button type="submit" class="btn btn-secondary">Σήμανση ως διαβασμένο</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if dashboard_reminders_total > dashboard_reminders|length %}
+    <p class="text-muted">Εμφανίζονται τα πρώτα 5 από {{ dashboard_reminders_total }} υπενθυμίσεις.</p>
+    {% endif %}
+    <p style="margin-top: 0.75rem;">
+        <a href="{% url 'reminders' %}">Προβολή όλων των υπενθυμίσεων</a>
+    </p>
+    {% else %}
+    <p class="text-muted">Δεν υπάρχουν υπενθυμίσεις για εκκρεμείς διαβουλεύσεις.</p>
+    {% endif %}
 </div>
 
 <div class="tile-grid">

@@ -1,0 +1,6 @@
+{% comment %}Ενότητα 5 — πίνακας διαβουλεύσεων καταλληλότητας (grid με modal).{% endcomment %}
+{% load case_detail %}
+
+<h3 class="form-section-title">Διαβουλεύσεις με Τμήματα / Υπηρεσίες</h3>
+<div class="form-span-all" data-suitability-consultation-status></div>
+{% include "cases/_suitability_consultation_grid.html" with suitability_consultations=suitability_consultations %}

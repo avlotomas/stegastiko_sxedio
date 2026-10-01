@@ -9,8 +9,13 @@ from django import forms
 ISO_DATE_FORMAT = "%Y-%m-%d"
 
 # Model help_text carries the specification wording prefixed by its section number,
-# e.g. "8.1 Ημερομηνία ανάθεσης μελέτης".
+# e.g. "8.1 Ημερομηνία ανάθεσης μελέτης". Shared fields may list several refs:
+# "5 / 8.4 Τμήμα / Υπηρεσία".
 SECTION_PREFIX = re.compile(r"^(\d+(?:\.\d+)*)\s+(\S.*)$", re.DOTALL)
+COMPOUND_SECTION_PREFIX = re.compile(
+    r"^(?:(?:\d+(?:\.\d+)*)\s*(?:/\s*)?)+\s*(?P<label>\S.*)$",
+    re.DOTALL,
+)
 
 
 class IsoDateInput(forms.DateInput):
@@ -49,10 +54,19 @@ class MultipleFileField(forms.FileField):
 
 
 def split_section_reference(help_text):
-    """Split "10.4.6 Ετήσιο εισόδημα" into ("10.4.6", "Ετήσιο εισόδημα")."""
-    match = SECTION_PREFIX.match((help_text or "").strip())
+    """Split a prefixed help_text into (section_ref, greek_label).
+
+    Handles a single ref ("8.1 Ημερομηνία…") and compound refs ("5 / 8.4 Τμήμα…").
+    """
+    text = (help_text or "").strip()
+    compound = COMPOUND_SECTION_PREFIX.match(text)
+    if compound:
+        prefix = text[: compound.start("label")].strip()
+        refs = re.findall(r"\d+(?:\.\d+)*", prefix)
+        return (refs[-1] if refs else ""), compound.group("label").strip()
+    match = SECTION_PREFIX.match(text)
     if not match:
-        return "", (help_text or "").strip()
+        return "", text
     return match.group(1), match.group(2).strip()
 
 

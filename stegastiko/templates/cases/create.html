@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load case_detail %}
 
 {% block title %}Νέα υπόθεση{% endblock %}
 
@@ -22,7 +23,7 @@
     </div>
     {% endif %}
 
-    <h3 class="form-section-title">1.1 Βασικά στοιχεία</h3>
+    <h3 class="form-section-title">{% case_subsection_heading "1.1" %}</h3>
     <div class="form-grid">
         {% include "includes/form_field.html" with field=form.case_type %}
         {% include "includes/form_field.html" with field=form.community %}
@@ -49,7 +50,7 @@
     </div>
 
     <div id="priority-section">
-        <h3 class="form-section-title">1.2 Χαρακτηριστικά Κοινότητας για σκοπούς προτεραιότητας νέου διαχωρισμού</h3>
+        <h3 class="form-section-title">{% case_subsection_heading "1.2" %}</h3>
         <div class="form-grid form-grid--priority">
             {% include "includes/form_field.html" with field=form.priority_turkish_cypriot_properties %}
             {% include "includes/form_field.html" with field=form.priority_protection_zones %}

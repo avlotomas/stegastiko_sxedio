@@ -6,6 +6,16 @@ from cases.section_labels import (
     get_case_section_label,
     save_case_section_label,
 )
+from cases.subsection_labels import (
+    CASE_SUBSECTION_LABEL_KEYS,
+    form_field_name_for_subsection_label,
+    get_case_subsection_label,
+    save_case_subsection_label,
+)
+from core.reminders import (
+    CONSULTATION_DUE_REMINDER_DAYS_DEFAULT,
+    CONSULTATION_DUE_REMINDER_DAYS_KEY,
+)
 from cases.services import DEFICIENCY_EMAIL_SUBJECT_DEFAULT, DEFICIENCY_EMAIL_SUBJECT_KEY
 from core.services import SMTP_SECURITY_CHOICES, SMTP_SETTING_DEFAULTS, get_setting, set_setting
 
@@ -64,12 +74,25 @@ class SystemConfigurationForm(forms.Form):
                 max_length=255,
                 widget=forms.TextInput(attrs={"class": "input"}),
             )
+        for subsection_key in CASE_SUBSECTION_LABEL_KEYS:
+            field_name = form_field_name_for_subsection_label(subsection_key)
+            self.fields[field_name] = forms.CharField(
+                label=f"Υποενότητα {subsection_key} — τίτλος εμφάνισης",
+                max_length=255,
+                widget=forms.TextInput(attrs={"class": "input"}),
+            )
         for setting_key, label in GENERAL_SETTING_FIELDS:
             self.fields[f"setting_{setting_key}"] = forms.CharField(
                 label=label,
                 max_length=512,
                 widget=forms.TextInput(attrs={"class": "input"}),
             )
+        self.fields[f"setting_{CONSULTATION_DUE_REMINDER_DAYS_KEY}"] = forms.IntegerField(
+            label="Ημέρες υπενθύμισης προθεσμίας διαβουλεύσεων (Dashboard)",
+            min_value=0,
+            widget=forms.NumberInput(attrs={"class": "input"}),
+            help_text="Πόσες ημέρες πριν από την προθεσμία απάντησης εμφανίζεται υπενθύμιση.",
+        )
         for setting_key, field in _email_setting_fields().items():
             field.widget.attrs.setdefault("class", "input")
             self.fields[email_field_name(setting_key)] = field
@@ -77,8 +100,15 @@ class SystemConfigurationForm(forms.Form):
             for section_key in CASE_SECTION_LABEL_KEYS:
                 fname = form_field_name_for_section_label(section_key)
                 self.fields[fname].initial = get_case_section_label(section_key)
+            for subsection_key in CASE_SUBSECTION_LABEL_KEYS:
+                fname = form_field_name_for_subsection_label(subsection_key)
+                self.fields[fname].initial = get_case_subsection_label(subsection_key)
             for setting_key, _ in GENERAL_SETTING_FIELDS:
                 self.fields[f"setting_{setting_key}"].initial = get_setting(setting_key, "")
+            self.fields[f"setting_{CONSULTATION_DUE_REMINDER_DAYS_KEY}"].initial = get_setting(
+                CONSULTATION_DUE_REMINDER_DAYS_KEY,
+                str(CONSULTATION_DUE_REMINDER_DAYS_DEFAULT),
+            )
             for setting_key, default in EMAIL_SETTING_DEFAULTS.items():
                 if setting_key != "smtpPassword":
                     self.fields[email_field_name(setting_key)].initial = get_setting(
@@ -89,12 +119,20 @@ class SystemConfigurationForm(forms.Form):
         for section_key in CASE_SECTION_LABEL_KEYS:
             fname = form_field_name_for_section_label(section_key)
             save_case_section_label(section_key, self.cleaned_data[fname])
+        for subsection_key in CASE_SUBSECTION_LABEL_KEYS:
+            fname = form_field_name_for_subsection_label(subsection_key)
+            save_case_subsection_label(subsection_key, self.cleaned_data[fname])
         for setting_key, description in GENERAL_SETTING_FIELDS:
             set_setting(
                 setting_key,
                 self.cleaned_data[f"setting_{setting_key}"],
                 description,
             )
+        set_setting(
+            CONSULTATION_DUE_REMINDER_DAYS_KEY,
+            str(self.cleaned_data[f"setting_{CONSULTATION_DUE_REMINDER_DAYS_KEY}"]),
+            "Ημέρες υπενθύμισης προθεσμίας διαβουλεύσεων (Dashboard)",
+        )
         for setting_key in EMAIL_SETTING_DEFAULTS:
             field_name = email_field_name(setting_key)
             value = self.cleaned_data[field_name]

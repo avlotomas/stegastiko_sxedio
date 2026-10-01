@@ -11,6 +11,7 @@ from cases.models import (
     SubmissionCycle,
     SubmissionCyclePublication,
     UtilityService,
+    UtilityServiceType,
     ValuationReferral,
 )
 
@@ -18,6 +19,7 @@ admin.site.register(Case)
 admin.site.register(CompletenessCheck)
 admin.site.register(LandPlot)
 admin.site.register(UtilityService)
+admin.site.register(UtilityServiceType)
 admin.site.register(Consultation)
 admin.site.register(InfrastructureCheck)
 admin.site.register(Field)

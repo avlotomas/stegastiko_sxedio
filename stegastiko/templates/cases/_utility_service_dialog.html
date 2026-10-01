@@ -1,0 +1,8 @@
+{% comment %}
+Modal of the 4.2 utility services grid. Rendered outside the section form because forms cannot
+nest; the form itself is loaded from the server when the modal opens.
+{% endcomment %}
+<dialog id="utility-service-dialog" class="modal" aria-labelledby="utility-service-dialog-title" data-utility-service-dialog>
+    <div class="alert alert--error" data-utility-service-errors hidden></div>
+    <div data-utility-service-dialog-body></div>
+</dialog>

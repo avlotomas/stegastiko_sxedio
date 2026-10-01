@@ -32,11 +32,20 @@ from cases.forms import (
     Section8PlotsForm,
     SubmissionCycleForm,
     SubmissionCyclePublicationFormSet,
-    SuitabilityConsultationFormSet,
-    UtilityServiceFormSet,
+    SuitabilityConsultationForm,
+    UtilityServiceForm,
     ValuationReferralFormSet,
 )
-from cases.models import Case, CompletenessCheck, Consultation, LandPlot, SubmissionCycle
+from cases.models import (
+    Case,
+    CompletenessCheck,
+    Consultation,
+    LandPlot,
+    SubmissionCycle,
+    UtilityService,
+)
+from cases.section4_blank_pdf import render_section4_blank_pdf, section4_blank_pdf_filename
+from cases.section6_report_pdf import render_section6_report_pdf, section6_report_pdf_filename
 from cases.services import (
     announcement_readiness,
     build_announcement_text,
@@ -49,6 +58,7 @@ from cases.services import (
     suitability_summary,
 )
 from cases.section_labels import case_section_heading, get_case_section_label
+from cases.subsection_labels import CASE_SUBSECTION_LABEL_KEYS, case_subsection_heading
 from cases.services import case_history as case_history_entries
 from core.models import Attachment, Communication, Community
 from core.services import smtp_is_configured
@@ -73,7 +83,7 @@ SECTIONS = {
     "3": {
         "title": "Ενότητα 3 — Στοιχεία τεμαχίων",
         "action": "Στοιχεία τεμαχίων",
-        "summary": "3.1 πίνακας τεμαχίων, 3.2 έλεγχος κρατικής γης, 3.3 σχόλια.",
+        "summary": "3.1 πίνακας τεμαχίων, 3.2 έλεγχος επάρκειας κρατικής γης, 3.3 σχόλια.",
         "form": Section3Form,
         # 3.1 plots are edited one at a time from the grid modal (land_plot_form).
         "formsets": (),
@@ -81,19 +91,19 @@ SECTIONS = {
     "4": {
         "title": "Ενότητα 4 — Τεχνική αξιολόγηση καταλληλότητας",
         "action": "Τεχνική αξιολόγηση",
-        "summary": "4.1 αξιολόγηση ανά τεμάχιο, 4.2 υπηρεσίες, 4.3 πρόσβαση, 4.4 αρχεία, 4.5 σχόλια.",
+        "summary": "4.1 αξιολόγηση ανά τεμάχιο, 4.2 υπηρεσίες, 4.3 πρόσβαση, 4.4 αρχεία, 4.5 σχόλια, 4.6 επίσκεψη.",
         "form": Section4Form,
-        # 4.1 rows follow the 3.1 plots and are edited from the grid modal (land_plot_evaluation_form).
-        "formsets": (
-            ("utility_services", UtilityServiceFormSet, "4.2 Υπηρεσίες κοινής ωφέλειας"),
-        ),
+        # 4.1 rows follow the 3.1 plots (land_plot_evaluation_form); 4.2 rows have their own
+        # grid modal (utility_service_form).
+        "formsets": (),
     },
     "5": {
         "title": "Ενότητα 5 — Διαβουλεύσεις με Τμήματα / Υπηρεσίες",
         "action": "Διαβουλεύσεις καταλληλότητας",
         "summary": "Μία γραμμή ανά διαβούλευση· η κατάσταση είναι αυτόματη.",
         "form": None,
-        "formsets": (("consultations", SuitabilityConsultationFormSet, "5 Διαβουλεύσεις"),),
+        # 5.x rows are edited one at a time from the grid modal (suitability_consultation_form).
+        "formsets": (),
     },
     "6": {
         "title": "Ενότητα 6 — Αξιολόγηση καταλληλότητας",
@@ -101,7 +111,7 @@ SECTIONS = {
         "summary": "6.1–6.5 συνοπτικοί πίνακες, 6.6 απόφαση και αιτιολόγηση ανά τεμάχιο.",
         "form": Section6Form,
         "formsets": (
-            ("plot_decisions", LandPlotDecisionFormSet, "6.6 Απόφαση καταλληλότητας ανά τεμάχιο"),
+            ("plot_decisions", LandPlotDecisionFormSet, "6.6"),
         ),
     },
     "7": {
@@ -117,8 +127,8 @@ SECTIONS = {
         "summary": "Ανάθεση μελέτης, ΤΠΟ, διαγωνισμός, διαβουλεύσεις και έλεγχοι υποδομών.",
         "form": Section8Form,
         "formsets": (
-            ("consultations", DivisionConsultationFormSet, "8.4 Διαβουλεύσεις κατά τον διαχωρισμό"),
-            ("infrastructure_checks", InfrastructureCheckFormSet, "8.6 Έλεγχος υποδομών"),
+            ("consultations", DivisionConsultationFormSet, "8.4"),
+            ("infrastructure_checks", InfrastructureCheckFormSet, "8.6"),
         ),
     },
     "8-plots": {
@@ -127,9 +137,9 @@ SECTIONS = {
         "summary": "Χωρομετρική εργασία, χωράφια, οικόπεδα και τιμή διάθεσης 25%.",
         "form": Section8PlotsForm,
         "formsets": (
-            ("fields", FieldFormSet, "8.7 Χωράφια"),
-            ("valuation_referrals", ValuationReferralFormSet, "8.8.1 Παραπομπές προς ΤΚΧ"),
-            ("parcels", ParcelFormSet, "8.7 / 8.8 Πίνακας αντιστοίχισης οικοπέδων"),
+            ("fields", FieldFormSet, "8.7-parcels"),
+            ("valuation_referrals", ValuationReferralFormSet, "8.8.1"),
+            ("parcels", ParcelFormSet, "8.7-8.8-mapping"),
         ),
     },
 }
@@ -142,10 +152,17 @@ CONSULTATION_STAGE_BY_SECTION = {
 }
 
 
+def _resolve_formset_legend(legend: str) -> str:
+    if legend in CASE_SUBSECTION_LABEL_KEYS:
+        return case_subsection_heading(legend)
+    return legend
+
+
 def _build_formsets(section_key, case, data=None, files=None):
     """Instantiate the inline formsets of a section, scoped to the case."""
     formsets = []
     for prefix, formset_class, legend in SECTIONS[section_key]["formsets"]:
+        legend = _resolve_formset_legend(legend)
         kwargs = {"instance": case, "prefix": prefix}
         if prefix == "consultations":
             kwargs["queryset"] = Consultation.objects.filter(
@@ -269,10 +286,9 @@ def case_detail(request, pk):
             "suitability_summary": suitability_summary(case) if case.is_new_division else None,
             "completeness_checks": case.completeness_checks.all(),
             "land_plots": case.land_plots.prefetch_related("attachments"),
+            "utility_services": _case_utility_services(case),
             "technical_attachments": case.attachments.filter(section_ref="4.4"),
-            "suitability_consultations": case.consultations.filter(
-                stage=Consultation.Stage.SUITABILITY
-            ),
+            "suitability_consultations": _case_suitability_consultations(case),
             "division_consultations": case.consultations.filter(
                 stage=Consultation.Stage.DIVISION
             ),
@@ -341,6 +357,9 @@ def case_section_edit(request, pk, section):
         context["land_plots"] = case.land_plots.prefetch_related("attachments")
     if section == "4":
         context["land_plots"] = case.land_plots.all()
+        context["utility_services"] = _case_utility_services(case)
+    if section == "5":
+        context["suitability_consultations"] = _case_suitability_consultations(case)
     if section == "2":
         context.update(
             {
@@ -356,6 +375,34 @@ def case_section_edit(request, pk, section):
             }
         )
     return render(request, "cases/section_form.html", context)
+
+
+@login_required
+def section_4_blank_pdf(request, pk):
+    """Blank Ενότητα 4 form for printing / field completion (PDF)."""
+    case = get_object_or_404(Case.objects.select_related("community"), pk=pk)
+    if "4" not in case.applicable_sections:
+        raise Http404("Η ενότητα δεν ισχύει για αυτόν τον τύπο διαδικασίας.")
+    pdf_bytes = render_section4_blank_pdf(case)
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = content_disposition_header(
+        as_attachment=True,
+        filename=section4_blank_pdf_filename(case),
+    )
+    return response
+
+
+@login_required
+def section_6_report_pdf(request, pk):
+    """Ενότητα 6 report «Πίνακες αξιολόγησης καταλληλότητας κρατικής γης» (PDF)."""
+    case = _case_for_section(pk, "6")
+    pdf_bytes = render_section6_report_pdf(case)
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = content_disposition_header(
+        as_attachment=True,
+        filename=section6_report_pdf_filename(case),
+    )
+    return response
 
 
 def _wants_json(request):
@@ -666,6 +713,175 @@ def land_plot_evaluation_form(request, pk, plot_id):
     return JsonResponse({"ok": True, "html": _plot_evaluation_form_html(request, case, form)})
 
 
+def _case_suitability_consultations(case):
+    return case.consultations.filter(stage=Consultation.Stage.SUITABILITY).prefetch_related(
+        "attachments"
+    )
+
+
+def _case_utility_services(case):
+    return case.utility_services.select_related("service_type")
+
+
+def _utility_service_grid_html(request, case):
+    return render_to_string(
+        "cases/_utility_service_grid.html",
+        {"case": case, "utility_services": _case_utility_services(case)},
+        request=request,
+    )
+
+
+def _utility_service_form_html(request, case, form):
+    return render_to_string(
+        "cases/_utility_service_form.html", {"case": case, "service_form": form}, request=request
+    )
+
+
+@login_required
+def utility_service_form(request, pk, service_id=None):
+    """4.2 Add or edit one utility service row from the grid modal."""
+    case = _case_for_section(pk, "4")
+    if not _wants_json(request):
+        raise Http404()
+    if service_id is None:
+        service = UtilityService(case=case)
+    else:
+        service = get_object_or_404(UtilityService, pk=service_id, case=case)
+
+    if request.method == "POST":
+        form = UtilityServiceForm(request.POST, instance=service)
+        if not form.is_valid():
+            return JsonResponse(
+                {"ok": False, "html": _utility_service_form_html(request, case, form)}, status=400
+            )
+        is_new = service.pk is None
+        service._section_ref = "4.2"
+        with transaction.atomic():
+            service = form.save()
+        verb = "Προστέθηκε" if is_new else "Ενημερώθηκε"
+        return JsonResponse(
+            {
+                "ok": True,
+                "message": f"{verb} η υπηρεσία {service.row_label}.",
+                "grid_html": _utility_service_grid_html(request, case),
+            }
+        )
+    if request.method != "GET":
+        raise Http404()
+    form = UtilityServiceForm(instance=service)
+    return JsonResponse({"ok": True, "html": _utility_service_form_html(request, case, form)})
+
+
+@login_required
+def utility_service_delete(request, pk, service_id):
+    """4.2 Delete one utility service row from the grid."""
+    case = _case_for_section(pk, "4")
+    if request.method != "POST" or not _wants_json(request):
+        raise Http404("Επιτρέπεται μόνο POST.")
+    service = get_object_or_404(UtilityService, pk=service_id, case=case)
+    label = service.row_label
+    service._section_ref = "4.2"
+    service.delete()
+    return JsonResponse(
+        {
+            "ok": True,
+            "message": f"Διαγράφηκε η υπηρεσία {label}.",
+            "grid_html": _utility_service_grid_html(request, case),
+        }
+    )
+
+
+def _suitability_consultation_grid_html(request, case):
+    return render_to_string(
+        "cases/_suitability_consultation_grid.html",
+        {"case": case, "suitability_consultations": _case_suitability_consultations(case)},
+        request=request,
+    )
+
+
+def _suitability_consultation_form_html(request, case, form):
+    return render_to_string(
+        "cases/_suitability_consultation_form.html",
+        {"case": case, "consultation_form": form},
+        request=request,
+    )
+
+
+@login_required
+def suitability_consultation_form(request, pk, consultation_id=None):
+    """5 Add or edit one suitability consultation from the grid modal."""
+    case = _case_for_section(pk, "5")
+    if not _wants_json(request):
+        raise Http404()
+    if consultation_id is None:
+        consultation = Consultation(case=case, stage=Consultation.Stage.SUITABILITY)
+    else:
+        consultation = get_object_or_404(
+            Consultation,
+            pk=consultation_id,
+            case=case,
+            stage=Consultation.Stage.SUITABILITY,
+        )
+
+    if request.method == "POST":
+        form = SuitabilityConsultationForm(request.POST, request.FILES, instance=consultation)
+        if not form.is_valid():
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "html": _suitability_consultation_form_html(request, case, form),
+                },
+                status=400,
+            )
+        is_new = consultation.pk is None
+        consultation._section_ref = "5"
+        consultation.stage = Consultation.Stage.SUITABILITY
+        with transaction.atomic():
+            consultation = form.save()
+        verb = "Προστέθηκε" if is_new else "Ενημερώθηκε"
+        return JsonResponse(
+            {
+                "ok": True,
+                "message": f"{verb} η διαβούλευση ({consultation.row_label}).",
+                "grid_html": _suitability_consultation_grid_html(request, case),
+            }
+        )
+    if request.method != "GET":
+        raise Http404()
+    form = SuitabilityConsultationForm(instance=consultation)
+    return JsonResponse(
+        {"ok": True, "html": _suitability_consultation_form_html(request, case, form)}
+    )
+
+
+@login_required
+def suitability_consultation_delete(request, pk, consultation_id):
+    """5 Delete one suitability consultation (and its files) from the grid."""
+    case = _case_for_section(pk, "5")
+    if request.method != "POST" or not _wants_json(request):
+        raise Http404("Επιτρέπεται μόνο POST.")
+    consultation = get_object_or_404(
+        Consultation,
+        pk=consultation_id,
+        case=case,
+        stage=Consultation.Stage.SUITABILITY,
+    )
+    label = consultation.row_label
+    consultation._section_ref = "5"
+    with transaction.atomic():
+        for attachment in consultation.attachments.filter(section_ref="5"):
+            attachment._section_ref = "5"
+            attachment.delete()
+        consultation.delete()
+    return JsonResponse(
+        {
+            "ok": True,
+            "message": f"Διαγράφηκε η διαβούλευση {label}.",
+            "grid_html": _suitability_consultation_grid_html(request, case),
+        }
+    )
+
+
 @login_required
 def case_attachment_download(request, pk, attachment_id):
     """Download a file of the case: 3.1 files of its land plots or 4.4 files of the case."""
@@ -675,7 +891,14 @@ def case_attachment_download(request, pk, attachment_id):
         object_id__in=case.land_plots.values("pk"),
     )
     case_files = Q(content_type=ContentType.objects.get_for_model(Case), object_id=case.pk)
-    attachment = get_object_or_404(Attachment.objects.filter(plot_files | case_files), pk=attachment_id)
+    consultation_files = Q(
+        content_type=ContentType.objects.get_for_model(Consultation),
+        object_id__in=case.consultations.values("pk"),
+    )
+    attachment = get_object_or_404(
+        Attachment.objects.filter(plot_files | case_files | consultation_files),
+        pk=attachment_id,
+    )
     response = HttpResponse(
         bytes(attachment.data), content_type=attachment.content_type_name
     )

@@ -12,7 +12,8 @@ The first four columns come from 3.1. Re-rendered after every modal edit; `reado
             <th>Εντός Ορίου Ανάπτυξης</th>
             <th>Μορφολογία</th>
             <th>Σχόλια Μορφολογίας</th>
-            <th>Κατά προσέγγιση αξιοποιήσιμο εμβαδόν γης (τ.μ.)</th>
+            <th>Αξιοποιήσιμο εμβαδόν γης (τ.μ.)</th>
+            <th>Εκτιμώμενο κόστος</th>
             <th>Εκτιμώμενος αριθμός οικοπέδων</th>
             <th>Τεχνική Καταλληλότητα</th>
             {% if not readonly %}<th><span class="visually-hidden">Ενέργειες</span></th>{% endif %}
@@ -31,6 +32,7 @@ The first four columns come from 3.1. Re-rendered after every modal edit; `reado
                 <td>{{ plot.morphology_display|default:"—" }}</td>
                 <td>{{ plot.morphology_comments|default:"—"|linebreaksbr }}</td>
                 <td>{{ plot.usable_area_sqm|default:"—" }}</td>
+                <td>{{ plot.estimated_cost|default:"—" }}</td>
                 <td>{{ plot.estimated_plots_count|default:"—" }}</td>
                 <td>
                     {% if plot.technical_suitability == 'suitable' %}
@@ -51,7 +53,7 @@ The first four columns come from 3.1. Re-rendered after every modal edit; `reado
                 {% endif %}
             </tr>
         {% empty %}
-            <tr><td colspan="{% if readonly %}9{% else %}10{% endif %}">Δεν έχουν καταχωριστεί τεμάχια στην Ενότητα 3.1.</td></tr>
+            <tr><td colspan="{% if readonly %}10{% else %}11{% endif %}">Δεν έχουν καταχωριστεί τεμάχια στην Ενότητα 3.1.</td></tr>
         {% endfor %}
         </tbody>
     </table>

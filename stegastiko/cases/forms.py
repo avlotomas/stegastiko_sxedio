@@ -1,4 +1,5 @@
 from django import forms
+from django.db.models import Q
 
 from applications.models import Person
 from cases.models import (
@@ -12,6 +13,7 @@ from cases.models import (
     SubmissionCycle,
     SubmissionCyclePublication,
     UtilityService,
+    UtilityServiceType,
     ValuationReferral,
     YesNo,
 )
@@ -283,35 +285,44 @@ class Section3Form(StyledFormMixin, forms.ModelForm):
 
     class Meta:
         model = Case
-        fields = ["state_land_remains_sufficient", "state_land_comments", "section3_comments"]
+        fields = ["state_land_remains_sufficient", "section3_comments"]
         widgets = {
-            "state_land_comments": forms.Textarea(attrs={"rows": 3}),
             "section3_comments": forms.Textarea(attrs={"rows": 3}),
         }
 
 
 class Section4Form(StyledFormMixin, AttachmentsFormMixin, forms.ModelForm):
-    """4.3 access, 4.4 files of the evaluation as a whole and 4.5 comments.
+    """4.3 access, 4.4 files, 4.5 comments and 4.6 visit details.
 
-    4.1 rows are edited one at a time from the grid modal; 4.2 is the inline formset.
+    4.1 and 4.2 rows are edited one at a time from their grid modals.
     """
 
     attachment_section_ref = "4.4"
 
     class Meta:
         model = Case
-        fields = ["access_technical_evaluation", "section4_comments"]
+        fields = [
+            "access_technical_evaluation",
+            "section4_comments",
+            "engineer_full_name",
+            "technical_visit_date",
+        ]
         widgets = {
             "access_technical_evaluation": forms.Textarea(attrs={"rows": 3}),
             "section4_comments": forms.Textarea(attrs={"rows": 3}),
+            "technical_visit_date": IsoDateInput(),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["access_technical_evaluation"].label = ""
+        self.fields["section4_comments"].label = ""
 
 
 class Section6Form(StyledFormMixin, forms.ModelForm):
     class Meta:
         model = Case
-        fields = ["section6_comments"]
-        widgets = {"section6_comments": forms.Textarea(attrs={"rows": 3})}
+        fields = []
 
 
 class Section7Form(StyledFormMixin, forms.ModelForm):
@@ -458,18 +469,83 @@ class LandPlotDecisionForm(StyledFormMixin, forms.ModelForm):
 
 
 class UtilityServiceForm(StyledFormMixin, forms.ModelForm):
+    """4.2 One service row, edited from the grid modal."""
+
     class Meta:
         model = UtilityService
-        fields = ["service_name", "proximity", "comments"]
-        widgets = {"comments": forms.Textarea(attrs={"rows": 2})}
+        fields = ["service_type", "proximity", "comments"]
+        widgets = {"comments": forms.Textarea(attrs={"rows": 3})}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # A deactivated value stays selectable on the rows that already use it.
+        available = Q(is_active=True)
+        if self.instance.service_type_id:
+            available |= Q(pk=self.instance.service_type_id)
+        field = self.fields["service_type"]
+        field.queryset = UtilityServiceType.objects.filter(available)
+        field.empty_label = "— Επιλέξτε υπηρεσία —"
 
 
-class ConsultationForm(StyledFormMixin, forms.ModelForm):
+class UtilityServiceTypeForm(StyledFormMixin, forms.ModelForm):
+    """One row of the 4.2 service catalog; the column headers carry the labels."""
+
+    class Meta:
+        model = UtilityServiceType
+        fields = ["name", "display_order", "is_active"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs["aria-label"] = field.label
+
+
+class BaseUtilityServiceTypeFormSet(forms.BaseModelFormSet):
+    def clean(self):
+        super().clean()
+        in_use = [
+            form.instance.name
+            for form in self.deleted_forms
+            if form.instance.pk and form.instance.is_in_use
+        ]
+        if in_use:
+            raise forms.ValidationError(
+                [
+                    f"Η υπηρεσία «{name}» χρησιμοποιείται σε υποθέσεις και δεν διαγράφεται· "
+                    "απενεργοποιήστε την."
+                    for name in in_use
+                ]
+            )
+
+
+UtilityServiceTypeFormSet = forms.modelformset_factory(
+    UtilityServiceType,
+    form=UtilityServiceTypeForm,
+    formset=BaseUtilityServiceTypeFormSet,
+    extra=2,
+    can_delete=True,
+)
+
+
+class ConsultationForm(OtherChoiceFieldsMixin, StyledFormMixin, forms.ModelForm):
     """Status is derived from the response date, so it is not editable here."""
+
+    OTHER_TEXT_FIELDS = {
+        "department": ("department_other", "Δώστε περιγραφή για «Άλλο»."),
+    }
 
     class Meta:
         model = Consultation
-        fields = ["department", "topic", "sent_date", "due_date", "response_date", "response_text", "comments"]
+        fields = [
+            "department",
+            "department_other",
+            "topic",
+            "sent_date",
+            "due_date",
+            "response_date",
+            "response_text",
+            "comments",
+        ]
         widgets = {
             "sent_date": IsoDateInput(),
             "due_date": IsoDateInput(),
@@ -477,6 +553,42 @@ class ConsultationForm(StyledFormMixin, forms.ModelForm):
             "topic": forms.Textarea(attrs={"rows": 2}),
             "response_text": forms.Textarea(attrs={"rows": 2}),
             "comments": forms.Textarea(attrs={"rows": 2}),
+            "department_other": forms.TextInput(
+                attrs={"placeholder": "Περιγραφή τμήματος / υπηρεσίας", "data-other-input": ""}
+            ),
+        }
+
+
+class SuitabilityConsultationForm(
+    OtherChoiceFieldsMixin, StyledFormMixin, AttachmentsFormMixin, forms.ModelForm
+):
+    """Ενότητα 5 — one consultation row in the grid modal."""
+
+    OTHER_TEXT_FIELDS = ConsultationForm.OTHER_TEXT_FIELDS
+    attachment_section_ref = "5"
+
+    class Meta:
+        model = Consultation
+        fields = [
+            "department",
+            "department_other",
+            "topic",
+            "sent_date",
+            "due_date",
+            "response_date",
+            "response_text",
+            "comments",
+        ]
+        widgets = {
+            "sent_date": IsoDateInput(),
+            "due_date": IsoDateInput(),
+            "response_date": IsoDateInput(),
+            "topic": forms.Textarea(attrs={"rows": 3}),
+            "response_text": forms.Textarea(attrs={"rows": 3}),
+            "comments": forms.Textarea(attrs={"rows": 2}),
+            "department_other": forms.TextInput(
+                attrs={"placeholder": "Περιγραφή τμήματος / υπηρεσίας", "data-other-input": ""}
+            ),
         }
 
 
@@ -488,10 +600,6 @@ class BaseStageConsultationFormSet(forms.BaseInlineFormSet):
     def save_new(self, form, commit=True):
         form.instance.stage = self.stage
         return super().save_new(form, commit=commit)
-
-
-class BaseSuitabilityConsultationFormSet(BaseStageConsultationFormSet):
-    stage = Consultation.Stage.SUITABILITY
 
 
 class BaseDivisionConsultationFormSet(BaseStageConsultationFormSet):
@@ -669,17 +777,6 @@ SubmissionCyclePublicationFormSet = forms.inlineformset_factory(
 )
 LandPlotDecisionFormSet = forms.inlineformset_factory(
     Case, LandPlot, form=LandPlotDecisionForm, extra=0, can_delete=False
-)
-UtilityServiceFormSet = forms.inlineformset_factory(
-    Case, UtilityService, form=UtilityServiceForm, extra=1, can_delete=True
-)
-SuitabilityConsultationFormSet = forms.inlineformset_factory(
-    Case,
-    Consultation,
-    form=ConsultationForm,
-    formset=BaseSuitabilityConsultationFormSet,
-    extra=1,
-    can_delete=True,
 )
 DivisionConsultationFormSet = forms.inlineformset_factory(
     Case,

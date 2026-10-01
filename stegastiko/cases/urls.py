@@ -11,6 +11,16 @@ urlpatterns = [
     path("<int:pk>/history/", views.case_history, name="history"),
     path("<int:pk>/section/<str:section>/", views.case_section_edit, name="section_edit"),
     path(
+        "<int:pk>/section/4/blank-pdf/",
+        views.section_4_blank_pdf,
+        name="section_4_blank_pdf",
+    ),
+    path(
+        "<int:pk>/section/6/report-pdf/",
+        views.section_6_report_pdf,
+        name="section_6_report_pdf",
+    ),
+    path(
         "<int:pk>/completeness-checks/new/",
         views.completeness_check_form,
         name="completeness_check_create",
@@ -50,6 +60,36 @@ urlpatterns = [
         "<int:pk>/land-plots/<int:plot_id>/evaluation/",
         views.land_plot_evaluation_form,
         name="land_plot_evaluation",
+    ),
+    path(
+        "<int:pk>/utility-services/new/",
+        views.utility_service_form,
+        name="utility_service_create",
+    ),
+    path(
+        "<int:pk>/utility-services/<int:service_id>/edit/",
+        views.utility_service_form,
+        name="utility_service_edit",
+    ),
+    path(
+        "<int:pk>/utility-services/<int:service_id>/delete/",
+        views.utility_service_delete,
+        name="utility_service_delete",
+    ),
+    path(
+        "<int:pk>/suitability-consultations/new/",
+        views.suitability_consultation_form,
+        name="suitability_consultation_create",
+    ),
+    path(
+        "<int:pk>/suitability-consultations/<int:consultation_id>/edit/",
+        views.suitability_consultation_form,
+        name="suitability_consultation_edit",
+    ),
+    path(
+        "<int:pk>/suitability-consultations/<int:consultation_id>/delete/",
+        views.suitability_consultation_delete,
+        name="suitability_consultation_delete",
     ),
     path(
         "<int:pk>/attachments/<int:attachment_id>/",

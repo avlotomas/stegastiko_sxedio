@@ -1,17 +1,18 @@
 {% comment %}Ενότητα 2 — πολλοί έλεγχοι, email ανά έλεγχο, σχόλια στην υπόθεση.{% endcomment %}
+{% load case_detail %}
 
-<h3 class="form-section-title">2.1 Έλεγχοι πληρότητας</h3>
+<h3 class="form-section-title">{% case_subsection_heading "2.1" %}</h3>
 {% include "cases/_completeness_check_grid.html" %}
 <div data-completeness-check-status></div>
 
-<h3 class="form-section-title">2.2 Ελλείψεις και επικοινωνία</h3>
+<h3 class="form-section-title">{% case_subsection_heading "2.2" %}</h3>
 <p class="helptext">
     Τα email ελλείψεων στέλνονται από τη γραμμή του αντίστοιχου ελέγχου (όταν το αποτέλεσμα είναι ΟΧΙ).
 </p>
 <h3 class="form-section-title">Ιστορικό απεσταλμένων email ελλείψεων</h3>
 {% include "cases/_deficiency_email_log.html" %}
 
-<h3 class="form-section-title">2.3 Σχόλια / Παρατηρήσεις</h3>
+<h3 class="form-section-title">{% case_subsection_heading "2.3" %}</h3>
 <div class="form-grid form-span-all">
     {% include "includes/form_field.html" with field=form.section2_comments wide=True %}
 </div>

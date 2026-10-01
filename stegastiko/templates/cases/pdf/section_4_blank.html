@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+    <meta charset="utf-8">
+    <title>{{ section_title }}</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 12mm 14mm;
+        }
+        body, p, h1, h2, h3, div, span {
+            font-family: "DejaVuSans", sans-serif;
+            font-size: 9pt;
+            line-height: 1.3;
+            color: #000;
+        }
+        h1 {
+            font-size: 12pt;
+            margin: 0 0 6px 0;
+        }
+        .general-block {
+            margin-bottom: 14px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #000;
+        }
+        .meta {
+            font-size: 8.5pt;
+            margin-bottom: 8px;
+        }
+        h2 {
+            font-size: 10pt;
+            margin: 8px 0 4px 0;
+            padding: 0;
+        }
+        .plot-section {
+            margin: 0 0 14px 0;
+            padding: 8px 10px;
+            border: 1px solid #333;
+            background-color: #f7f7f7;
+            page-break-inside: avoid;
+        }
+        .plot-title {
+            font-size: 10pt;
+            font-weight: bold;
+            margin: 0 0 6px 0;
+        }
+        .field {
+            margin: 2px 0;
+        }
+        .field-label {
+            font-weight: bold;
+        }
+        .ref-value {
+            font-weight: normal;
+        }
+        .choice {
+            margin: 1px 0 1px 2px;
+        }
+        .cb {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border: 1px solid #000;
+            margin-right: 5px;
+        }
+        .box {
+            border: 1px solid #000;
+            min-height: 28px;
+            margin-top: 2px;
+            background-color: #fff;
+        }
+        .box--tall {
+            min-height: 48px;
+        }
+        .line {
+            border-bottom: 1px solid #000;
+            min-height: 14px;
+            margin-top: 2px;
+            background-color: #fff;
+        }
+        .utility-row {
+            margin-bottom: 6px;
+            padding-bottom: 4px;
+            border-bottom: 1px dotted #666;
+            page-break-inside: avoid;
+        }
+        .note {
+            font-size: 8pt;
+            margin: 2px 0 6px 0;
+        }
+        .empty-msg {
+            font-style: italic;
+            margin: 4px 0;
+        }
+        .plots-intro {
+            margin-top: 12px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="general-block">
+    <h1>{{ section_title }}</h1>
+    <p class="meta">
+        Υπόθεση <strong>{{ case.case_number }}</strong> · {{ case.community.name }} · {{ case.get_case_type_display }}
+    </p>
+    <p class="meta">
+        Φόρμα για συμπλήρωση στο πεδίο (κενά πεδία αξιολόγησης).
+    </p>
+
+    <h2>{{ heading_42 }}</h2>
+    <p class="note">Η ίδια υπηρεσία μπορεί να καταχωριστεί περισσότερες από μία φορές· συμπληρώστε όσες γραμμές χρειάζεστε.</p>
+    {% for row in utility_blank_rows %}
+    <div class="utility-row">
+        <div class="field">
+            <span class="field-label">{{ labels.utility_service }}</span>
+            {% for service_type in utility_service_types %}
+            <div class="choice"><span class="cb"></span>{{ service_type.name }}</div>
+            {% empty %}
+            <div class="choice"><span class="cb"></span>—</div>
+            {% endfor %}
+        </div>
+        <div class="field">
+            <span class="field-label">{{ labels.utility_proximity }}</span>
+            <div class="line"></div>
+        </div>
+        <div class="field">
+            <span class="field-label">{{ labels.utility_comments }}</span>
+            <div class="box"></div>
+        </div>
+    </div>
+    {% endfor %}
+
+    <h2>{{ heading_43 }}</h2>
+    <div class="field">
+        <div class="box box--tall"></div>
+    </div>
+
+    <h2>{{ heading_45 }}</h2>
+    <div class="field">
+        <div class="box box--tall"></div>
+    </div>
+</div>
+
+<div class="plots-intro">
+    <h2>{{ heading_41 }}</h2>
+    <p class="note">Τα στοιχεία τεμαχίου από την 3.1 εμφανίζονται για αναφορά· συμπληρώστε τα πεδία αξιολόγησης 4.1.</p>
+
+    {% if plots %}
+    {% for plot in plots %}
+    <div class="plot-section">
+        <p class="plot-title">Τεμάχιο {{ plot.parcel_number }}{% if plot.sheet_plan %} · Φ/Σχ {{ plot.sheet_plan }}{% endif %}</p>
+
+        <div class="field"><span class="field-label">{{ labels.location }}:</span>
+            <span class="ref-value">{{ plot.location|default:"—" }}</span></div>
+        <div class="field"><span class="field-label">{{ labels.area_sqm }}:</span>
+            <span class="ref-value">{% if plot.area_sqm %}{{ plot.area_sqm }}{% else %}—{% endif %}</span></div>
+        <div class="field"><span class="field-label">{{ labels.zone }}:</span>
+            <span class="ref-value">{{ plot.zone|default:"—" }}</span></div>
+        <div class="field"><span class="field-label">{{ labels.inside_development_zone }}:</span>
+            <span class="ref-value">{{ plot.get_inside_development_zone_display|default:"—" }}</span></div>
+
+        <div class="field">
+            <span class="field-label">{{ labels.morphology }}</span>
+            {% for value, label in morphology_choices %}
+            <div class="choice"><span class="cb"></span>{{ label }}</div>
+            {% endfor %}
+        </div>
+        <div class="field">
+            <span class="field-label">{{ labels.morphology_other }}</span>
+            <div class="line"></div>
+        </div>
+        <div class="field">
+            <span class="field-label">{{ labels.morphology_comments }}</span>
+            <div class="box"></div>
+        </div>
+        <div class="field">
+            <span class="field-label">{{ labels.usable_area_sqm }}</span>
+            <div class="line"></div>
+        </div>
+        <div class="field">
+            <span class="field-label">{{ labels.estimated_cost }}</span>
+            <div class="line"></div>
+        </div>
+        <div class="field">
+            <span class="field-label">{{ labels.estimated_plots_count }}</span>
+            <div class="line"></div>
+        </div>
+        <div class="field">
+            <span class="field-label">{{ labels.technical_suitability }}</span>
+            {% for value, label in suitability_choices %}
+            <div class="choice"><span class="cb"></span>{{ label }}</div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <p class="empty-msg">Δεν έχουν καταχωριστεί τεμάχια στην Ενότητα 3.1.</p>
+    {% endif %}
+</div>
+
+<h2>{{ heading_46 }}</h2>
+<div class="field">
+    <span class="field-label">{{ labels.engineer_full_name }}</span>
+    <div class="line"></div>
+</div>
+<div class="field">
+    <span class="field-label">{{ labels.technical_visit_date }}</span>
+    <div class="line"></div>
+</div>
+
+</body>
+</html>

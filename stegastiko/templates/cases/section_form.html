@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load case_detail %}
 
 {% block title %}{{ section_title }}{% endblock %}
 {% block body_class %}case-work{% endblock %}
@@ -24,7 +25,7 @@
 
 {% if section == '6' and summary %}
 <div class="card">
-    <h2 class="card__title">6.1 Συνοπτική εικόνα προτεραιότητας Κοινότητας</h2>
+    <h3 class="form-section-title">{% case_subsection_heading "6.1" %}</h3>
     <dl class="detail-grid">
         <div>
             <dt>Κοινότητα / Δ.Δ.</dt>
@@ -35,47 +36,24 @@
             <dd>{% for item in summary.priority_characteristics %}{{ item }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</dd>
         </div>
         <div>
-            <dt>Τεκμηρίωση</dt>
+            <dt>Σχόλια</dt>
             <dd>{{ summary.priority_documentation|default:"—" }}</dd>
         </div>
     </dl>
 
-    <h3 class="form-section-title">6.2 Συνοπτικός πίνακας τεμαχίων</h3>
-    <div class="table-wrap">
-        <table class="data-table">
-            <thead>
-            <tr>
-                <th>Τεμάχιο</th><th>Εμβαδόν</th><th>Ζώνη</th><th>Εντός Ορίου</th>
-                <th>Μορφολογία</th><th>Αξιοποιήσιμο</th><th>Τεχνική Καταλληλότητα</th>
-            </tr>
-            </thead>
-            <tbody>
-            {% for plot in summary.land_plots %}
-                <tr>
-                    <td>{{ plot.parcel_number }}</td>
-                    <td>{{ plot.area_sqm|default:"—" }}</td>
-                    <td>{{ plot.zone|default:"—" }}</td>
-                    <td>{{ plot.get_inside_development_zone_display|default:"—" }}</td>
-                    <td>{{ plot.morphology_display|default:"—" }}</td>
-                    <td>{{ plot.usable_area_sqm|default:"—" }}</td>
-                    <td>{{ plot.get_technical_suitability_display|default:"—" }}</td>
-                </tr>
-            {% empty %}
-                <tr><td colspan="7">Δεν έχουν καταχωριστεί τεμάχια (Ενότητα 3).</td></tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    <p class="helptext">6.2 Τεχνική Αξιολόγηση Πρόσβασης (4.3): {{ summary.access_technical_evaluation|default:"—" }}</p>
+    <h3 class="form-section-title">{% case_subsection_heading "4.1" %}</h3>
+    {% include "cases/_plot_evaluation_grid.html" with readonly=True land_plots=summary.land_plots %}
+    <h3 class="form-section-title">{% case_subsection_heading "4.3" %}</h3>
+    <p class="form-readonly">{{ summary.access_technical_evaluation|default:"—"|linebreaksbr }}</p>
 
-    <h3 class="form-section-title">6.3 Συνοπτικός πίνακας υπηρεσιών κοινής ωφέλειας</h3>
+    <h3 class="form-section-title">{% case_subsection_heading "6.3" %}</h3>
     <div class="table-wrap">
         <table class="data-table">
             <thead><tr><th>Υπηρεσία</th><th>Εγγύτητα</th><th>Σχόλια</th></tr></thead>
             <tbody>
             {% for service in summary.utility_services %}
                 <tr>
-                    <td>{{ service.service_name }}</td>
+                    <td>{{ service.service_type.name }}</td>
                     <td>{{ service.proximity|default:"—" }}</td>
                     <td>{{ service.comments|default:"—" }}</td>
                 </tr>
@@ -86,14 +64,14 @@
         </table>
     </div>
 
-    <h3 class="form-section-title">6.4 Συνοπτικός πίνακας διαβουλεύσεων</h3>
+    <h3 class="form-section-title">{% case_subsection_heading "6.4" %}</h3>
     <div class="table-wrap">
         <table class="data-table">
             <thead><tr><th>Τμήμα / Υπηρεσία</th><th>Θέμα</th><th>Άποψη / Απάντηση</th><th>Κατάσταση</th></tr></thead>
             <tbody>
             {% for consultation in summary.consultations %}
                 <tr>
-                    <td>{{ consultation.department }}</td>
+                    <td>{{ consultation.department_display }}</td>
                     <td>{{ consultation.topic|default:"—" }}</td>
                     <td>{{ consultation.response_text|default:"—" }}</td>
                     <td>{{ consultation.get_status_display }}</td>
@@ -105,17 +83,16 @@
         </table>
     </div>
 
-    <h3 class="form-section-title">6.5 Έλεγχος κρατικής γης (3.2)</h3>
+    <h3 class="form-section-title">{% case_subsection_heading "6.5" %} (3.2)</h3>
     <p class="form-readonly">
         {{ summary.state_land_remains_sufficient|default:"—" }}
-        {% if summary.state_land_comments %}— {{ summary.state_land_comments }}{% endif %}
     </p>
 </div>
 {% endif %}
 
 {% if section == '8-plots' and completion %}
 <div class="card">
-    <h2 class="card__title">8.8.2 Έλεγχος ολοκλήρωσης (αυτόματο)</h2>
+    <h2 class="card__title">{% case_subsection_heading "8.8.2" %}</h2>
     <dl class="detail-grid">
         <div>
             <dt>Οικόπεδα</dt>
@@ -162,12 +139,19 @@
             {% endfor %}
         </div>
         {% endif %}
+    {% elif section == '5' %}
+        {% include "cases/_section_5_form.html" %}
     {% endif %}
 
     {% for legend, formset in formsets %}
-    {% if section != '2' and section != '3' and section != '4' %}
+    {% if section != '2' and section != '3' and section != '4' and section != '5' %}
+    {% if section == '6' %}
+    <div class="child-formset">
+        <h3 class="form-section-title">{{ legend }}</h3>
+    {% else %}
     <fieldset class="child-formset">
         <legend>{{ legend }}</legend>
+    {% endif %}
         {{ formset.management_form }}
         {% if formset.non_form_errors %}
         <div class="alert alert--error">
@@ -187,21 +171,41 @@
             </div>
         </div>
         {% endfor %}
+    {% if section == '6' %}
+    </div>
+    {% else %}
     </fieldset>
+    {% endif %}
     {% endif %}
     {% endfor %}
 
+    {% if section != '5' %}
     <div class="form-actions form-span-all">
         <button type="submit" class="btn btn-primary">Αποθήκευση</button>
+        {% if section == '4' %}
+        <a href="{% url 'cases:section_4_blank_pdf' case.pk %}" class="btn btn-secondary">Εξαγωγή PDF φόρμας</a>
+        {% elif section == '6' %}
+        <a href="{% url 'cases:section_6_report_pdf' case.pk %}" class="btn btn-secondary">Εξαγωγή PDF πινάκων αξιολόγησης</a>
+        {% endif %}
         <a href="{% url 'cases:detail' case.pk %}" class="btn btn-secondary">Ακύρωση</a>
     </div>
+    {% else %}
+    <div class="form-actions form-span-all">
+        <a href="{% url 'cases:detail' case.pk %}" class="btn btn-secondary">Επιστροφή στον φάκελο</a>
+    </div>
+    {% endif %}
 </form>
 </div>
 {% if section == '2' %}
     {% include "cases/_completeness_check_dialog.html" %}
     {% include "cases/_deficiency_email_dialog.html" %}
-{% elif section == '3' or section == '4' %}
+{% elif section == '3' %}
     {% include "cases/_land_plot_dialog.html" %}
+{% elif section == '4' %}
+    {% include "cases/_land_plot_dialog.html" %}
+    {% include "cases/_utility_service_dialog.html" %}
+{% elif section == '5' %}
+    {% include "cases/_suitability_consultation_dialog.html" %}
 {% endif %}
 
 </div>

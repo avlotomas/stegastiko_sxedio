@@ -1,0 +1,28 @@
+{% comment %}4.2 Modal form for one utility service row.{% endcomment %}
+<form method="post"
+      action="{% if service_form.instance.pk %}{% url 'cases:utility_service_edit' case.pk service_form.instance.pk %}{% else %}{% url 'cases:utility_service_create' case.pk %}{% endif %}"
+      class="app-form"
+      data-utility-service-form
+      novalidate>
+    {% csrf_token %}
+    <h2 class="card__title" id="utility-service-dialog-title">
+        {% if service_form.instance.pk %}4.2 Επεξεργασία υπηρεσίας{% else %}4.2 Νέα υπηρεσία{% endif %}
+    </h2>
+
+    {% if service_form.non_field_errors %}
+    <div class="alert alert--error">
+        {% for error in service_form.non_field_errors %}{{ error }}{% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="form-grid">
+        {% include "includes/form_field.html" with field=service_form.service_type wide=True %}
+        {% include "includes/form_field.html" with field=service_form.proximity wide=True %}
+        {% include "includes/form_field.html" with field=service_form.comments wide=True %}
+    </div>
+
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Αποθήκευση</button>
+        <button type="button" class="btn btn-secondary" data-dialog-close>Άκυρο</button>
+    </div>
+</form>

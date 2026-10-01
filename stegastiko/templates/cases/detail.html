@@ -24,7 +24,7 @@
 
 <section class="card">
     <h2 class="card__title">{% case_section_heading "1" %}</h2>
-    <h3 class="form-section-title">1.1 Βασικά στοιχεία</h3>
+    <h3 class="form-section-title">{% case_subsection_heading "1.1" %}</h3>
     <dl class="detail-grid">
         <div>
             <dt>Τύπος διαδικασίας</dt>
@@ -59,11 +59,11 @@
     </dl>
 
     {% if case.is_new_division %}
-    <h3 class="form-section-title">1.2 Χαρακτηριστικά Κοινότητας για σκοπούς προτεραιότητας νέου διαχωρισμού</h3>
+    <h3 class="form-section-title">{% case_subsection_heading "1.2" %}</h3>
     {% case_detail_fields case "priority_turkish_cypriot_properties" "priority_protection_zones" "priority_nuisance_developments" "priority_limited_private_land" "priority_other" "priority_documentation" %}
     {% endif %}
 
-    <h3 class="form-section-title">1.3 Σχόλια / Παρατηρήσεις Ενότητας 1</h3>
+    <h3 class="form-section-title">{% case_subsection_heading "1.3" %}</h3>
     {% case_detail_fields case "comments" %}
 </section>
 
@@ -71,7 +71,7 @@
 <section class="card">
     <h2 class="card__title">{% case_section_heading "2" %}</h2>
 
-    <h3 class="form-section-title">2.1 Τρέχον αποτέλεσμα ελέγχου</h3>
+    <h3 class="form-section-title">{% case_subsection_heading "2.1" %}</h3>
     <dl class="detail-grid">
         <div>
             <dt>Αποτέλεσμα</dt>
@@ -128,13 +128,13 @@
     <h3 class="form-section-title">Ιστορικό απεσταλμένων email ελλείψεων</h3>
     {% include "cases/_case_communication_email_table.html" %}
 
-    <h3 class="form-section-title">2.3 Σχόλια / Παρατηρήσεις</h3>
+    <h3 class="form-section-title">{% case_subsection_heading "2.3" %}</h3>
     {% case_detail_fields case "section2_comments" %}
 </section>
 
 <section class="card">
     <h2 class="card__title">{% case_section_heading "3" %}</h2>
-    <h3 class="form-section-title">3.1 Πίνακας τεμαχίων</h3>
+    <h3 class="form-section-title">{% case_subsection_heading "3.1" %}</h3>
     <div class="table-wrap">
         <table class="data-table">
             <thead>
@@ -175,36 +175,21 @@
             </tbody>
         </table>
     </div>
-    <h3 class="form-section-title">3.2 Έλεγχος κρατικής γης</h3>
-    {% case_detail_fields case "state_land_remains_sufficient" "state_land_comments" %}
-    <h3 class="form-section-title">3.3 Σχόλια / Παρατηρήσεις Ενότητας 3</h3>
+    <h3 class="form-section-title">{% case_subsection_heading "3.2" %}</h3>
+    {% case_detail_fields case "state_land_remains_sufficient" %}
+    <h3 class="form-section-title">{% case_subsection_heading "3.3" %}</h3>
     {% case_detail_fields case "section3_comments" %}
 </section>
 
 <section class="card">
     <h2 class="card__title">{% case_section_heading "4" %}</h2>
-    <h3 class="form-section-title">4.1 Τεχνική αξιολόγηση ανά τεμάχιο</h3>
+    <h3 class="form-section-title">{% case_subsection_heading "4.1" %}</h3>
     {% include "cases/_plot_evaluation_grid.html" with readonly=True %}
-    <h3 class="form-section-title">4.2 Υπηρεσίες κοινής ωφέλειας</h3>
-    <div class="table-wrap">
-        <table class="data-table">
-            <thead><tr><th>Υπηρεσία</th><th>Εγγύτητα με το/τα τεμάχιο/α</th><th>Σχόλια / Παρατηρήσεις</th></tr></thead>
-            <tbody>
-            {% for service in case.utility_services.all %}
-                <tr>
-                    <td>{{ service.service_name }}</td>
-                    <td>{{ service.proximity|default:"—" }}</td>
-                    <td>{{ service.comments|default:"—"|linebreaksbr }}</td>
-                </tr>
-            {% empty %}
-                <tr><td colspan="3">Δεν έχουν καταχωριστεί υπηρεσίες.</td></tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    <h3 class="form-section-title">4.3 Πρόσβαση</h3>
-    {% case_detail_fields case "access_technical_evaluation" %}
-    <h3 class="form-section-title">4.4 Επισυναπτόμενα αρχεία</h3>
+    <h3 class="form-section-title">{% case_subsection_heading "4.2" %}</h3>
+    {% include "cases/_utility_service_grid.html" with readonly=True %}
+    <h3 class="form-section-title">{% case_subsection_heading "4.3" %}</h3>
+    <p class="form-readonly">{% if case.access_technical_evaluation %}{{ case.access_technical_evaluation|linebreaksbr }}{% else %}—{% endif %}</p>
+    <h3 class="form-section-title">{% case_subsection_heading "4.4" %}</h3>
     {% if technical_attachments %}
     <ul class="attachment-list">
         {% for attachment in technical_attachments %}
@@ -214,51 +199,22 @@
     {% else %}
     <p class="form-readonly">Δεν έχουν επισυναφθεί αρχεία.</p>
     {% endif %}
-    <h3 class="form-section-title">4.5 Σχόλια / Παρατηρήσεις Ενότητας 4</h3>
+    <h3 class="form-section-title">{% case_subsection_heading "4.5" %}</h3>
     {% case_detail_fields case "section4_comments" %}
+    <h3 class="form-section-title">{% case_subsection_heading "4.6" %}</h3>
+    {% case_detail_fields case "engineer_full_name" "technical_visit_date" %}
 </section>
 
 <section class="card">
     <h2 class="card__title">{% case_section_heading "5" %}</h2>
     <h3 class="form-section-title">Διαβουλεύσεις με Τμήματα / Υπηρεσίες</h3>
-    <div class="table-wrap">
-        <table class="data-table">
-            <thead>
-            <tr>
-                <th>Τμήμα / Υπηρεσία</th>
-                <th>Θέμα</th>
-                <th>Ημ. αποστολής</th>
-                <th>Προθεσμία</th>
-                <th>Ημ. απάντησης</th>
-                <th>Άποψη / Απάντηση</th>
-                <th>Κατάσταση</th>
-                <th>Σχόλια</th>
-            </tr>
-            </thead>
-            <tbody>
-            {% for consultation in suitability_consultations %}
-                <tr>
-                    <td>{{ consultation.department }}</td>
-                    <td>{{ consultation.topic|default:"—"|linebreaksbr }}</td>
-                    <td>{{ consultation.sent_date|default:"—" }}</td>
-                    <td>{{ consultation.due_date|default:"—" }}</td>
-                    <td>{{ consultation.response_date|default:"—" }}</td>
-                    <td>{{ consultation.response_text|default:"—"|linebreaksbr }}</td>
-                    <td>{{ consultation.get_status_display }}</td>
-                    <td>{{ consultation.comments|default:"—"|linebreaksbr }}</td>
-                </tr>
-            {% empty %}
-                <tr><td colspan="8">Δεν έχουν καταχωριστεί διαβουλεύσεις.</td></tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
+    {% include "cases/_suitability_consultation_grid.html" with readonly=True suitability_consultations=suitability_consultations %}
 </section>
 
 <section class="card">
     <h2 class="card__title">{% case_section_heading "6" %}</h2>
     {% if suitability_summary %}
-    <h3 class="form-section-title">6.1 Συνοπτική εικόνα προτεραιότητας Κοινότητας</h3>
+    <h3 class="form-section-title">{% case_subsection_heading "6.1" %}</h3>
     <dl class="detail-grid">
         <div>
             <dt>Κοινότητα / Δ.Δ.</dt>
@@ -269,12 +225,14 @@
             <dd>{% for item in suitability_summary.priority_characteristics %}{{ item }}{% if not forloop.last %}, {% endif %}{% empty %}—{% endfor %}</dd>
         </div>
         <div>
-            <dt>Τεκμηρίωση</dt>
+            <dt>Σχόλια</dt>
             <dd>{{ suitability_summary.priority_documentation|default:"—"|linebreaksbr }}</dd>
         </div>
     </dl>
     {% endif %}
-    <h3 class="form-section-title">6.6 Απόφαση καταλληλότητας ανά τεμάχιο</h3>
+    <h3 class="form-section-title">{% case_subsection_heading "4.3" %}</h3>
+    <p class="form-readonly">{% if case.access_technical_evaluation %}{{ case.access_technical_evaluation|linebreaksbr }}{% else %}—{% endif %}</p>
+    <h3 class="form-section-title">{% case_subsection_heading "6.6" %}</h3>
     <div class="table-wrap">
         <table class="data-table">
             <thead>
@@ -305,8 +263,11 @@
             </tbody>
         </table>
     </div>
-    <h3 class="form-section-title">6.7 Σχόλια / Παρατηρήσεις Ενότητας 6</h3>
-    {% case_detail_fields case "section6_comments" %}
+    {% if suitability_summary %}
+    <div class="form-actions">
+        <a href="{% url 'cases:section_6_report_pdf' case.pk %}" class="btn btn-secondary">Εξαγωγή PDF πινάκων αξιολόγησης</a>
+    </div>
+    {% endif %}
 </section>
 
 <section class="card">
@@ -319,13 +280,13 @@
 
 <section class="card">
     <h2 class="card__title">{% case_section_heading "8" %}</h2>
-    <h3 class="form-section-title">8.1 Ανάθεση μελέτης</h3>
+    <h3 class="form-section-title">{% case_subsection_heading "8.1" %}</h3>
     {% case_detail_fields case "survey_assignment_date" "surveyor_name" "surveyor_phone" "surveyor_email" "survey_assignment_comments" %}
-    <h3 class="form-section-title">8.2 Σχεδιασμός διαχωρισμού</h3>
+    <h3 class="form-section-title">{% case_subsection_heading "8.2" %}</h3>
     {% case_detail_fields case "division_design_status" "division_design_completed_on" "division_design_plots_count" "division_design_comments" %}
-    <h3 class="form-section-title">8.3 Αίτηση στο ΤΠΟ</h3>
+    <h3 class="form-section-title">{% case_subsection_heading "8.3" %}</h3>
     {% case_detail_fields case "tpo_application_date" "tpo_application_number" "tpo_response" "tpo_response_date" "tpo_comments" %}
-    <h3 class="form-section-title">8.4 Διαβουλεύσεις κατά τον διαχωρισμό</h3>
+    <h3 class="form-section-title">{% case_subsection_heading "8.4" %}</h3>
     <div class="table-wrap">
         <table class="data-table">
             <thead>
@@ -343,7 +304,7 @@
             <tbody>
             {% for consultation in division_consultations %}
                 <tr>
-                    <td>{{ consultation.department }}</td>
+                    <td>{{ consultation.department_display }}</td>
                     <td>{{ consultation.topic|default:"—"|linebreaksbr }}</td>
                     <td>{{ consultation.sent_date|default:"—" }}</td>
                     <td>{{ consultation.due_date|default:"—" }}</td>
@@ -358,9 +319,9 @@
             </tbody>
         </table>
     </div>
-    <h3 class="form-section-title">8.5 Διαγωνισμός / ανάθεση εργασιών</h3>
+    <h3 class="form-section-title">{% case_subsection_heading "8.5" %}</h3>
     {% case_detail_fields case "tender_announcement_date" "tender_award_date" "contractor_name" "contractor_phone" "contractor_email" "contract_duration_value" "contract_duration_unit" "tender_comments" %}
-    <h3 class="form-section-title">8.6 Έλεγχος υποδομών</h3>
+    <h3 class="form-section-title">{% case_subsection_heading "8.6" %}</h3>
     <div class="table-wrap">
         <table class="data-table">
             <thead>
@@ -401,9 +362,9 @@
 
 <section class="card">
     <h2 class="card__title">{% case_section_heading "8-plots" %}</h2>
-    <h3 class="form-section-title">8.7 Αίτηση στο ΤΚΧ</h3>
+    <h3 class="form-section-title">{% case_subsection_heading "8.7" %}</h3>
     {% case_detail_fields case "dls_application_date" "dls_file_number" "dls_response_date" "dls_comments" %}
-    <h3 class="form-section-title">8.7 Χωράφια</h3>
+    <h3 class="form-section-title">{% case_subsection_heading "8.7-parcels" %}</h3>
     <div class="table-wrap">
         <table class="data-table">
             <thead><tr><th>Κωδικός</th><th>Περιγραφή</th></tr></thead>
@@ -419,7 +380,7 @@
             </tbody>
         </table>
     </div>
-    <h3 class="form-section-title">8.8.1 Παραπομπές προς ΤΚΧ</h3>
+    <h3 class="form-section-title">{% case_subsection_heading "8.8.1" %}</h3>
     <div class="table-wrap">
         <table class="data-table">
             <thead>
@@ -444,7 +405,7 @@
             </tbody>
         </table>
     </div>
-    <h3 class="form-section-title">8.7 / 8.8 Πίνακας αντιστοίχισης οικοπέδων</h3>
+    <h3 class="form-section-title">{% case_subsection_heading "8.7-8.8-mapping" %}</h3>
     <div class="table-wrap">
         <table class="data-table">
             <thead>
@@ -487,7 +448,7 @@
         </table>
     </div>
 
-    <h3 class="form-section-title">8.8.2 Έλεγχος ολοκλήρωσης (αυτόματο)</h3>
+    <h3 class="form-section-title">{% case_subsection_heading "8.8.2" %}</h3>
     <dl class="detail-grid">
         <div>
             <dt>Οικόπεδα</dt>
@@ -510,7 +471,7 @@
 
 <section class="card">
     <h2 class="card__title">{% case_section_heading "9" %}</h2>
-    <h3 class="form-section-title">9.4 Έλεγχος ετοιμότητας (αυτόματο)</h3>
+    <h3 class="form-section-title">{% case_subsection_heading "9.4" %}</h3>
     <dl class="detail-grid">
         {% for label, ready in readiness.rows %}
         <div>

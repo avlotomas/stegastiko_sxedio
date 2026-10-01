@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block title %}Κατάλογος υπηρεσιών κοινής ωφέλειας{% endblock %}
+
+{% block content %}
+<nav class="breadcrumb" aria-label="Πλοήγηση">
+    <a href="{% url 'home' %}">Αρχική</a>
+    <span>/</span>
+    <a href="{% url 'system_configuration' %}">Ρυθμίσεις συστήματος</a>
+    <span>/</span>
+    <span>Κατάλογος υπηρεσιών κοινής ωφέλειας</span>
+</nav>
+
+<div class="page-header">
+    <h1>Κατάλογος υπηρεσιών κοινής ωφέλειας (4.2)</h1>
+    <p class="page-header__lead">
+        Οι τιμές της επιλογής «Υπηρεσία» στην Ενότητα 4.2. Η μετονομασία εφαρμόζεται σε όλες τις
+        υποθέσεις που χρησιμοποιούν την υπηρεσία. Μια υπηρεσία σε χρήση δεν διαγράφεται·
+        απενεργοποιείται, ώστε να μην προσφέρεται σε νέες καταχωρίσεις.
+    </p>
+</div>
+
+<div class="card">
+<form method="post" class="app-form" novalidate>
+    {% csrf_token %}
+    {{ formset.management_form }}
+    {% if formset.non_form_errors %}
+    <div class="alert alert--error form-span-all">
+        {% for error in formset.non_form_errors %}<div>{{ error }}</div>{% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="table-wrap form-span-all">
+        <table class="data-table">
+            <thead>
+            <tr>
+                <th>Ονομασία υπηρεσίας</th>
+                <th>Σειρά εμφάνισης</th>
+                <th>Ενεργή</th>
+                <th>Διαγραφή</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in formset %}
+                <tr>
+                    <td>
+                        {% for hidden in row.hidden_fields %}{{ hidden }}{% endfor %}
+                        {{ row.name }}
+                        {% for error in row.non_field_errors %}<ul class="errorlist"><li>{{ error }}</li></ul>{% endfor %}
+                        {% if row.name.errors %}
+                        <ul class="errorlist">{% for error in row.name.errors %}<li>{{ error }}</li>{% endfor %}</ul>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {{ row.display_order }}
+                        {% if row.display_order.errors %}
+                        <ul class="errorlist">{% for error in row.display_order.errors %}<li>{{ error }}</li>{% endfor %}</ul>
+                        {% endif %}
+                    </td>
+                    <td>{{ row.is_active }}</td>
+                    <td>
+                        {% if row.instance.pk %}
+                            {% if row.instance.is_in_use %}
+                            <span class="text-muted">Σε χρήση</span>
+                            {% else %}
+                            {{ row.DELETE }}
+                            {% endif %}
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <p class="helptext form-span-all">Συμπληρώστε τις κενές γραμμές για να προσθέσετε νέες υπηρεσίες.</p>
+
+    <div class="form-actions form-span-all">
+        <button type="submit" class="btn btn-primary">Αποθήκευση καταλόγου</button>
+        <a href="{% url 'system_configuration' %}" class="btn btn-secondary">Ακύρωση</a>
+    </div>
+</form>
+</div>
+{% endblock %}

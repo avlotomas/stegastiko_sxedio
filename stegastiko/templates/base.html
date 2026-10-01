@@ -23,6 +23,7 @@
         </button>
         <nav class="site-nav" data-site-nav aria-label="Κύρια πλοήγηση">
             <a href="{% url 'home' %}" class="site-nav__link{% if request.resolver_match.url_name == 'home' %} is-active{% endif %}">Αρχική</a>
+            <a href="{% url 'reminders' %}" class="site-nav__link{% if request.resolver_match.url_name == 'reminders' %} is-active{% endif %}">Υπενθυμίσεις</a>
             <a href="{% url 'cases:list' %}" class="site-nav__link{% if request.resolver_match.namespace == 'cases' %} is-active{% endif %}">Αιτήσεις Κ.Σ. / Δ.Δ.</a>
             <a href="{% url 'applications:list' %}" class="site-nav__link{% if request.resolver_match.namespace == 'applications' %} is-active{% endif %}">Αιτήσεις Πολιτών</a>
             <a href="{% url 'applications:import' %}" class="site-nav__link">Εισαγωγή Excel</a>

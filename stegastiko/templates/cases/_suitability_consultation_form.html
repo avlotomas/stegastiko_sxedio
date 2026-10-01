@@ -1,0 +1,55 @@
+{% comment %}Ενότητα 5 — modal form for one suitability consultation row.{% endcomment %}
+<form method="post"
+      enctype="multipart/form-data"
+      action="{% if consultation_form.instance.pk %}{% url 'cases:suitability_consultation_edit' case.pk consultation_form.instance.pk %}{% else %}{% url 'cases:suitability_consultation_create' case.pk %}{% endif %}"
+      class="app-form"
+      data-suitability-consultation-form
+      novalidate>
+    {% csrf_token %}
+    <h2 class="card__title" id="suitability-consultation-dialog-title">
+        {% if consultation_form.instance.pk %}Επεξεργασία διαβούλευσης{% else %}Νέα διαβούλευση{% endif %}
+    </h2>
+
+    {% if consultation_form.non_field_errors %}
+    <div class="alert alert--error">
+        {% for error in consultation_form.non_field_errors %}{{ error }}{% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="form-grid">
+        {% include "includes/choice_with_other_field.html" with field=consultation_form.department other=consultation_form.department_other wide=True %}
+        {% include "includes/form_field.html" with field=consultation_form.topic wide=True %}
+        {% include "includes/form_field.html" with field=consultation_form.sent_date wide=True %}
+        {% include "includes/form_field.html" with field=consultation_form.due_date wide=True %}
+        {% include "includes/form_field.html" with field=consultation_form.response_date wide=True %}
+        {% include "includes/form_field.html" with field=consultation_form.response_text wide=True %}
+        {% include "includes/form_field.html" with field=consultation_form.comments wide=True %}
+        <div class="form-field form-field--wide" data-file-picker>
+            <label for="{{ consultation_form.new_files.id_for_label }}">Επισυναπτόμενο αρχείο</label>
+            {% if consultation_form.remove_attachments %}
+            <ul class="attachment-list">
+                {% for option in consultation_form.remove_attachments %}
+                <li>
+                    <a href="{% url 'cases:attachment_download' case.pk option.data.value.value %}">{{ option.choice_label }}</a>
+                    <label class="attachment-list__remove">{{ option.tag }} Αφαίρεση</label>
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+            {{ consultation_form.new_files }}
+            <ul class="attachment-list file-picker-list" data-file-picker-list hidden></ul>
+            {% if consultation_form.new_files.errors %}
+            <ul class="errorlist">
+                {% for error in consultation_form.new_files.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+    </div>
+
+    <p class="helptext">Η κατάσταση ενημερώνεται αυτόματα από την ημερομηνία λήψης απάντησης.</p>
+
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Αποθήκευση</button>
+        <button type="button" class="btn btn-secondary" data-dialog-close>Άκυρο</button>
+    </div>
+</form>

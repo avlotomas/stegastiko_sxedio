@@ -37,13 +37,13 @@
 
     <h3 class="form-section-title">Τεχνική αξιολόγηση</h3>
     <div class="form-grid">
-        {% include "includes/choice_with_other_field.html" with field=evaluation_form.morphology other=evaluation_form.morphology_other %}
-        {% include "includes/form_field.html" with field=evaluation_form.technical_suitability %}
+        {% include "includes/choice_with_other_field.html" with field=evaluation_form.morphology other=evaluation_form.morphology_other wide=True %}
         {% include "includes/form_field.html" with field=evaluation_form.morphology_comments wide=True %}
-        {% include "includes/form_field.html" with field=evaluation_form.usable_area_sqm %}
-        {% include "includes/form_field.html" with field=evaluation_form.estimated_plots_count %}
+        {% include "includes/form_field.html" with field=evaluation_form.usable_area_sqm wide=True %}
+        {% include "includes/form_field.html" with field=evaluation_form.estimated_plots_count wide=True %}
+        {% include "includes/form_field.html" with field=evaluation_form.estimated_cost wide=True %}
+        {% include "includes/form_field.html" with field=evaluation_form.technical_suitability wide=True %}
     </div>
-    <p class="helptext">Ο αριθμός οικοπέδων εδώ είναι <strong>εκτίμηση</strong>, όχι ο τελικός αριθμός (8.2).</p>
 
     <div class="form-actions">
         <button type="submit" class="btn btn-primary">Αποθήκευση αξιολόγησης</button>

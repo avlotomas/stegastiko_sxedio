@@ -1449,3 +1449,345 @@ bindFilePickers(document);
 })();
 
 
+// Utility services grid (4.2): columns sort on click (also on the read-only case folder);
+// add / edit / delete in a modal, each saved immediately.
+(function () {
+    const collator = new Intl.Collator("el", { numeric: true, sensitivity: "base" });
+
+    const sortGrid = function (button) {
+        const table = button.closest("[data-utility-service-table]");
+        const tbody = table ? table.querySelector("tbody") : null;
+        if (!tbody) {
+            return;
+        }
+        const key = button.dataset.utilityServiceSort;
+        const nextDir = table.dataset.sortKey === key && table.dataset.sortDir === "asc" ? "desc" : "asc";
+        table.dataset.sortKey = key;
+        table.dataset.sortDir = nextDir;
+        table.querySelectorAll("th").forEach(function (th) {
+            th.removeAttribute("aria-sort");
+        });
+        button.closest("th").setAttribute("aria-sort", nextDir === "asc" ? "ascending" : "descending");
+        const read = function (row) {
+            const cell = row.querySelector("[data-sort-" + key + "]");
+            return cell ? cell.getAttribute("data-sort-" + key) || "" : "";
+        };
+        const rows = Array.from(tbody.querySelectorAll("tr[data-utility-service-row]"));
+        rows.sort(function (a, b) {
+            const order = collator.compare(read(a), read(b));
+            return nextDir === "asc" ? order : -order;
+        });
+        rows.forEach(function (row) {
+            tbody.appendChild(row);
+        });
+    };
+
+    const dialog = document.querySelector("[data-utility-service-dialog]");
+    const body = dialog ? dialog.querySelector("[data-utility-service-dialog-body]") : null;
+    const errors = dialog ? dialog.querySelector("[data-utility-service-errors]") : null;
+
+    const showDialogError = function (message) {
+        errors.textContent = message;
+        errors.hidden = !message;
+    };
+
+    const showStatus = function (message, kind) {
+        const status = document.querySelector("[data-utility-service-status]");
+        if (!status) {
+            return;
+        }
+        status.textContent = "";
+        const alert = document.createElement("div");
+        alert.className = "alert alert--" + (kind || "success");
+        alert.setAttribute("role", "status");
+        alert.textContent = message;
+        status.appendChild(alert);
+    };
+
+    const replaceGrid = function (html) {
+        const grid = document.querySelector("[data-utility-service-container]");
+        if (grid) {
+            grid.outerHTML = html;
+        }
+    };
+
+    const requestJson = function (url, options) {
+        return fetch(url, Object.assign({
+            headers: { Accept: "application/json" },
+            credentials: "same-origin",
+        }, options)).then(function (response) {
+            return response.json();
+        });
+    };
+
+    const mountForm = function (html) {
+        body.innerHTML = html;
+        const form = body.querySelector("[data-utility-service-form]");
+        form.addEventListener("submit", onSubmit);
+        const first = form.querySelector("select, input:not([type=hidden]), textarea");
+        if (first) {
+            first.focus();
+        }
+    };
+
+    const onSubmit = function (event) {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const submit = form.querySelector('button[type="submit"]');
+        submit.disabled = true;
+        showDialogError("");
+        requestJson(form.action, { method: "POST", body: new FormData(form) })
+            .then(function (data) {
+                if (!data.ok) {
+                    mountForm(data.html);
+                    return;
+                }
+                replaceGrid(data.grid_html);
+                showStatus(data.message);
+                dialog.close();
+            })
+            .catch(function () {
+                showDialogError("Αποτυχία επικοινωνίας με τον διακομιστή.");
+            })
+            .finally(function () {
+                submit.disabled = false;
+            });
+    };
+
+    const openForm = function (url) {
+        showDialogError("");
+        body.innerHTML = '<p class="text-muted">Φόρτωση…</p>';
+        dialog.showModal();
+        requestJson(url)
+            .then(function (data) {
+                if (!data.ok) {
+                    throw new Error("bad response");
+                }
+                mountForm(data.html);
+            })
+            .catch(function () {
+                body.textContent = "";
+                showDialogError("Αποτυχία φόρτωσης της φόρμας υπηρεσίας.");
+            });
+    };
+
+    const deleteService = function (button) {
+        const label = button.dataset.utilityServiceLabel || "";
+        if (!window.confirm("Διαγραφή της υπηρεσίας " + label + ";")) {
+            return;
+        }
+        button.disabled = true;
+        const token = document.querySelector('input[name="csrfmiddlewaretoken"]');
+        const data = new FormData();
+        data.append("csrfmiddlewaretoken", token ? token.value : "");
+        requestJson(button.dataset.utilityServiceDelete, { method: "POST", body: data })
+            .then(function (result) {
+                if (!result.ok) {
+                    throw new Error("bad response");
+                }
+                replaceGrid(result.grid_html);
+                showStatus(result.message);
+            })
+            .catch(function () {
+                button.disabled = false;
+                showStatus("Αποτυχία διαγραφής της υπηρεσίας.", "error");
+            });
+    };
+
+    document.addEventListener("click", function (event) {
+        const sort = event.target.closest("[data-utility-service-sort]");
+        if (sort) {
+            event.preventDefault();
+            sortGrid(sort);
+            return;
+        }
+        if (!dialog) {
+            return;
+        }
+        const open = event.target.closest("[data-utility-service-open]");
+        if (open) {
+            event.preventDefault();
+            openForm(open.dataset.utilityServiceOpen);
+            return;
+        }
+        const remove = event.target.closest("[data-utility-service-delete]");
+        if (remove) {
+            event.preventDefault();
+            deleteService(remove);
+        }
+    });
+})();
+
+
+// Suitability consultations grid (Ενότητα 5): sortable columns; add / edit / delete in a modal.
+(function () {
+    const collator = new Intl.Collator("el", { numeric: true, sensitivity: "base" });
+
+    const sortGrid = function (button) {
+        const table = button.closest("[data-suitability-consultation-table]");
+        const tbody = table ? table.querySelector("tbody") : null;
+        if (!tbody) {
+            return;
+        }
+        const key = button.dataset.suitabilityConsultationSort;
+        const nextDir = table.dataset.sortKey === key && table.dataset.sortDir === "asc" ? "desc" : "asc";
+        table.dataset.sortKey = key;
+        table.dataset.sortDir = nextDir;
+        table.querySelectorAll("th").forEach(function (th) {
+            th.removeAttribute("aria-sort");
+        });
+        button.closest("th").setAttribute("aria-sort", nextDir === "asc" ? "ascending" : "descending");
+        const read = function (row) {
+            const cell = row.querySelector("[data-sort-" + key + "]");
+            return cell ? cell.getAttribute("data-sort-" + key) || "" : "";
+        };
+        const rows = Array.from(tbody.querySelectorAll("tr[data-suitability-consultation-row]"));
+        rows.sort(function (a, b) {
+            const order = collator.compare(read(a), read(b));
+            return nextDir === "asc" ? order : -order;
+        });
+        rows.forEach(function (row) {
+            tbody.appendChild(row);
+        });
+    };
+
+    const dialog = document.querySelector("[data-suitability-consultation-dialog]");
+    const body = dialog ? dialog.querySelector("[data-suitability-consultation-dialog-body]") : null;
+    const errors = dialog ? dialog.querySelector("[data-suitability-consultation-errors]") : null;
+
+    const showDialogError = function (message) {
+        errors.textContent = message;
+        errors.hidden = !message;
+    };
+
+    const showStatus = function (message, kind) {
+        const status = document.querySelector("[data-suitability-consultation-status]");
+        if (!status) {
+            return;
+        }
+        status.textContent = "";
+        const alert = document.createElement("div");
+        alert.className = "alert alert--" + (kind || "success");
+        alert.setAttribute("role", "status");
+        alert.textContent = message;
+        status.appendChild(alert);
+    };
+
+    const replaceGrid = function (html) {
+        const grid = document.querySelector("[data-suitability-consultation-container]");
+        if (grid) {
+            grid.outerHTML = html;
+        }
+    };
+
+    const requestJson = function (url, options) {
+        return fetch(url, Object.assign({
+            headers: { Accept: "application/json" },
+            credentials: "same-origin",
+        }, options)).then(function (response) {
+            return response.json();
+        });
+    };
+
+    const mountForm = function (html, pendingFiles) {
+        body.innerHTML = html;
+        bindOtherGroups(body);
+        bindFilePickers(body, pendingFiles);
+        const form = body.querySelector("[data-suitability-consultation-form]");
+        form.addEventListener("submit", onSubmit);
+        const first = form.querySelector("select, input:not([type=hidden]), textarea");
+        if (first) {
+            first.focus();
+        }
+    };
+
+    const onSubmit = function (event) {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const submit = form.querySelector('button[type="submit"]');
+        submit.disabled = true;
+        showDialogError("");
+        requestJson(form.action, { method: "POST", body: new FormData(form) })
+            .then(function (data) {
+                if (!data.ok) {
+                    const fileInput = form.querySelector('[data-file-picker] input[type="file"]');
+                    mountForm(data.html, fileInput ? Array.from(fileInput.files) : []);
+                    return;
+                }
+                replaceGrid(data.grid_html);
+                showStatus(data.message);
+                dialog.close();
+            })
+            .catch(function () {
+                showDialogError("Αποτυχία επικοινωνίας με τον διακομιστή.");
+            })
+            .finally(function () {
+                submit.disabled = false;
+            });
+    };
+
+    const openForm = function (url) {
+        showDialogError("");
+        body.innerHTML = '<p class="text-muted">Φόρτωση…</p>';
+        dialog.showModal();
+        requestJson(url)
+            .then(function (data) {
+                if (!data.ok) {
+                    throw new Error("bad response");
+                }
+                mountForm(data.html);
+            })
+            .catch(function () {
+                body.textContent = "";
+                showDialogError("Αποτυχία φόρτωσης της φόρμας διαβούλευσης.");
+            });
+    };
+
+    const deleteConsultation = function (button) {
+        const label = button.dataset.suitabilityConsultationLabel || "";
+        if (!window.confirm("Διαγραφή της διαβούλευσης " + label + ";")) {
+            return;
+        }
+        button.disabled = true;
+        const token = document.querySelector('input[name="csrfmiddlewaretoken"]');
+        const data = new FormData();
+        data.append("csrfmiddlewaretoken", token ? token.value : "");
+        requestJson(button.dataset.suitabilityConsultationDelete, { method: "POST", body: data })
+            .then(function (result) {
+                if (!result.ok) {
+                    throw new Error("bad response");
+                }
+                replaceGrid(result.grid_html);
+                showStatus(result.message);
+            })
+            .catch(function () {
+                button.disabled = false;
+                showStatus("Αποτυχία διαγραφής της διαβούλευσης.", "error");
+            });
+    };
+
+    document.addEventListener("click", function (event) {
+        const sort = event.target.closest("[data-suitability-consultation-sort]");
+        if (sort) {
+            event.preventDefault();
+            sortGrid(sort);
+            return;
+        }
+        if (!dialog) {
+            return;
+        }
+        const open = event.target.closest("[data-suitability-consultation-open]");
+        if (open) {
+            event.preventDefault();
+            openForm(open.dataset.suitabilityConsultationOpen);
+            return;
+        }
+        const remove = event.target.closest("[data-suitability-consultation-delete]");
+        if (remove) {
+            event.preventDefault();
+            deleteConsultation(remove);
+        }
+    });
+})();
+
+

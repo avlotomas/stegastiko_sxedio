@@ -3,7 +3,8 @@
 εμφανίζονται όλα· επεξεργάσιμα από τον λειτουργό είναι μόνο email, ημερομηνία υποβολής
 (νέο διαχωρισμό) και τα πεδία προτεραιότητας 1.2.
 {% endcomment %}
-<h3 class="form-section-title">1.1 Βασικά στοιχεία</h3>
+{% load case_detail %}
+<h3 class="form-section-title">{% case_subsection_heading "1.1" %}</h3>
 <dl class="detail-grid spec-readonly-grid form-span-all">
     <div>
         <dt>Τύπος διαδικασίας</dt>
@@ -35,7 +36,7 @@
 </div>
 
 {% if case.is_new_division %}
-<h3 class="form-section-title">1.2 Χαρακτηριστικά Κοινότητας για σκοπούς προτεραιότητας νέου διαχωρισμού</h3>
+<h3 class="form-section-title">{% case_subsection_heading "1.2" %}</h3>
 <div class="form-grid form-grid--priority">
     {% include "includes/form_field.html" with field=form.priority_turkish_cypriot_properties %}
     {% include "includes/form_field.html" with field=form.priority_protection_zones %}
@@ -46,7 +47,7 @@
 </div>
 {% endif %}
 
-<h3 class="form-section-title">1.3 Σχόλια / Παρατηρήσεις Ενότητας 1</h3>
+<h3 class="form-section-title">{% case_subsection_heading "1.3" %}</h3>
 <div class="form-grid">
     {% include "includes/form_field.html" with field=form.comments wide=True %}
 </div>
