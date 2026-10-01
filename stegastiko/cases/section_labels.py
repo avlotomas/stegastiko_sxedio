@@ -1,4 +1,4 @@
-"""Configurable display titles for Κ.Σ./Δ.Δ. case sections (sidebar, page heading, folder tiles)."""
+"""Configurable display titles for Κ.Σ./Δ.Δ. case sections (sidebar, page heading, folder view)."""
 
 from core.services import get_setting, set_setting
 
@@ -38,12 +38,15 @@ def case_section_number(section_key: str) -> str:
 
 
 def case_section_heading(section_key: str) -> str:
-    """Numbered heading of a section on the read-only case folder (e.g. «2 Έλεγχος πληρότητας»)."""
-    return f"{case_section_number(section_key)} {get_case_section_label(section_key)}"
+    """Numbered heading of a section on the read-only case folder (e.g. «2. Έλεγχος πληρότητας»)."""
+    return f"{case_section_number(section_key)}. {get_case_section_label(section_key)}"
 
 
 def save_case_section_label(section_key: str, label: str) -> None:
-    description = f"Τίτλος εμφάνισης Ενότητας {section_key} (πλοήγηση και κεφαλίδα οθόνης)"
+    description = (
+        f"Τίτλος εμφάνισης Ενότητας {section_key} "
+        "(πλοήγηση, κεφαλίδα οθόνης και προβολή φακέλου)"
+    )
     set_setting(case_section_label_setting_key(section_key), label.strip(), description)
 
 

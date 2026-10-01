@@ -25,6 +25,29 @@ class IsoDateInput(forms.DateInput):
         super().__init__(attrs=merged, format=format or ISO_DATE_FORMAT)
 
 
+class MultipleFileInput(forms.ClearableFileInput):
+    allow_multiple_selected = True
+
+
+class MultipleFileField(forms.FileField):
+    """Several uploads in one input; cleans to a list (empty when nothing was chosen)."""
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("widget", MultipleFileInput())
+        super().__init__(*args, **kwargs)
+
+    def clean(self, data, initial=None):
+        single_clean = super().clean
+        if isinstance(data, (list, tuple)):
+            return [single_clean(item, initial) for item in data]
+        return [single_clean(data, initial)] if data else []
+
+    def has_changed(self, initial, data):
+        # The widget returns [] when nothing is chosen; that must not make an
+        # untouched extra formset row count as filled in.
+        return not self.disabled and bool(data)
+
+
 def split_section_reference(help_text):
     """Split "10.4.6 Ετήσιο εισόδημα" into ("10.4.6", "Ετήσιο εισόδημα")."""
     match = SECTION_PREFIX.match((help_text or "").strip())
@@ -40,17 +63,17 @@ def label_without_section_reference(label):
 
 
 def apply_greek_labels(form):
-    """Promote the Greek help_text to the field label, section number included.
+    """Promote the Greek help_text to the field label (wording only, no § number).
 
-    The UI must be Greek and screens must keep the specification numbering visible, and
-    the model help_text already carries both (e.g. "8.1 Ημερομηνία ανάθεσης μελέτης").
-    Using it as the label avoids a second source of truth and stops Django falling back
-    to a humanised English field name. Labels set explicitly on the form win, because
-    this runs before the subclass gets a chance to override them.
+    Model help_text carries the specification reference plus Greek text
+    (e.g. "8.1 Ημερομηνία ανάθεσης μελέτης"); subsection headings keep the number.
+    Using help_text as the label avoids a second source of truth and stops Django
+    falling back to a humanised English field name. Labels set explicitly on the form
+    win, because this runs before the subclass gets a chance to override them.
     """
     for field in form.fields.values():
         section_ref, text = split_section_reference(field.help_text)
         if not section_ref or not text:
             continue
-        field.label = f"{section_ref} {text}"
+        field.label = text
         field.help_text = ""

@@ -1,0 +1,64 @@
+{% comment %}
+Table of sent deficiency emails (2.2). Rows open the read-only view modal.
+Requires: case, communications; optional empty_message (default Greek empty text).
+{% endcomment %}
+<div class="table-wrap{% if table_class %} {{ table_class }}{% endif %}">
+    <table class="data-table data-table--clickable-rows" data-communication-table>
+        <thead>
+        <tr>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-communication-sort="check">
+                    Έλεγχος
+                </button>
+            </th>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-communication-sort="recipient">
+                    Παραλήπτης
+                </button>
+            </th>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-communication-sort="subject">
+                    Θέμα
+                </button>
+            </th>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-communication-sort="status">
+                    Κατάσταση
+                </button>
+            </th>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-communication-sort="sent-at">
+                    Απεστάλη
+                </button>
+            </th>
+            <th><span class="visually-hidden">Ενέργειες</span></th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for communication in communications %}
+            <tr class="communication-email-row" data-communication-row>
+                <td data-sort-check="{{ communication.content_object.row_label|default:''|lower }}">{{ communication.content_object.row_label|default:"—" }}</td>
+                <td data-sort-recipient="{{ communication.recipient|lower }}">{{ communication.recipient }}</td>
+                <td data-sort-subject="{{ communication.subject|lower }}">{{ communication.subject }}</td>
+                <td data-sort-status="{{ communication.status }}">{% if communication.status == "sent" %}Απεστάλη{% else %}Προσχέδιο{% endif %}</td>
+                <td data-sort-sent-at="{{ communication.sent_at|date:'Y-m-d H:i:s' }}">{{ communication.sent_at|default:"—" }}</td>
+                <td>
+                    <button type="button"
+                            class="btn btn-link btn-link--table"
+                            data-communication-view
+                            data-communication-detail-url="{% url 'cases:communication_detail' case.pk communication.pk %}">
+                        Προβολή
+                    </button>
+                </td>
+            </tr>
+        {% empty %}
+            <tr>
+                <td colspan="6">{{ empty_message|default:"Δεν έχουν σταλεί email ελλείψεων." }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% if communications %}
+    <p class="helptext">Πατήστε «Προβολή» για να δείτε το πλήρες email.</p>
+    {% endif %}
+</div>

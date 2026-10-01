@@ -2,20 +2,25 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.http import Http404
+from django.db.models import Q
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.utils import timezone
+from django.template.loader import render_to_string
+from django.contrib.contenttypes.models import ContentType
+from django.utils import formats, timezone
+from django.utils.http import content_disposition_header
 
 from cases.forms import (
     AnnouncementTextForm,
     CaseCreateForm,
-    CompletenessCheckFormSet,
+    CompletenessCheckForm,
+    DeficiencyEmailForm,
     DivisionConsultationFormSet,
     FieldFormSet,
     InfrastructureCheckFormSet,
     LandPlotDecisionFormSet,
-    LandPlotEvaluationFormSet,
-    LandPlotFormSet,
+    LandPlotEvaluationForm,
+    LandPlotForm,
     ParcelFormSet,
     Section1Form,
     Section2Form,
@@ -31,21 +36,22 @@ from cases.forms import (
     UtilityServiceFormSet,
     ValuationReferralFormSet,
 )
-from cases.models import Case, CompletenessCheck, Consultation, SubmissionCycle
+from cases.models import Case, CompletenessCheck, Consultation, LandPlot, SubmissionCycle
 from cases.services import (
     announcement_readiness,
     build_announcement_text,
     case_communications,
-    create_deficiency_email,
+    deficiency_email_subject,
     generate_case_number,
-    mark_communication_sent,
     publish_announcement,
     section8_completion,
+    send_deficiency_email,
     suitability_summary,
 )
-from cases.section_labels import get_case_section_label
+from cases.section_labels import case_section_heading, get_case_section_label
 from cases.services import case_history as case_history_entries
-from core.models import Communication, Community
+from core.models import Attachment, Communication, Community
+from core.services import smtp_is_configured
 
 # Each entry drives one action screen of the Κ.Σ./Δ.Δ. application: the label shown on
 # the case folder, a short description, the main Case form and its inline formsets.
@@ -62,22 +68,23 @@ SECTIONS = {
         "action": "Έλεγχος πληρότητας",
         "summary": "Επαναλαμβανόμενος πίνακας ελέγχων με ελλείψεις και email.",
         "form": Section2Form,
-        "formsets": (("completeness_checks", CompletenessCheckFormSet, "2 Πίνακας ελέγχων"),),
+        "formsets": (),
     },
     "3": {
         "title": "Ενότητα 3 — Στοιχεία τεμαχίων",
         "action": "Στοιχεία τεμαχίων",
-        "summary": "Πίνακας τεμαχίων και έλεγχος κρατικής γης.",
+        "summary": "3.1 πίνακας τεμαχίων, 3.2 έλεγχος κρατικής γης, 3.3 σχόλια.",
         "form": Section3Form,
-        "formsets": (("land_plots", LandPlotFormSet, "3 Πίνακας τεμαχίων"),),
+        # 3.1 plots are edited one at a time from the grid modal (land_plot_form).
+        "formsets": (),
     },
     "4": {
         "title": "Ενότητα 4 — Τεχνική αξιολόγηση καταλληλότητας",
         "action": "Τεχνική αξιολόγηση",
-        "summary": "4.1 αξιολόγηση ανά τεμάχιο, 4.2 υπηρεσίες κοινής ωφέλειας, 4.3 πρόσβαση.",
+        "summary": "4.1 αξιολόγηση ανά τεμάχιο, 4.2 υπηρεσίες, 4.3 πρόσβαση, 4.4 αρχεία, 4.5 σχόλια.",
         "form": Section4Form,
+        # 4.1 rows follow the 3.1 plots and are edited from the grid modal (land_plot_evaluation_form).
         "formsets": (
-            ("plot_evaluations", LandPlotEvaluationFormSet, "4.1 Τεχνική αξιολόγηση ανά τεμάχιο"),
             ("utility_services", UtilityServiceFormSet, "4.2 Υπηρεσίες κοινής ωφέλειας"),
         ),
     },
@@ -135,7 +142,7 @@ CONSULTATION_STAGE_BY_SECTION = {
 }
 
 
-def _build_formsets(section_key, case, data=None):
+def _build_formsets(section_key, case, data=None, files=None):
     """Instantiate the inline formsets of a section, scoped to the case."""
     formsets = []
     for prefix, formset_class, legend in SECTIONS[section_key]["formsets"]:
@@ -144,7 +151,7 @@ def _build_formsets(section_key, case, data=None):
             kwargs["queryset"] = Consultation.objects.filter(
                 case=case, stage=CONSULTATION_STAGE_BY_SECTION[section_key]
             )
-        formsets.append((legend, formset_class(data, **kwargs)))
+        formsets.append((legend, formset_class(data, files, **kwargs)))
     return formsets
 
 
@@ -171,9 +178,9 @@ def case_nav_items(case, active_key=None):
     items = [
         {
             "key": key,
-            "action": get_case_section_label(key),
+            "action": case_section_heading(key),
             "summary": SECTIONS[key]["summary"],
-            "title": get_case_section_label(key),
+            "title": case_section_heading(key),
             "is_active": active_key == key,
         }
         for key in section_screens_for(case)
@@ -182,9 +189,9 @@ def case_nav_items(case, active_key=None):
         items.append(
             {
                 "key": "9",
-                "action": get_case_section_label("9"),
+                "action": case_section_heading("9"),
                 "summary": SECTION_9_NAV["summary"],
-                "title": get_case_section_label("9"),
+                "title": case_section_heading("9"),
                 "is_active": active_key == "9",
             }
         )
@@ -261,7 +268,8 @@ def case_detail(request, pk):
             "case_nav": case_nav_items(case),
             "suitability_summary": suitability_summary(case) if case.is_new_division else None,
             "completeness_checks": case.completeness_checks.all(),
-            "land_plots": case.land_plots.all(),
+            "land_plots": case.land_plots.prefetch_related("attachments"),
+            "technical_attachments": case.attachments.filter(section_ref="4.4"),
             "suitability_consultations": case.consultations.filter(
                 stage=Consultation.Stage.SUITABILITY
             ),
@@ -303,8 +311,8 @@ def case_section_edit(request, pk, section):
     form_class = section_config["form"]
 
     if request.method == "POST":
-        form = form_class(request.POST, instance=case) if form_class else None
-        formsets = _build_formsets(section, case, request.POST)
+        form = form_class(request.POST, request.FILES, instance=case) if form_class else None
+        formsets = _build_formsets(section, case, request.POST, request.FILES)
         form_valid = form.is_valid() if form else True
         formsets_valid = all(formset.is_valid() for _, formset in formsets)
         if form_valid and formsets_valid:
@@ -319,54 +327,362 @@ def case_section_edit(request, pk, section):
         form = form_class(instance=case) if form_class else None
         formsets = _build_formsets(section, case)
 
-    return render(
-        request,
-        "cases/section_form.html",
-        {
-            "case": case,
-            "section": section,
-            "section_title": get_case_section_label(section),
-            "form": form,
-            "formsets": formsets,
-            "summary": suitability_summary(case) if section == "6" else None,
-            "completion": section8_completion(case) if section == "8-plots" else None,
-            "completeness_checks": case.completeness_checks.all() if section == "2" else None,
-            "communications": case_communications(case) if section == "2" else None,
-            "case_nav": case_nav_items(case, active_key=section),
-        },
+    context = {
+        "case": case,
+        "section": section,
+        "section_title": get_case_section_label(section),
+        "form": form,
+        "formsets": formsets,
+        "summary": suitability_summary(case) if section == "6" else None,
+        "completion": section8_completion(case) if section == "8-plots" else None,
+        "case_nav": case_nav_items(case, active_key=section),
+    }
+    if section == "3":
+        context["land_plots"] = case.land_plots.prefetch_related("attachments")
+    if section == "4":
+        context["land_plots"] = case.land_plots.all()
+    if section == "2":
+        context.update(
+            {
+                "completeness_checks": case.completeness_checks.all(),
+                "communications": case_communications(case),
+                "deficiency_email_form": DeficiencyEmailForm(
+                    initial={
+                        "subject": deficiency_email_subject(case),
+                        "body": "",
+                    }
+                ),
+                "smtp_ready": smtp_is_configured(),
+            }
+        )
+    return render(request, "cases/section_form.html", context)
+
+
+def _wants_json(request):
+    return "application/json" in request.headers.get("Accept", "")
+
+
+@login_required
+def completeness_check_form(request, pk, check_id=None):
+    """2.1 Add or edit one completeness check from the grid modal."""
+    case = _case_for_section(pk, "2")
+    if not _wants_json(request):
+        raise Http404()
+    if check_id is None:
+        check = CompletenessCheck(case=case)
+    else:
+        check = get_object_or_404(CompletenessCheck, pk=check_id, case=case)
+
+    if request.method == "POST":
+        form = CompletenessCheckForm(request.POST, instance=check)
+        if not form.is_valid():
+            return JsonResponse(
+                {"ok": False, "html": _completeness_check_form_html(request, case, form)}, status=400
+            )
+        is_new = check.pk is None
+        check._section_ref = "2.1"
+        with transaction.atomic():
+            check = form.save()
+        verb = "Προστέθηκε" if is_new else "Ενημερώθηκε"
+        return JsonResponse(
+            {
+                "ok": True,
+                "message": f"{verb} ο {check.sequence}ος έλεγχος πληρότητας.",
+                "grid_html": _completeness_check_grid_html(request, case),
+            }
+        )
+    if request.method != "GET":
+        raise Http404()
+    form = CompletenessCheckForm(instance=check)
+    return JsonResponse({"ok": True, "html": _completeness_check_form_html(request, case, form)})
+
+
+@login_required
+def completeness_check_delete(request, pk, check_id):
+    """2.1 Delete one completeness check when it has no sent emails."""
+    case = _case_for_section(pk, "2")
+    if request.method != "POST" or not _wants_json(request):
+        raise Http404("Επιτρέπεται μόνο POST.")
+    check = get_object_or_404(CompletenessCheck, pk=check_id, case=case)
+    if not check.can_delete:
+        return JsonResponse(
+            {
+                "ok": False,
+                "message": "Ο έλεγχος δεν διαγράφεται γιατί έχει απεσταλμένα email ελλείψεων.",
+                "grid_html": _completeness_check_grid_html(request, case),
+            },
+            status=409,
+        )
+    label = check.row_label
+    check._section_ref = "2.1"
+    check.delete()
+    return JsonResponse(
+        {"ok": True, "message": f"Διαγράφηκε ο έλεγχος ({label}).", "grid_html": _completeness_check_grid_html(request, case)}
     )
 
 
 @login_required
-def case_deficiency_email_create(request, pk, check_id):
+def case_deficiency_email_send(request, pk, check_id):
+    """2.2 Send the deficiencies email for one completeness check."""
     case = get_object_or_404(Case.objects.select_related("community"), pk=pk)
     if request.method != "POST":
         raise Http404("Επιτρέπεται μόνο POST.")
+    if "2" not in case.applicable_sections:
+        raise Http404("Η ενότητα δεν ισχύει για αυτόν τον τύπο διαδικασίας.")
     check = get_object_or_404(CompletenessCheck, pk=check_id, case=case)
-    try:
-        create_deficiency_email(check)
-    except ValidationError as exc:
-        messages.error(request, exc.messages[0] if exc.messages else str(exc))
+
+    form = DeficiencyEmailForm(request.POST)
+    errors = []
+    communication = None
+    if form.is_valid():
+        try:
+            communication = send_deficiency_email(
+                check, form.cleaned_data["subject"], form.cleaned_data["body"]
+            )
+        except ValidationError as exc:
+            errors = exc.messages
     else:
-        messages.success(
-            request, f"Δημιουργήθηκε προσχέδιο email ελλείψεων ({check.sequence}ος έλεγχος)."
+        errors = [error for field_errors in form.errors.values() for error in field_errors]
+
+    if communication:
+        message = f"Το email ελλείψεων στάλθηκε στο {communication.recipient}."
+    if _wants_json(request):
+        if not communication:
+            return JsonResponse({"ok": False, "errors": errors}, status=400)
+        log_html = render_to_string(
+            "cases/_deficiency_email_log.html",
+            {"case": case, "communications": case_communications(case)},
+            request=request,
         )
+        return JsonResponse(
+            {
+                "ok": True,
+                "message": message,
+                "log_html": log_html,
+                "grid_html": _completeness_check_grid_html(request, case),
+            }
+        )
+
+    if communication:
+        messages.success(request, message)
+    else:
+        for error in errors:
+            messages.error(request, error)
     return redirect("cases:section_edit", pk=case.pk, section="2")
 
 
+def _completeness_check_form_html(request, case, form):
+    return render_to_string(
+        "cases/_completeness_check_form.html",
+        {"case": case, "check_form": form},
+        request=request,
+    )
+
+
+def _completeness_check_grid_html(request, case):
+    return render_to_string(
+        "cases/_completeness_check_grid.html",
+        {
+            "case": case,
+            "completeness_checks": case.completeness_checks.all(),
+            "smtp_ready": smtp_is_configured(),
+        },
+        request=request,
+    )
+
+
+def _communication_detail_payload(communication: Communication) -> dict:
+    sent_at = ""
+    if communication.sent_at:
+        sent_at = formats.date_format(
+            timezone.localtime(communication.sent_at), "SHORT_DATETIME_FORMAT"
+        )
+    status_display = "Απεστάλη" if communication.status == "sent" else "Προσχέδιο"
+    return {
+        "recipient": communication.recipient,
+        "subject": communication.subject,
+        "body": communication.body,
+        "check_label": getattr(communication.content_object, "row_label", ""),
+        "status": communication.status,
+        "status_display": status_display,
+        "sent_at": sent_at,
+    }
+
+
 @login_required
-def case_deficiency_email_send(request, pk, communication_id):
+def case_communication_detail(request, pk, communication_id):
+    """Return one sent email for the 2.2 history view modal."""
     case = get_object_or_404(Case, pk=pk)
-    if request.method != "POST":
-        raise Http404("Επιτρέπεται μόνο POST.")
-    communication = get_object_or_404(Communication, pk=communication_id, object_id=case.pk)
-    try:
-        mark_communication_sent(communication)
-    except ValidationError as exc:
-        messages.error(request, exc.messages[0] if exc.messages else str(exc))
+    case_type = ContentType.objects.get_for_model(Case)
+    check_type = ContentType.objects.get_for_model(CompletenessCheck)
+    communication = get_object_or_404(
+        Communication.objects.filter(
+            Q(content_type=case_type, object_id=case.pk)
+            | Q(content_type=check_type, object_id__in=case.completeness_checks.values("pk"))
+        ),
+        pk=communication_id,
+    )
+    if request.method != "GET":
+        raise Http404("Επιτρέπεται μόνο GET.")
+    if not _wants_json(request):
+        raise Http404()
+    return JsonResponse({"ok": True, **_communication_detail_payload(communication)})
+
+
+def _case_for_section(pk, section):
+    case = get_object_or_404(Case.objects.select_related("community"), pk=pk)
+    if section not in case.applicable_sections:
+        raise Http404("Η ενότητα δεν ισχύει για αυτόν τον τύπο διαδικασίας.")
+    return case
+
+
+def _land_plot_grid_html(request, case):
+    return render_to_string(
+        "cases/_land_plot_grid.html",
+        {"case": case, "land_plots": case.land_plots.prefetch_related("attachments")},
+        request=request,
+    )
+
+
+def _land_plot_form_html(request, case, form):
+    return render_to_string(
+        "cases/_land_plot_form.html", {"case": case, "plot_form": form}, request=request
+    )
+
+
+@login_required
+def land_plot_form(request, pk, plot_id=None):
+    """3.1 Add or edit one land plot from the grid modal; files stay on the plot."""
+    case = _case_for_section(pk, "3")
+    if not _wants_json(request):
+        raise Http404()
+    if plot_id is None:
+        plot = LandPlot(case=case)
     else:
-        messages.success(request, "Καταγράφηκε η αποστολή του email ελλείψεων.")
-    return redirect("cases:detail", pk=case.pk)
+        plot = get_object_or_404(LandPlot, pk=plot_id, case=case)
+
+    if request.method == "POST":
+        form = LandPlotForm(request.POST, request.FILES, instance=plot)
+        if not form.is_valid():
+            return JsonResponse(
+                {"ok": False, "html": _land_plot_form_html(request, case, form)}, status=400
+            )
+        is_new = plot.pk is None
+        plot._section_ref = "3.1"
+        with transaction.atomic():
+            plot = form.save()
+        verb = "Προστέθηκε" if is_new else "Ενημερώθηκε"
+        return JsonResponse(
+            {
+                "ok": True,
+                "message": f"{verb} το τεμάχιο {plot.parcel_number}.",
+                "grid_html": _land_plot_grid_html(request, case),
+            }
+        )
+    if request.method != "GET":
+        raise Http404()
+    form = LandPlotForm(instance=plot)
+    return JsonResponse({"ok": True, "html": _land_plot_form_html(request, case, form)})
+
+
+@login_required
+def land_plot_delete(request, pk, plot_id):
+    """3.1 Delete one land plot (and its files) from the grid."""
+    case = _case_for_section(pk, "3")
+    if request.method != "POST" or not _wants_json(request):
+        raise Http404("Επιτρέπεται μόνο POST.")
+    plot = get_object_or_404(LandPlot, pk=plot_id, case=case)
+    # The grid may predate a 4.1 evaluation entered meanwhile, so the server checks again.
+    if plot.has_technical_evaluation and request.POST.get("confirm_evaluation") != "1":
+        return JsonResponse(
+            {
+                "ok": False,
+                "requires_confirmation": True,
+                "message": plot.deletion_warning,
+                "grid_html": _land_plot_grid_html(request, case),
+            },
+            status=409,
+        )
+    parcel_number = plot.parcel_number
+    plot._section_ref = "3.1"
+    with transaction.atomic():
+        for attachment in plot.attachments.all():
+            attachment._section_ref = "3.1"
+            attachment.delete()
+        plot.delete()
+    return JsonResponse(
+        {
+            "ok": True,
+            "message": f"Διαγράφηκε το τεμάχιο {parcel_number}.",
+            "grid_html": _land_plot_grid_html(request, case),
+        }
+    )
+
+
+def _plot_evaluation_grid_html(request, case):
+    return render_to_string(
+        "cases/_plot_evaluation_grid.html",
+        {"case": case, "land_plots": case.land_plots.all()},
+        request=request,
+    )
+
+
+def _plot_evaluation_form_html(request, case, form):
+    return render_to_string(
+        "cases/_plot_evaluation_form.html", {"case": case, "evaluation_form": form}, request=request
+    )
+
+
+@login_required
+def land_plot_evaluation_form(request, pk, plot_id):
+    """4.1 Edit the technical evaluation of one 3.1 plot from the grid modal.
+
+    The rows follow the 3.1 plots one-to-one, so plots are never added or removed here.
+    """
+    case = _case_for_section(pk, "4")
+    if not _wants_json(request):
+        raise Http404()
+    plot = get_object_or_404(LandPlot, pk=plot_id, case=case)
+
+    if request.method == "POST":
+        form = LandPlotEvaluationForm(request.POST, instance=plot)
+        if not form.is_valid():
+            return JsonResponse(
+                {"ok": False, "html": _plot_evaluation_form_html(request, case, form)}, status=400
+            )
+        plot._section_ref = "4.1"
+        with transaction.atomic():
+            plot = form.save()
+        return JsonResponse(
+            {
+                "ok": True,
+                "message": f"Ενημερώθηκε η τεχνική αξιολόγηση του τεμαχίου {plot.parcel_number}.",
+                "grid_html": _plot_evaluation_grid_html(request, case),
+            }
+        )
+    if request.method != "GET":
+        raise Http404()
+    form = LandPlotEvaluationForm(instance=plot)
+    return JsonResponse({"ok": True, "html": _plot_evaluation_form_html(request, case, form)})
+
+
+@login_required
+def case_attachment_download(request, pk, attachment_id):
+    """Download a file of the case: 3.1 files of its land plots or 4.4 files of the case."""
+    case = get_object_or_404(Case, pk=pk)
+    plot_files = Q(
+        content_type=ContentType.objects.get_for_model(LandPlot),
+        object_id__in=case.land_plots.values("pk"),
+    )
+    case_files = Q(content_type=ContentType.objects.get_for_model(Case), object_id=case.pk)
+    attachment = get_object_or_404(Attachment.objects.filter(plot_files | case_files), pk=attachment_id)
+    response = HttpResponse(
+        bytes(attachment.data), content_type=attachment.content_type_name
+    )
+    response["Content-Disposition"] = content_disposition_header(
+        as_attachment=True, filename=attachment.filename
+    )
+    return response
 
 
 @login_required
@@ -396,6 +712,7 @@ def announcement_create(request, pk):
             "case": case,
             "form": form,
             "readiness": readiness,
+            "submission_cycles": case.submission_cycles.all(),
             "case_nav": case_nav_items(case, active_key="9"),
             "section_title": get_case_section_label("9"),
         },

@@ -74,6 +74,10 @@ class AuditedModel(models.Model):
         section_ref = getattr(self, "_section_ref", "")
         return case_id, application_id, section_ref
 
+    def _audit_value(self, field_name, value):
+        """Value written to the history; override to mask secrets."""
+        return value
+
 
 class Attachment(AuditedModel):
     _audit_exclude_fields = {"data"}
@@ -103,6 +107,15 @@ class Attachment(AuditedModel):
                 self.uploaded_by_id = user.id
         return super().save(*args, **kwargs)
 
+    def _audit_context(self):
+        # Files on a case child (e.g. a 3.1 land plot) belong to the case folder history.
+        owner = self.content_object
+        case_id = getattr(owner, "case_id", None)
+        application_id = getattr(owner, "application_id", None)
+        if (self.content_type.app_label, self.content_type.model) == ("cases", "case"):
+            case_id = self.object_id
+        return case_id, application_id, getattr(self, "_section_ref", "") or self.section_ref
+
 
 class Communication(AuditedModel):
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
@@ -128,6 +141,17 @@ class Communication(AuditedModel):
                 self.created_by_id = user.id
         return super().save(*args, **kwargs)
 
+    def _audit_context(self):
+        # Emails about a case belong to its aggregate history (§Β.1.3).
+        case_id = None
+        model_ref = (self.content_type.app_label, self.content_type.model)
+        if model_ref == ("cases", "case"):
+            case_id = self.object_id
+        elif model_ref == ("cases", "completenesscheck"):
+            owner = self.content_object
+            case_id = getattr(owner, "case_id", None)
+        return case_id, None, getattr(self, "_section_ref", "")
+
 
 class Community(AuditedModel):
     district = models.CharField(max_length=128)
@@ -147,6 +171,8 @@ class Community(AuditedModel):
 
 
 class SystemSetting(AuditedModel):
+    SECRET_KEYS = frozenset({"smtpPassword"})
+
     key = models.CharField(max_length=64, unique=True)
     value = models.CharField(max_length=512)
     description = models.CharField(max_length=255, blank=True)
@@ -156,6 +182,11 @@ class SystemSetting(AuditedModel):
 
     def __str__(self):
         return self.key
+
+    def _audit_value(self, field_name, value):
+        if field_name == "value" and self.key in self.SECRET_KEYS and value:
+            return "********"
+        return value
 
 
 class DocumentCatalogItem(AuditedModel):

@@ -1,0 +1,91 @@
+{% comment %}2.1 Grid of completeness checks, edited from modal with immediate save.{% endcomment %}
+<div data-completeness-check-container>
+<div class="form-actions form-span-all">
+    <button type="button"
+            class="btn btn-secondary"
+            data-completeness-check-open="{% url 'cases:completeness_check_create' case.pk %}">
+        Προσθήκη ελέγχου
+    </button>
+</div>
+<div class="table-wrap" data-completeness-check-grid>
+    <table class="data-table" data-completeness-check-table>
+        <thead>
+        <tr>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-completeness-sort="sequence">
+                    Α/Α
+                </button>
+            </th>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-completeness-sort="date">
+                    Ημερομηνία ελέγχου
+                </button>
+            </th>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-completeness-sort="result">
+                    Αποτέλεσμα
+                </button>
+            </th>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-completeness-sort="deficiencies">
+                    Ελλείψεις
+                </button>
+            </th>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-completeness-sort="emails">
+                    Email ελλείψεων
+                </button>
+            </th>
+            <th><span class="visually-hidden">Ενέργειες</span></th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for check in completeness_checks %}
+            <tr data-completeness-row>
+                <td data-sort-sequence="{{ check.sequence }}">{{ check.sequence }}ος</td>
+                <td data-sort-date="{{ check.check_date|date:'Y-m-d' }}">{{ check.check_date }}</td>
+                <td data-sort-result="{{ check.result }}">
+                    {% if check.result == 'yes' %}
+                    <span class="badge badge--pass">{{ check.get_result_display }}</span>
+                    {% elif check.result == 'no' %}
+                    <span class="badge badge--fail">{{ check.get_result_display }}</span>
+                    {% else %}
+                    <span class="badge badge--pending">ΕΚΚΡΕΜΕΙ</span>
+                    {% endif %}
+                </td>
+                <td data-sort-deficiencies="{{ check.deficiencies|lower }}">{{ check.deficiencies|default:"—"|truncatechars:80 }}</td>
+                <td data-sort-emails="{{ check.communications.count }}">{{ check.communications.count }}</td>
+                <td class="data-table__actions">
+                    <button type="button"
+                            class="btn btn-secondary btn-sm"
+                            data-completeness-check-open="{% url 'cases:completeness_check_edit' case.pk check.pk %}">
+                        Επεξεργασία
+                    </button>
+                    <button type="button"
+                            class="btn btn-danger btn-sm"
+                            data-completeness-check-delete="{% url 'cases:completeness_check_delete' case.pk check.pk %}"
+                            data-completeness-check-label="{{ check.row_label }}"
+                            {% if not check.can_delete %}
+                            data-completeness-check-delete-blocked-reason="Δεν μπορείτε να διαγράψετε αυτόν τον έλεγχο επειδή έχουν ήδη σταλεί email ελλείψεων."
+                            title="Δεν μπορείτε να διαγράψετε αυτόν τον έλεγχο επειδή έχουν ήδη σταλεί email ελλείψεων."
+                            {% endif %}>
+                        Διαγραφή
+                    </button>
+                    <button type="button"
+                            class="btn btn-secondary btn-sm"
+                            data-dialog-open="deficiency-email-dialog"
+                            data-email-action="{% url 'cases:deficiency_email_send' case.pk check.pk %}"
+                            data-copy-text="{{ check.deficiencies }}"
+                            data-check-label="{{ check.row_label }}"
+                            {% if not case.contact_email or not smtp_ready %}disabled{% endif %}>
+                        Αποστολή Email
+                    </button>
+                </td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="6">Δεν έχουν καταχωριστεί έλεγχοι πληρότητας.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+</div>

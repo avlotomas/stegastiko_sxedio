@@ -2,14 +2,14 @@
 
 from django.db import models
 
-from core.forms import split_section_reference
+from core.forms import label_without_section_reference
 
 
 def case_field_label(case, field_name):
     field = case._meta.get_field(field_name)
-    section_ref, text = split_section_reference(field.help_text or "")
-    if section_ref and text:
-        return f"{section_ref} {text}"
+    text = label_without_section_reference(field.help_text or "")
+    if text:
+        return text
     return field.verbose_name
 
 

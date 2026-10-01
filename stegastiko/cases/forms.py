@@ -15,8 +15,8 @@ from cases.models import (
     ValuationReferral,
     YesNo,
 )
-from core.forms import IsoDateInput, apply_greek_labels, label_without_section_reference
-from core.models import Community
+from core.forms import IsoDateInput, MultipleFileField, apply_greek_labels
+from core.models import Attachment, Community
 
 
 class StyledFormMixin:
@@ -35,45 +35,141 @@ class StyledFormMixin:
         apply_greek_labels(self)
 
 
+class OtherChoiceFieldsMixin:
+    """«Άλλο» choices whose description is written in the same cell (§Α.5).
+
+    The description is required while "other" is selected and cleared otherwise; the
+    previous value stays in the action history.
+    """
+
+    # choice field name -> (description field name, message when it is missing)
+    OTHER_TEXT_FIELDS = {}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for other_name, _ in self.OTHER_TEXT_FIELDS.values():
+            field = self.fields[other_name]
+            field.widget.attrs["aria-label"] = field.label
+
+    def clean(self):
+        cleaned_data = super().clean()
+        for choice_name, (other_name, message) in self.OTHER_TEXT_FIELDS.items():
+            if cleaned_data.get(choice_name) == "other":
+                if not (cleaned_data.get(other_name) or "").strip():
+                    self.add_error(other_name, message)
+            else:
+                cleaned_data[other_name] = ""
+        return cleaned_data
+
+
+class AttachmentsFormMixin:
+    """Files kept on the form's instance: add new ones and remove existing ones.
+
+    Must come after StyledFormMixin in the bases so the added fields get styled too.
+    """
+
+    attachment_section_ref = ""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["new_files"] = MultipleFileField(required=False, label="Επισύναψη αρχείων")
+        if self.instance.pk:
+            remove = forms.ModelMultipleChoiceField(
+                queryset=self.existing_attachments(),
+                required=False,
+                widget=forms.CheckboxSelectMultiple,
+                label="Αφαίρεση αρχείων",
+            )
+            remove.label_from_instance = lambda attachment: attachment.filename
+            self.fields["remove_attachments"] = remove
+
+    def existing_attachments(self):
+        return self.instance.attachments.filter(section_ref=self.attachment_section_ref)
+
+    def save(self, commit=True):
+        instance = super().save(commit=commit)
+        if commit:
+            self.save_attachments()
+        return instance
+
+    def save_attachments(self):
+        for attachment in self.cleaned_data.get("remove_attachments") or []:
+            attachment._section_ref = self.attachment_section_ref
+            attachment.delete()
+        for upload in self.cleaned_data.get("new_files") or []:
+            Attachment(
+                content_object=self.instance,
+                section_ref=self.attachment_section_ref,
+                filename=upload.name,
+                content_type_name=upload.content_type or "application/octet-stream",
+                data=upload.read(),
+            ).save()
+
+
 class CaseCreateForm(StyledFormMixin, forms.ModelForm):
-    """1.1 Only the operator-entered fields; case number and start date are automatic."""
+    """§1.1–1.2 on create; case number and start date are automatic."""
 
     class Meta:
         model = Case
-        fields = ["community", "case_type", "submitted_at", "contact_email"]
-        widgets = {"submitted_at": IsoDateInput()}
+        fields = [
+            "community",
+            "case_type",
+            "submitted_at",
+            "contact_email",
+            "priority_turkish_cypriot_properties",
+            "priority_protection_zones",
+            "priority_nuisance_developments",
+            "priority_limited_private_land",
+            "priority_other",
+            "priority_documentation",
+        ]
+        widgets = {
+            "submitted_at": IsoDateInput(),
+            "priority_documentation": forms.Textarea(attrs={"rows": 3}),
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["community"].queryset = Community.objects.filter(is_active=True)
         self.fields["community"].label = "Κοινότητα / Δ.Δ."
         self.fields["case_type"].label = "Τύπος διαδικασίας"
-        self.fields["case_type"].help_text = (
-            "1.1 Καθορίζει ποιες Ενότητες ισχύουν: το νέο αίτημα διαχωρισμού περνά από 1–9, "
-            "τα αδιάθετα οικόπεδα καταχωρίζονται απευθείας στην 8.8."
-        )
-        self.fields["contact_email"].required = False
         self.fields["submitted_at"].required = False
-        self.fields["case_type"].help_text = (
-            "1.1 Αδιάθετα Οικόπεδα / Νέο Αίτημα Διαχωρισμού — καθορίζει ποιες Ενότητες ισχύουν (§Α.3.3)."
-        )
-        self.fields["community"].help_text = "1.1 Επιλογή από κατάλογο Κοινοτήτων (Παράρτημα 1)."
-        self.fields["contact_email"].help_text = (
-            "1.1 Κενή κατά την πρώτη καταχώριση· τη συμπληρώνει ο λειτουργός. "
-            "Προσυμπληρώνεται από τον κατάλογο Κοινοτήτων με την επιλογή Κοινότητας."
-        )
-        self.fields["submitted_at"].help_text = (
-            "1.1 Ημερομηνία· αφορά νέο αίτημα διαχωρισμού."
-        )
+
+    def _apply_community_contact_email_default(self):
+        """Pre-fill from community before required-field validation (create screen JS does the same)."""
+        if not self.is_bound:
+            return
+        email = (self.data.get("contact_email") or "").strip()
+        community_id = self.data.get("community")
+        if email or not community_id:
+            return
+        community = Community.objects.filter(pk=community_id, is_active=True).first()
+        if not community or not (community.contact_email or "").strip():
+            return
+        data = self.data.copy()
+        data["contact_email"] = community.contact_email
+        self.data = data
+
+    def full_clean(self):
+        self._apply_community_contact_email_default()
+        super().full_clean()
 
     def clean(self):
         cleaned_data = super().clean()
-        community = cleaned_data.get("community")
         case_type = cleaned_data.get("case_type")
-        if community and not cleaned_data.get("contact_email"):
-            cleaned_data["contact_email"] = community.contact_email
+        if not (cleaned_data.get("contact_email") or "").strip():
+            self.add_error(
+                "contact_email",
+                "Απαιτείται ηλεκτρονική διεύθυνση επικοινωνίας Κ.Σ./Δ.Δ. (1.1).",
+            )
         if case_type == Case.CaseType.UNALLOCATED_PLOTS:
             cleaned_data["submitted_at"] = None
+            cleaned_data["priority_turkish_cypriot_properties"] = False
+            cleaned_data["priority_protection_zones"] = False
+            cleaned_data["priority_nuisance_developments"] = False
+            cleaned_data["priority_limited_private_land"] = False
+            cleaned_data["priority_other"] = ""
+            cleaned_data["priority_documentation"] = ""
         elif case_type == Case.CaseType.NEW_DIVISION and not cleaned_data.get("submitted_at"):
             self.add_error(
                 "submitted_at",
@@ -100,9 +196,6 @@ class Section1Form(StyledFormMixin, forms.ModelForm):
         ]
         widgets = {
             "submitted_at": IsoDateInput(),
-            "priority_other": forms.TextInput(
-                attrs={"placeholder": "Επιλογή και περιγραφή στο ίδιο σημείο"}
-            ),
             "priority_documentation": forms.Textarea(attrs={"rows": 3}),
             "comments": forms.Textarea(attrs={"rows": 3}),
         }
@@ -123,8 +216,6 @@ class Section1Form(StyledFormMixin, forms.ModelForm):
                 "priority_documentation",
             ):
                 self.fields.pop(name, None)
-        for field in self.fields.values():
-            field.label = label_without_section_reference(field.label)
 
     def clean(self):
         cleaned_data = super().clean()
@@ -147,30 +238,49 @@ class Section2Form(StyledFormMixin, forms.ModelForm):
 
 
 class CompletenessCheckForm(StyledFormMixin, forms.ModelForm):
-    """2 One row per dated check; the sequence number is assigned automatically."""
+    """2.1 One dated check row, edited from the section 2 modal."""
 
     class Meta:
         model = CompletenessCheck
-        fields = ["check_date", "result", "deficiencies", "comments"]
+        fields = ["check_date", "result", "deficiencies"]
         widgets = {
             "check_date": IsoDateInput(),
-            "deficiencies": forms.Textarea(attrs={"rows": 3}),
-            "comments": forms.Textarea(attrs={"rows": 2}),
+            "result": forms.Select(attrs={"data-completeness-result": ""}),
+            "deficiencies": forms.Textarea(attrs={"rows": 5}),
         }
 
     def clean(self):
         cleaned_data = super().clean()
-        if cleaned_data.get("result") == YesNo.NO and not (
-            cleaned_data.get("deficiencies") or ""
-        ).strip():
+        result = cleaned_data.get("result")
+        if result == YesNo.NO and not (cleaned_data.get("deficiencies") or "").strip():
             self.add_error(
                 "deficiencies",
                 "Για αποτέλεσμα ΟΧΙ πρέπει να καταχωριστούν οι ελλείψεις (Ενότητα 2).",
             )
+        elif result == YesNo.YES:
+            # 2.2 applies only to ΟΧΙ; earlier deficiencies stay in the action history.
+            cleaned_data["deficiencies"] = ""
         return cleaned_data
 
 
+class DeficiencyEmailForm(forms.Form):
+    """2.2 Email of the deficiencies; the recipient is always the 1.1 contact address."""
+
+    subject = forms.CharField(
+        label="Θέμα",
+        max_length=255,
+        widget=forms.TextInput(attrs={"class": "input"}),
+    )
+    body = forms.CharField(
+        label="Κείμενο",
+        required=False,
+        widget=forms.Textarea(attrs={"class": "input", "rows": 10, "data-email-body": ""}),
+    )
+
+
 class Section3Form(StyledFormMixin, forms.ModelForm):
+    """3.2 State-land check and 3.3 comments; the 3.1 plots are the inline formset."""
+
     class Meta:
         model = Case
         fields = ["state_land_remains_sufficient", "state_land_comments", "section3_comments"]
@@ -180,7 +290,14 @@ class Section3Form(StyledFormMixin, forms.ModelForm):
         }
 
 
-class Section4Form(StyledFormMixin, forms.ModelForm):
+class Section4Form(StyledFormMixin, AttachmentsFormMixin, forms.ModelForm):
+    """4.3 access, 4.4 files of the evaluation as a whole and 4.5 comments.
+
+    4.1 rows are edited one at a time from the grid modal; 4.2 is the inline formset.
+    """
+
+    attachment_section_ref = "4.4"
+
     class Meta:
         model = Case
         fields = ["access_technical_evaluation", "section4_comments"]
@@ -277,7 +394,15 @@ class Section8PlotsForm(StyledFormMixin, forms.ModelForm):
         }
 
 
-class LandPlotForm(StyledFormMixin, forms.ModelForm):
+class LandPlotForm(OtherChoiceFieldsMixin, StyledFormMixin, AttachmentsFormMixin, forms.ModelForm):
+    """3.1 One row per land plot; «Άλλο» is written in the same cell and files stay on the plot."""
+
+    attachment_section_ref = "3.1"
+    OTHER_TEXT_FIELDS = {
+        "ownership_status": ("ownership_other", "Συμπληρώστε το είδος της άλλης ιδιοκτησίας (3.1)."),
+        "access": ("access_other", "Συμπληρώστε τη διευκρίνιση της πρόσβασης (3.1)."),
+    }
+
     class Meta:
         model = LandPlot
         fields = [
@@ -285,26 +410,44 @@ class LandPlotForm(StyledFormMixin, forms.ModelForm):
             "sheet_plan",
             "location",
             "ownership_status",
+            "ownership_other",
             "area_sqm",
             "zone",
             "inside_development_zone",
             "access",
+            "access_other",
             "comments",
         ]
-        widgets = {"comments": forms.Textarea(attrs={"rows": 2})}
+        widgets = {
+            "ownership_other": forms.TextInput(
+                attrs={"placeholder": "Είδος άλλης ιδιοκτησίας", "data-other-input": ""}
+            ),
+            "access_other": forms.TextInput(
+                attrs={"placeholder": "Διευκρίνιση", "data-other-input": ""}
+            ),
+            "comments": forms.Textarea(attrs={"rows": 2}),
+        }
 
 
-class LandPlotEvaluationForm(StyledFormMixin, forms.ModelForm):
+class LandPlotEvaluationForm(OtherChoiceFieldsMixin, StyledFormMixin, forms.ModelForm):
+    """4.1 Technical evaluation of one 3.1 plot; the plot itself is not editable here."""
+
+    OTHER_TEXT_FIELDS = {
+        "morphology": (
+            "morphology_other",
+            "Συμπληρώστε την περιγραφή της άλλης τεχνικής ιδιαιτερότητας (4.1).",
+        ),
+    }
+
     class Meta:
         model = LandPlot
-        fields = [
-            "morphology",
-            "morphology_comments",
-            "usable_area_sqm",
-            "estimated_plots_count",
-            "technical_suitability",
-        ]
-        widgets = {"morphology_comments": forms.Textarea(attrs={"rows": 2})}
+        fields = list(LandPlot.TECHNICAL_EVALUATION_FIELDS)
+        widgets = {
+            "morphology_other": forms.TextInput(
+                attrs={"placeholder": "Περιγραφή τεχνικής ιδιαιτερότητας", "data-other-input": ""}
+            ),
+            "morphology_comments": forms.Textarea(attrs={"rows": 2}),
+        }
 
 
 class LandPlotDecisionForm(StyledFormMixin, forms.ModelForm):
@@ -523,15 +666,6 @@ SubmissionCyclePublicationFormSet = forms.inlineformset_factory(
     form=SubmissionCyclePublicationForm,
     extra=1,
     can_delete=True,
-)
-CompletenessCheckFormSet = forms.inlineformset_factory(
-    Case, CompletenessCheck, form=CompletenessCheckForm, extra=1, can_delete=True
-)
-LandPlotFormSet = forms.inlineformset_factory(
-    Case, LandPlot, form=LandPlotForm, extra=1, can_delete=True
-)
-LandPlotEvaluationFormSet = forms.inlineformset_factory(
-    Case, LandPlot, form=LandPlotEvaluationForm, extra=0, can_delete=False
 )
 LandPlotDecisionFormSet = forms.inlineformset_factory(
     Case, LandPlot, form=LandPlotDecisionForm, extra=0, can_delete=False

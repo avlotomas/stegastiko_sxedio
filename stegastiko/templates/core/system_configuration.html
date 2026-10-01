@@ -13,7 +13,8 @@
     <h1>Ρυθμίσεις συστήματος</h1>
     <p class="page-header__lead">
         Πρόσβαση μόνο για Διαχειριστή. Οι τίτλοι ενοτήτων εμφανίζονται στην πλοήγηση
-        δεξιά, στην κεφαλίδα της οθόνης επεξεργασίας και στις πλακίδες του φακέλου υπόθεσης.
+        δεξιά, στην κεφαλίδα της οθόνης επεξεργασίας και ως τίτλοι ενοτήτων στην οθόνη
+        προβολής του φακέλου υπόθεσης.
     </p>
 </div>
 
@@ -52,6 +53,15 @@
                     <ul class="errorlist">{% for error in field.errors %}<li>{{ error }}</li>{% endfor %}</ul>
                     {% endif %}
                 </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+
+    <h2 class="card__title" style="margin-top: 1.5rem;">Αποστολή email (SMTP)</h2>
+    <div class="form-grid">
+        {% for field in form %}
+            {% if field.name|slice:":6" == "email_" %}
+                {% include "includes/form_field.html" with field=field wide=True %}
             {% endif %}
         {% endfor %}
     </div>

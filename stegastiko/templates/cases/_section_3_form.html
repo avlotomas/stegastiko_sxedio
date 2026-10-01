@@ -1,0 +1,30 @@
+{% comment %}
+Ενότητα 3 — 3.1 πίνακας τεμαχίων (grid· προσθήκη/επεξεργασία σε modal, αρχεία ανά τεμάχιο),
+3.2 έλεγχος κρατικής γης, 3.3 σχόλια.
+{% endcomment %}
+
+<h3 class="form-section-title">3.1 Πίνακας τεμαχίων</h3>
+
+<div class="form-span-all" data-land-plot-status></div>
+<div class="toolbar">
+    <button type="button" class="btn btn-primary btn-sm"
+            data-land-plot-open="{% url 'cases:land_plot_create' case.pk %}">
+        + Προσθήκη τεμαχίου
+    </button>
+</div>
+{% include "cases/_land_plot_grid.html" %}
+<p class="helptext">
+    Η προσθήκη, η επεξεργασία και η διαγραφή τεμαχίων αποθηκεύονται αμέσως·
+    η «Αποθήκευση» στο τέλος της σελίδας αφορά τις 3.2 και 3.3.
+</p>
+
+<h3 class="form-section-title">3.2 Έλεγχος κρατικής γης</h3>
+<div class="form-grid form-span-all">
+    {% include "includes/form_field.html" with field=form.state_land_remains_sufficient wide=True %}
+    {% include "includes/form_field.html" with field=form.state_land_comments wide=True %}
+</div>
+
+<h3 class="form-section-title">3.3 Σχόλια / Παρατηρήσεις Ενότητας 3</h3>
+<div class="form-grid form-span-all">
+    {% include "includes/form_field.html" with field=form.section3_comments wide=True %}
+</div>

@@ -1,0 +1,57 @@
+{% comment %}
+3.1 Add / edit one land plot inside the grid modal; files are attached to the plot.
+{% endcomment %}
+{% with plot=plot_form.instance %}
+<form method="post" enctype="multipart/form-data" class="app-form" data-land-plot-form novalidate
+      action="{% if plot.pk %}{% url 'cases:land_plot_edit' case.pk plot.pk %}{% else %}{% url 'cases:land_plot_create' case.pk %}{% endif %}">
+    {% csrf_token %}
+    <h2 class="card__title" id="land-plot-dialog-title">
+        {% if plot.pk %}3.1 Επεξεργασία τεμαχίου{% else %}3.1 Νέο τεμάχιο{% endif %}
+    </h2>
+
+    {% if plot_form.non_field_errors %}
+    <div class="alert alert--error">
+        {% for error in plot_form.non_field_errors %}{{ error }}{% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="form-grid">
+        {% include "includes/form_field.html" with field=plot_form.parcel_number %}
+        {% include "includes/form_field.html" with field=plot_form.sheet_plan %}
+        {% include "includes/form_field.html" with field=plot_form.location %}
+        {% include "includes/choice_with_other_field.html" with field=plot_form.ownership_status other=plot_form.ownership_other %}
+        {% include "includes/form_field.html" with field=plot_form.area_sqm %}
+        {% include "includes/form_field.html" with field=plot_form.zone %}
+        {% include "includes/form_field.html" with field=plot_form.inside_development_zone %}
+        {% include "includes/choice_with_other_field.html" with field=plot_form.access other=plot_form.access_other %}
+        {% include "includes/form_field.html" with field=plot_form.comments wide=True %}
+
+        <div class="form-field form-field--wide" data-file-picker>
+            <label for="{{ plot_form.new_files.id_for_label }}">Αρχεία τεμαχίου</label>
+            {% if plot_form.remove_attachments %}
+            <ul class="attachment-list">
+                {% for option in plot_form.remove_attachments %}
+                <li>
+                    <a href="{% url 'cases:attachment_download' case.pk option.data.value.value %}">{{ option.choice_label }}</a>
+                    <label class="attachment-list__remove">{{ option.tag }} Αφαίρεση</label>
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+            {{ plot_form.new_files }}
+            <ul class="attachment-list file-picker-list" data-file-picker-list hidden></ul>
+            {% if plot_form.new_files.errors %}
+            <ul class="errorlist">
+                {% for error in plot_form.new_files.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+            {% endif %}
+            <p class="helptext">Επιλογή πολλών αρχείων μαζί ή σε διαδοχικές επιλογές· τα αρχεία προστίθενται στη λίστα.</p>
+        </div>
+    </div>
+
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Αποθήκευση τεμαχίου</button>
+        <button type="button" class="btn btn-secondary" data-dialog-close>Άκυρο</button>
+    </div>
+</form>
+{% endwith %}

@@ -1,8 +1,9 @@
 from decimal import Decimal
 
+from django.contrib.contenttypes.fields import GenericRelation
 from django.db import models
 
-from core.models import AuditedModel, Community
+from core.models import Attachment, AuditedModel, Communication, Community
 
 
 class YesNo(models.TextChoices):
@@ -71,7 +72,7 @@ class Case(AuditedModel):
     )
     priority_documentation = models.TextField(
         blank=True,
-        help_text="1.2 Στοιχεία τεκμηρίωσης των επιλεγμένων χαρακτηριστικών",
+        help_text="1.2 Σχόλια/Παρατηρήσεις",
     )
 
     section2_comments = models.TextField(blank=True, help_text="2 Σχόλια / Παρατηρήσεις Ενότητας 2")
@@ -80,15 +81,22 @@ class Case(AuditedModel):
         max_length=8,
         choices=YesNo.choices,
         blank=True,
-        help_text="3 Παραμένουν ικανοποιητικές εκτάσεις κρατικής γης στην Κοινότητα",
+        help_text=(
+            "3.2 Μετά την προτεινόμενη αξιοποίηση θα παραμένουν στην Κοινότητα "
+            "ικανοποιητικές εκτάσεις κρατικής γης;"
+        ),
     )
-    state_land_comments = models.TextField(blank=True, help_text="3 Σχόλια ελέγχου κρατικής γης")
-    section3_comments = models.TextField(blank=True, help_text="3 Σχόλια / Παρατηρήσεις Ενότητας 3")
+    state_land_comments = models.TextField(blank=True, help_text="3.2 Σχόλια / Παρατηρήσεις")
+    section3_comments = models.TextField(
+        blank=True, help_text="3.3 Σχόλια / Παρατηρήσεις Ενότητας 3"
+    )
 
     access_technical_evaluation = models.TextField(
         blank=True, help_text="4.3 Τεχνική αξιολόγηση πρόσβασης στο/στα τεμάχιο/α"
     )
     section4_comments = models.TextField(blank=True, help_text="4.5 Σχόλια / Παρατηρήσεις Ενότητας 4")
+    # 4.4 files of the technical evaluation as a whole are kept on the case (section_ref "4.4").
+    attachments = GenericRelation(Attachment)
 
     section6_comments = models.TextField(blank=True, help_text="6.7 Σχόλια / Παρατηρήσεις Ενότητας 6")
 
@@ -221,8 +229,8 @@ class Case(AuditedModel):
 
     @property
     def latest_completeness_check(self):
-        """2 Current completeness state comes from the most recent dated check."""
-        return self.completeness_checks.first()
+        """2.1 Current completeness result for this case (latest by date)."""
+        return self.completeness_checks.order_by("-check_date", "-sequence", "-id").first()
 
     @property
     def completeness_result(self):
@@ -243,7 +251,7 @@ class Case(AuditedModel):
 
 
 class CompletenessCheck(AuditedModel):
-    """2 Each completeness check of the Κ.Σ. application is a separate dated row."""
+    """2.1 One dated completeness check of the Κ.Σ. application."""
 
     case = models.ForeignKey(Case, on_delete=models.CASCADE, related_name="completeness_checks")
     sequence = models.PositiveIntegerField(help_text="2 Αύξουσα αρίθμηση ελέγχου (1ος, 2ος, …)")
@@ -257,9 +265,10 @@ class CompletenessCheck(AuditedModel):
         blank=True, help_text="2 Ελλείψεις / Απαιτούμενα συμπληρωματικά στοιχεία (όταν ΟΧΙ)"
     )
     comments = models.TextField(blank=True, help_text="2 Σχόλια ελέγχου")
+    communications = GenericRelation(Communication)
 
     class Meta:
-        ordering = ("-sequence", "-id")
+        ordering = ("-check_date", "-sequence", "-id")
         unique_together = ("case", "sequence")
 
     def __str__(self):
@@ -272,6 +281,11 @@ class CompletenessCheck(AuditedModel):
     @property
     def is_complete(self):
         return self.result == YesNo.YES
+
+    @property
+    def can_delete(self):
+        """Checks with sent emails stay immutable for traceability."""
+        return not self.communications.exists()
 
     def save(self, *args, **kwargs):
         if not self.sequence:
@@ -297,22 +311,57 @@ class LandPlot(AuditedModel):
         STEEP = "steep", "Έντονες υψομετρικές διαφορές"
         OTHER = "other", "Άλλη τεχνική ιδιαιτερότητα"
 
+    class OwnershipStatus(models.TextChoices):
+        STATE_LAND = "state_land", "Κρατική γη"
+        OTHER = "other", "Άλλη ιδιοκτησία"
+
+    class Access(models.TextChoices):
+        PUBLIC_ROAD = "public_road", "Πρόσβαση σε εγγεγραμμένο δημόσιο δρόμο"
+        ROAD_REQUIRED = "road_required", "Απαιτείται διάνοιξη και εγγραφή δημόσιου δρόμου"
+        OTHER = "other", "Άλλο"
+
+    TECHNICAL_EVALUATION_FIELDS = (
+        "morphology",
+        "morphology_other",
+        "morphology_comments",
+        "usable_area_sqm",
+        "estimated_plots_count",
+        "technical_suitability",
+    )
+
     case = models.ForeignKey(Case, on_delete=models.CASCADE, related_name="land_plots")
     parcel_number = models.CharField(max_length=64, help_text="3.1 Αρ. τεμαχίου")
     sheet_plan = models.CharField(max_length=64, blank=True, help_text="3.1 Φύλλο/Σχέδιο")
     location = models.CharField(max_length=255, blank=True, help_text="3.1 Τοποθεσία")
     ownership_status = models.CharField(
-        max_length=128, blank=True, help_text="3.1 Ιδιοκτησιακό καθεστώς"
+        max_length=16,
+        choices=OwnershipStatus.choices,
+        blank=True,
+        help_text="3.1 Ιδιοκτησιακό καθεστώς",
+    )
+    ownership_other = models.CharField(
+        max_length=255, blank=True, help_text="3.1 Είδος άλλης ιδιοκτησίας"
     )
     area_sqm = models.DecimalField(
         max_digits=12, decimal_places=2, null=True, blank=True, help_text="3.1 Εμβαδόν (τ.μ.)"
     )
     zone = models.CharField(max_length=128, blank=True, help_text="3.1 Πολεοδομική Ζώνη")
-    inside_development_zone = models.BooleanField(default=False, help_text="3.1 Εντός Ορίου Ανάπτυξης")
-    access = models.CharField(max_length=128, blank=True, help_text="3.1 Πρόσβαση")
-    comments = models.TextField(blank=True, help_text="3.1 Σχόλια τεμαχίου")
+    inside_development_zone = models.CharField(
+        max_length=8, choices=YesNo.choices, blank=True, help_text="3.1 Εντός Ορίου Ανάπτυξης"
+    )
+    access = models.CharField(
+        max_length=16, choices=Access.choices, blank=True, help_text="3.1 Πρόσβαση"
+    )
+    access_other = models.CharField(
+        max_length=255, blank=True, help_text="3.1 Διευκρίνιση άλλης πρόσβασης"
+    )
+    comments = models.TextField(blank=True, help_text="3.1 Σχόλια / Παρατηρήσεις")
+    attachments = GenericRelation(Attachment)
     morphology = models.CharField(
         max_length=16, choices=Morphology.choices, blank=True, help_text="4.1 Μορφολογία"
+    )
+    morphology_other = models.CharField(
+        max_length=255, blank=True, help_text="4.1 Περιγραφή άλλης τεχνικής ιδιαιτερότητας"
     )
     morphology_comments = models.TextField(blank=True, help_text="4.1 Σχόλια Μορφολογίας")
     usable_area_sqm = models.DecimalField(
@@ -344,6 +393,45 @@ class LandPlot(AuditedModel):
 
     def __str__(self):
         return f"{self.case.case_number} - {self.parcel_number}"
+
+    @property
+    def ownership_display(self):
+        """3.1 «Άλλη ιδιοκτησία» carries its kind in the same cell."""
+        if self.ownership_status == self.OwnershipStatus.OTHER and self.ownership_other:
+            return f"{self.get_ownership_status_display()}: {self.ownership_other}"
+        return self.get_ownership_status_display()
+
+    @property
+    def access_display(self):
+        """3.1 «Άλλο» carries its description in the same cell."""
+        if self.access == self.Access.OTHER and self.access_other:
+            return f"{self.get_access_display()}: {self.access_other}"
+        return self.get_access_display()
+
+    @property
+    def morphology_display(self):
+        """4.1 «Άλλη τεχνική ιδιαιτερότητα» carries its description in the same cell."""
+        if self.morphology == self.Morphology.OTHER and self.morphology_other:
+            return f"{self.get_morphology_display()}: {self.morphology_other}"
+        return self.get_morphology_display()
+
+    @property
+    def has_technical_evaluation(self):
+        """Any 4.1 value recorded for this plot."""
+        return any(
+            getattr(self, name) not in (None, "") for name in self.TECHNICAL_EVALUATION_FIELDS
+        )
+
+    @property
+    def deletion_warning(self):
+        """Shown before deleting a 3.1 plot whose 4.1 evaluation would be lost with it."""
+        if not self.has_technical_evaluation:
+            return ""
+        return (
+            f"Προσοχή: υπάρχει τεχνική αξιολόγηση (Ενότητα 4.1) για το τεμάχιο "
+            f"{self.parcel_number}. Με τη διαγραφή του τεμαχίου θα διαγραφεί και η "
+            f"τεχνική αξιολόγηση, καθώς και τα αρχεία του και η απόφαση καταλληλότητας (6.6)."
+        )
 
     @property
     def row_label(self):

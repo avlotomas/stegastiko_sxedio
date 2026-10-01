@@ -51,7 +51,38 @@
     {% endif %}
 </div>
 
+{% if submission_cycles %}
 <div class="card">
+    <h2 class="card__title">Καταχωρημένες γνωστοποιήσεις</h2>
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead>
+            <tr><th>Ημ. γνωστοποίησης</th><th>Περίοδος υποβολής</th><th>Διαθέσιμα οικόπεδα</th><th>Κατάσταση</th><th></th></tr>
+            </thead>
+            <tbody>
+            {% for cycle in submission_cycles %}
+                <tr>
+                    <td>{{ cycle.announcement_date }}</td>
+                    <td>{{ cycle.submission_start_date }} – {{ cycle.submission_end_date }}</td>
+                    <td>{{ cycle.available_plots_count }}</td>
+                    <td>
+                        {% if cycle.is_published %}
+                        <span class="badge badge--pass">Εκδόθηκε</span>
+                        {% else %}
+                        <span class="badge badge--pending">Προσχέδιο</span>
+                        {% endif %}
+                    </td>
+                    <td><a href="{% url 'cases:announcement_detail' case.pk cycle.pk %}" class="btn btn-ghost btn-sm">Άνοιγμα</a></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<div class="card">
+<h2 class="card__title">Νέα γνωστοποίηση</h2>
 <form method="post" class="app-form" novalidate>
     {% csrf_token %}
     {% if form.non_field_errors %}

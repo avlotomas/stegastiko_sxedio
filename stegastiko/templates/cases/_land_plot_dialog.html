@@ -1,0 +1,9 @@
+{% comment %}
+Modal of the land plot grids: 3.1 add / edit a plot, 4.1 edit its technical evaluation.
+Rendered outside the section form because forms cannot nest; the form itself is loaded from
+the server when the modal opens.
+{% endcomment %}
+<dialog id="land-plot-dialog" class="modal modal--wide" aria-labelledby="land-plot-dialog-title" data-land-plot-dialog>
+    <div class="alert alert--error" data-land-plot-errors hidden></div>
+    <div data-land-plot-dialog-body></div>
+</dialog>

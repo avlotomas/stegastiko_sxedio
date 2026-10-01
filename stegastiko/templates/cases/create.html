@@ -11,10 +11,6 @@
 
 <div class="page-header">
     <h1>Ενότητα 1 — Δεδομένα αίτησης Κ.Σ. / Δ.Δ.</h1>
-    <p class="page-header__lead">
-        Καταχώριση βασικών στοιχείων (1.1). Ο αριθμός υπόθεσης και η ημερομηνία έναρξης
-        συμπληρώνονται αυτόματα μετά τη δημιουργία της διαδικασίας.
-    </p>
 </div>
 
 <div class="card">
@@ -33,16 +29,16 @@
     </div>
     <dl class="detail-grid spec-readonly-grid form-span-all">
         <div>
-            <dt>1.1 Επαρχία</dt>
+            <dt>Επαρχία</dt>
             <dd id="district-preview">—</dd>
         </div>
         <div>
-            <dt>1.1 Μοναδικός αριθμός υπόθεσης</dt>
-            <dd class="text-muted">Αυτόματα μετά τη δημιουργία της διαδικασίας</dd>
+            <dt>Μοναδικός αριθμός υπόθεσης</dt>
+            <dd>—</dd>
         </div>
         <div>
-            <dt>1.1 Ημερομηνία έναρξης διαδικασίας</dt>
-            <dd class="text-muted">Αυτόματη</dd>
+            <dt>Ημερομηνία έναρξης διαδικασίας</dt>
+            <dd>—</dd>
         </div>
     </dl>
     <div class="form-grid">
@@ -50,6 +46,18 @@
             {% include "includes/form_field.html" with field=form.submitted_at %}
         </div>
         {% include "includes/form_field.html" with field=form.contact_email wide=True %}
+    </div>
+
+    <div id="priority-section">
+        <h3 class="form-section-title">1.2 Χαρακτηριστικά Κοινότητας για σκοπούς προτεραιότητας νέου διαχωρισμού</h3>
+        <div class="form-grid form-grid--priority">
+            {% include "includes/form_field.html" with field=form.priority_turkish_cypriot_properties %}
+            {% include "includes/form_field.html" with field=form.priority_protection_zones %}
+            {% include "includes/form_field.html" with field=form.priority_nuisance_developments %}
+            {% include "includes/form_field.html" with field=form.priority_limited_private_land %}
+            {% include "includes/form_field.html" with field=form.priority_other wide=True %}
+            {% include "includes/form_field.html" with field=form.priority_documentation wide=True %}
+        </div>
     </div>
 
     <div class="form-actions form-span-all">
@@ -68,6 +76,7 @@ const communitySelect = document.getElementById("id_community");
 const contactEmailInput = document.getElementById("id_contact_email");
 const caseTypeSelect = document.getElementById("id_case_type");
 const submittedAtWrap = document.getElementById("submitted-at-field");
+const prioritySection = document.getElementById("priority-section");
 const districtPreview = document.getElementById("district-preview");
 
 function syncDistrict() {
@@ -76,10 +85,11 @@ function syncDistrict() {
     districtPreview.textContent = district || "—";
 }
 
-function syncSubmittedAtVisibility() {
-    if (!caseTypeSelect || !submittedAtWrap) return;
+function syncNewDivisionFields() {
+    if (!caseTypeSelect) return;
     const isNewDivision = caseTypeSelect.value === "new_division";
-    submittedAtWrap.hidden = !isNewDivision;
+    if (submittedAtWrap) submittedAtWrap.hidden = !isNewDivision;
+    if (prioritySection) prioritySection.hidden = !isNewDivision;
 }
 
 if (communitySelect && contactEmailInput) {
@@ -96,8 +106,8 @@ if (communitySelect && contactEmailInput) {
     syncDistrict();
 }
 if (caseTypeSelect) {
-    caseTypeSelect.addEventListener("change", syncSubmittedAtVisibility);
-    syncSubmittedAtVisibility();
+    caseTypeSelect.addEventListener("change", syncNewDivisionFields);
+    syncNewDivisionFields();
 }
 </script>
 {% endblock %}

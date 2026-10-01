@@ -67,8 +67,8 @@ def audited_post_save(sender, instance, created, **kwargs):
                 instance,
                 ActionHistory.ActionType.UPDATE,
                 field_name=field.name,
-                old_value=old_value,
-                new_value=new_value,
+                old_value=instance._audit_value(field.name, old_value),
+                new_value=instance._audit_value(field.name, new_value),
             )
 
 

@@ -55,8 +55,8 @@
                     <td>{{ plot.parcel_number }}</td>
                     <td>{{ plot.area_sqm|default:"—" }}</td>
                     <td>{{ plot.zone|default:"—" }}</td>
-                    <td>{{ plot.inside_development_zone|yesno:"ΝΑΙ,ΟΧΙ" }}</td>
-                    <td>{{ plot.get_morphology_display|default:"—" }}</td>
+                    <td>{{ plot.get_inside_development_zone_display|default:"—" }}</td>
+                    <td>{{ plot.morphology_display|default:"—" }}</td>
                     <td>{{ plot.usable_area_sqm|default:"—" }}</td>
                     <td>{{ plot.get_technical_suitability_display|default:"—" }}</td>
                 </tr>
@@ -105,21 +105,10 @@
         </table>
     </div>
 
-    <h3 class="form-section-title">6.5 Έλεγχος κρατικής γης</h3>
+    <h3 class="form-section-title">6.5 Έλεγχος κρατικής γης (3.2)</h3>
     <p class="form-readonly">
         {{ summary.state_land_remains_sufficient|default:"—" }}
         {% if summary.state_land_comments %}— {{ summary.state_land_comments }}{% endif %}
-    </p>
-</div>
-{% endif %}
-
-{% if section == '2' and completeness_checks %}
-<div class="card">
-    <h2 class="card__title">Τρέχουσα κατάσταση πληρότητας</h2>
-    <p class="form-readonly">
-        Από τον τελευταίο έλεγχο ({{ case.latest_completeness_check.sequence }}ος,
-        {{ case.latest_completeness_check.check_date }}):
-        <strong>{{ case.completeness_result_display }}</strong>
     </p>
 </div>
 {% endif %}
@@ -149,7 +138,7 @@
 {% endif %}
 
 <div class="card">
-<form method="post" class="app-form" novalidate>
+<form method="post"{% if section == '4' %} enctype="multipart/form-data"{% endif %} class="app-form" novalidate>
     {% csrf_token %}
 
     {% if form %}
@@ -160,6 +149,12 @@
         {% endif %}
         {% if section == '1' %}
             {% include "cases/_section_1_form.html" %}
+        {% elif section == '2' %}
+            {% include "cases/_section_2_form.html" %}
+        {% elif section == '3' %}
+            {% include "cases/_section_3_form.html" %}
+        {% elif section == '4' %}
+            {% include "cases/_section_4_form.html" %}
         {% else %}
         <div class="form-grid">
             {% for field in form %}
@@ -170,6 +165,7 @@
     {% endif %}
 
     {% for legend, formset in formsets %}
+    {% if section != '2' and section != '3' and section != '4' %}
     <fieldset class="child-formset">
         <legend>{{ legend }}</legend>
         {{ formset.management_form }}
@@ -192,6 +188,7 @@
         </div>
         {% endfor %}
     </fieldset>
+    {% endif %}
     {% endfor %}
 
     <div class="form-actions form-span-all">
@@ -200,6 +197,12 @@
     </div>
 </form>
 </div>
+{% if section == '2' %}
+    {% include "cases/_completeness_check_dialog.html" %}
+    {% include "cases/_deficiency_email_dialog.html" %}
+{% elif section == '3' or section == '4' %}
+    {% include "cases/_land_plot_dialog.html" %}
+{% endif %}
 
 </div>
 {% include "cases/_case_actions_sidebar.html" %}

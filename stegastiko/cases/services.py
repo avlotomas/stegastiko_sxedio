@@ -1,16 +1,15 @@
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
-from cases.models import (
-    Case,
-    CompletenessCheck,
-    SubmissionCycle,
-    SubmissionCyclePublication,
-)
+from cases.models import Case, CompletenessCheck, SubmissionCycle, SubmissionCyclePublication
 from core.models import ActionHistory, Communication
-from core.services import get_setting
+from core.services import get_setting, send_email
+
+DEFICIENCY_EMAIL_SUBJECT_KEY = "deficiencyEmailSubject"
+DEFICIENCY_EMAIL_SUBJECT_DEFAULT = "Ελλείψεις αίτησης Κ.Σ./Δ.Δ. — υπόθεση {case_number}"
 
 
 @transaction.atomic
@@ -32,55 +31,43 @@ def generate_case_number(community, start_date=None) -> str:
     return f"{prefix}-{community.community_folder_code}-{year}-{sequence}"
 
 
-def build_deficiency_email_body(check: CompletenessCheck) -> str:
-    """2 Email text composed from the deficiencies of a specific check."""
-    case = check.case
-    return (
-        f"Θέμα: Ελλείψεις αίτησης Κ.Σ./Δ.Δ. — υπόθεση {case.case_number}\n\n"
-        f"Κοινότητα/Δ.Δ.: {case.community.name} ({case.community.district})\n"
-        f"{check.sequence}ος έλεγχος πληρότητας, ημερομηνία {check.check_date}\n\n"
-        "Παρακαλούμε να προσκομιστούν τα ακόλουθα ελλείποντα στοιχεία:\n"
-        f"{check.deficiencies.strip()}\n"
+def deficiency_email_subject(case: Case) -> str:
+    """2.2 Predefined subject from the Settings; supports {case_number} and {community}."""
+    template = get_setting(DEFICIENCY_EMAIL_SUBJECT_KEY, DEFICIENCY_EMAIL_SUBJECT_DEFAULT)
+    return template.replace("{case_number}", case.case_number).replace(
+        "{community}", case.community.name
     )
 
 
-def create_deficiency_email(check: CompletenessCheck) -> Communication:
-    """2 Record a draft deficiency email addressed to the 1.1 contact address."""
+def send_deficiency_email(check: CompletenessCheck, subject: str, body: str) -> Communication:
+    """2.2 Send the deficiencies to the 1.1 contact address and record the sending."""
     case = check.case
-    if check.is_complete:
-        raise ValidationError("Ο έλεγχος είναι ΝΑΙ· δεν παράγεται email ελλείψεων.")
-    if not check.deficiencies.strip():
-        raise ValidationError("Δεν έχουν καταχωριστεί ελλείψεις σε αυτόν τον έλεγχο (Ενότητα 2).")
     if not case.contact_email:
-        raise ValidationError("Η υπόθεση δεν έχει email επικοινωνίας (1.1).")
+        raise ValidationError("Η υπόθεση δεν έχει ηλεκτρονική διεύθυνση επικοινωνίας (1.1).")
+    if not subject.strip():
+        raise ValidationError("Το θέμα του email είναι κενό.")
 
-    return Communication.objects.create(
-        content_type=ContentType.objects.get_for_model(Case),
-        object_id=case.pk,
+    send_email(case.contact_email, subject, body)
+    communication = Communication(
+        content_type=ContentType.objects.get_for_model(CompletenessCheck),
+        object_id=check.pk,
         recipient=case.contact_email,
-        subject=(
-            f"Ελλείψεις αίτησης Κ.Σ./Δ.Δ. — υπόθεση {case.case_number} "
-            f"({check.sequence}ος έλεγχος)"
-        ),
-        body=build_deficiency_email_body(check),
-        status="draft",
+        subject=subject,
+        body=body,
+        status="sent",
+        sent_at=timezone.now(),
     )
-
-
-def mark_communication_sent(communication: Communication) -> Communication:
-    """2.2 Sending and its date are recorded automatically in the action history."""
-    if communication.status == "sent":
-        raise ValidationError("Το email έχει ήδη καταγραφεί ως απεσταλμένο.")
-    communication.status = "sent"
-    communication.sent_at = timezone.now()
+    communication._section_ref = "2.2"
     communication.save()
     return communication
 
 
 def case_communications(case: Case):
+    case_type = ContentType.objects.get_for_model(Case)
+    check_type = ContentType.objects.get_for_model(CompletenessCheck)
     return Communication.objects.filter(
-        content_type=ContentType.objects.get_for_model(Case),
-        object_id=case.pk,
+        Q(content_type=case_type, object_id=case.pk)
+        | Q(content_type=check_type, object_id__in=case.completeness_checks.values("pk"))
     ).order_by("-created_at", "-id")
 
 

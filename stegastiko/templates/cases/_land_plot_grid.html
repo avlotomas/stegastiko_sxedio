@@ -1,0 +1,56 @@
+{% comment %}
+3.1 Land plot grid of the section 3 screen; re-rendered after every add/edit/delete.
+{% endcomment %}
+<div class="table-wrap" data-land-plot-grid>
+    <table class="data-table">
+        <thead>
+        <tr>
+            <th>Αρ. τεμαχίου</th>
+            <th>Φύλλο/Σχέδιο</th>
+            <th>Τοποθεσία</th>
+            <th>Ιδιοκτησιακό καθεστώς</th>
+            <th>Εμβαδόν (τ.μ.)</th>
+            <th>Πολεοδομική Ζώνη</th>
+            <th>Εντός Ορίου Ανάπτυξης</th>
+            <th>Πρόσβαση</th>
+            <th>Σχόλια / Παρατηρήσεις</th>
+            <th>Αρχεία τεμαχίου</th>
+            <th><span class="visually-hidden">Ενέργειες</span></th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for plot in land_plots %}
+            <tr>
+                <td><strong>{{ plot.parcel_number }}</strong></td>
+                <td>{{ plot.sheet_plan|default:"—" }}</td>
+                <td>{{ plot.location|default:"—" }}</td>
+                <td>{{ plot.ownership_display|default:"—" }}</td>
+                <td>{{ plot.area_sqm|default:"—" }}</td>
+                <td>{{ plot.zone|default:"—" }}</td>
+                <td>{{ plot.get_inside_development_zone_display|default:"—" }}</td>
+                <td>{{ plot.access_display|default:"—" }}</td>
+                <td>{{ plot.comments|default:"—"|truncatechars:80 }}</td>
+                <td>
+                    {% for attachment in plot.attachments.all %}
+                    <a href="{% url 'cases:attachment_download' case.pk attachment.pk %}">{{ attachment.filename }}</a>{% if not forloop.last %}<br>{% endif %}
+                    {% empty %}—{% endfor %}
+                </td>
+                <td class="data-table__actions">
+                    <button type="button" class="btn btn-secondary btn-sm"
+                            data-land-plot-open="{% url 'cases:land_plot_edit' case.pk plot.pk %}">
+                        Επεξεργασία
+                    </button>
+                    <button type="button" class="btn btn-danger btn-sm"
+                            data-land-plot-delete="{% url 'cases:land_plot_delete' case.pk plot.pk %}"
+                            data-land-plot-label="{{ plot.parcel_number }}"
+                            {% if plot.has_technical_evaluation %}data-land-plot-warning="{{ plot.deletion_warning }}"{% endif %}>
+                        Διαγραφή
+                    </button>
+                </td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="11">Δεν έχουν καταχωριστεί τεμάχια.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>

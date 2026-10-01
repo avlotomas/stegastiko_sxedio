@@ -6,30 +6,26 @@
 <h3 class="form-section-title">1.1 Βασικά στοιχεία</h3>
 <dl class="detail-grid spec-readonly-grid form-span-all">
     <div>
-        <dt>1.1 Τύπος διαδικασίας</dt>
+        <dt>Τύπος διαδικασίας</dt>
         <dd>{{ case.get_case_type_display }}</dd>
     </div>
     <div>
-        <dt>1.1 Κοινότητα / Δημοτικό Διαμέρισμα</dt>
+        <dt>Κοινότητα / Δημοτικό Διαμέρισμα</dt>
         <dd>{{ case.community.name }}</dd>
     </div>
     <div>
-        <dt>1.1 Επαρχία</dt>
+        <dt>Επαρχία</dt>
         <dd>{{ case.community.district }}</dd>
     </div>
     <div>
-        <dt>1.1 Μοναδικός αριθμός υπόθεσης (Αρ. Φακέλου Κ.Σ./Δ.Δ.)</dt>
+        <dt>Μοναδικός αριθμός υπόθεσης (Αρ. Φακέλου Κ.Σ./Δ.Δ.)</dt>
         <dd>{{ case.case_number }}</dd>
     </div>
     <div>
-        <dt>1.1 Ημερομηνία έναρξης διαδικασίας</dt>
+        <dt>Ημερομηνία έναρξης διαδικασίας</dt>
         <dd>{{ case.start_date }}</dd>
     </div>
 </dl>
-<p class="helptext form-span-all">
-    Για νέο αίτημα, ο αριθμός υπόθεσης λειτουργεί ως Αρ. Φακέλου Αίτησης Κ.Σ./Δ.Δ.
-    Για αδιάθετα παραμένει αριθμός της υπόθεσης αδιάθετων.
-</p>
 
 <div class="form-grid">
     {% include "includes/form_field.html" with field=form.contact_email wide=True %}
@@ -40,7 +36,6 @@
 
 {% if case.is_new_division %}
 <h3 class="form-section-title">1.2 Χαρακτηριστικά Κοινότητας για σκοπούς προτεραιότητας νέου διαχωρισμού</h3>
-<p class="helptext form-span-all">Πολλαπλή επιλογή — το σύστημα δεν αποδίδει αυτόματα προτεραιότητα.</p>
 <div class="form-grid form-grid--priority">
     {% include "includes/form_field.html" with field=form.priority_turkish_cypriot_properties %}
     {% include "includes/form_field.html" with field=form.priority_protection_zones %}

@@ -1,0 +1,58 @@
+{% comment %}
+4.1 Technical evaluation grid: one row per 3.1 plot (rows are never added or removed here).
+The first four columns come from 3.1. Re-rendered after every modal edit; `readonly` hides the actions.
+{% endcomment %}
+<div class="table-wrap"{% if not readonly %} data-land-plot-grid{% endif %}>
+    <table class="data-table">
+        <thead>
+        <tr>
+            <th>Τεμάχιο</th>
+            <th>Εμβαδόν (τ.μ.)</th>
+            <th>Πολεοδομική Ζώνη</th>
+            <th>Εντός Ορίου Ανάπτυξης</th>
+            <th>Μορφολογία</th>
+            <th>Σχόλια Μορφολογίας</th>
+            <th>Κατά προσέγγιση αξιοποιήσιμο εμβαδόν γης (τ.μ.)</th>
+            <th>Εκτιμώμενος αριθμός οικοπέδων</th>
+            <th>Τεχνική Καταλληλότητα</th>
+            {% if not readonly %}<th><span class="visually-hidden">Ενέργειες</span></th>{% endif %}
+        </tr>
+        </thead>
+        <tbody>
+        {% for plot in land_plots %}
+            <tr>
+                <td>
+                    <strong>{{ plot.parcel_number }}</strong>
+                    {% if plot.sheet_plan %}<br><span class="text-muted">Φ/Σχ {{ plot.sheet_plan }}</span>{% endif %}
+                </td>
+                <td>{{ plot.area_sqm|default:"—" }}</td>
+                <td>{{ plot.zone|default:"—" }}</td>
+                <td>{{ plot.get_inside_development_zone_display|default:"—" }}</td>
+                <td>{{ plot.morphology_display|default:"—" }}</td>
+                <td>{{ plot.morphology_comments|default:"—"|linebreaksbr }}</td>
+                <td>{{ plot.usable_area_sqm|default:"—" }}</td>
+                <td>{{ plot.estimated_plots_count|default:"—" }}</td>
+                <td>
+                    {% if plot.technical_suitability == 'suitable' %}
+                    <span class="badge badge--pass">{{ plot.get_technical_suitability_display }}</span>
+                    {% elif plot.technical_suitability == 'unsuitable' %}
+                    <span class="badge badge--fail">{{ plot.get_technical_suitability_display }}</span>
+                    {% elif plot.technical_suitability %}
+                    <span class="badge badge--pending">{{ plot.get_technical_suitability_display }}</span>
+                    {% else %}—{% endif %}
+                </td>
+                {% if not readonly %}
+                <td class="data-table__actions">
+                    <button type="button" class="btn btn-secondary btn-sm"
+                            data-land-plot-open="{% url 'cases:land_plot_evaluation' case.pk plot.pk %}">
+                        Επεξεργασία
+                    </button>
+                </td>
+                {% endif %}
+            </tr>
+        {% empty %}
+            <tr><td colspan="{% if readonly %}9{% else %}10{% endif %}">Δεν έχουν καταχωριστεί τεμάχια στην Ενότητα 3.1.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>

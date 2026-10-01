@@ -1,0 +1,25 @@
+{% comment %}2.1 Modal form for one completeness check row.{% endcomment %}
+<form method="post"
+      action="{% if check_form.instance.pk %}{% url 'cases:completeness_check_edit' case.pk check_form.instance.pk %}{% else %}{% url 'cases:completeness_check_create' case.pk %}{% endif %}"
+      class="app-form"
+      data-completeness-check-form
+      novalidate>
+    {% csrf_token %}
+    <h2 class="card__title">
+        {% if check_form.instance.pk %}2.1 Επεξεργασία ελέγχου{% else %}2.1 Νέος έλεγχος{% endif %}
+    </h2>
+
+    <div class="form-grid">
+        {% for hidden in check_form.hidden_fields %}{{ hidden }}{% endfor %}
+        {% include "includes/form_field.html" with field=check_form.check_date %}
+        {% include "includes/form_field.html" with field=check_form.result %}
+        <div class="form-span-all" data-completeness-deficiencies{% if check_form.result.value != "no" %} hidden{% endif %}>
+            {% include "includes/form_field.html" with field=check_form.deficiencies wide=True %}
+        </div>
+    </div>
+
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Αποθήκευση</button>
+        <button type="button" class="btn btn-secondary" data-dialog-close>Άκυρο</button>
+    </div>
+</form>

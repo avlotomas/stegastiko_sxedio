@@ -1,0 +1,53 @@
+{% comment %}
+4.1 Edit the technical evaluation of one plot inside the grid modal; the 3.1 data is read-only.
+{% endcomment %}
+{% with plot=evaluation_form.instance %}
+<form method="post" class="app-form" data-land-plot-form novalidate
+      action="{% url 'cases:land_plot_evaluation' case.pk plot.pk %}">
+    {% csrf_token %}
+    <h2 class="card__title" id="land-plot-dialog-title">
+        4.1 Τεχνική αξιολόγηση τεμαχίου {{ plot.parcel_number }}
+    </h2>
+
+    {% if evaluation_form.non_field_errors %}
+    <div class="alert alert--error">
+        {% for error in evaluation_form.non_field_errors %}{{ error }}{% endfor %}
+    </div>
+    {% endif %}
+
+    <h3 class="form-section-title">Στοιχεία τεμαχίου (από 3.1)</h3>
+    <dl class="detail-grid">
+        <div>
+            <dt>Τεμάχιο</dt>
+            <dd>{{ plot.parcel_number }}{% if plot.sheet_plan %} · Φ/Σχ {{ plot.sheet_plan }}{% endif %}</dd>
+        </div>
+        <div>
+            <dt>Εμβαδόν (τ.μ.)</dt>
+            <dd>{{ plot.area_sqm|default:"—" }}</dd>
+        </div>
+        <div>
+            <dt>Πολεοδομική Ζώνη</dt>
+            <dd>{{ plot.zone|default:"—" }}</dd>
+        </div>
+        <div>
+            <dt>Εντός Ορίου Ανάπτυξης</dt>
+            <dd>{{ plot.get_inside_development_zone_display|default:"—" }}</dd>
+        </div>
+    </dl>
+
+    <h3 class="form-section-title">Τεχνική αξιολόγηση</h3>
+    <div class="form-grid">
+        {% include "includes/choice_with_other_field.html" with field=evaluation_form.morphology other=evaluation_form.morphology_other %}
+        {% include "includes/form_field.html" with field=evaluation_form.technical_suitability %}
+        {% include "includes/form_field.html" with field=evaluation_form.morphology_comments wide=True %}
+        {% include "includes/form_field.html" with field=evaluation_form.usable_area_sqm %}
+        {% include "includes/form_field.html" with field=evaluation_form.estimated_plots_count %}
+    </div>
+    <p class="helptext">Ο αριθμός οικοπέδων εδώ είναι <strong>εκτίμηση</strong>, όχι ο τελικός αριθμός (8.2).</p>
+
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Αποθήκευση αξιολόγησης</button>
+        <button type="button" class="btn btn-secondary" data-dialog-close>Άκυρο</button>
+    </div>
+</form>
+{% endwith %}

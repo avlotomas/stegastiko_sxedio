@@ -1,0 +1,30 @@
+{% comment %}Read-only modal for a sent Communication (2.2 deficiency emails).{% endcomment %}
+<dialog id="communication-email-view-dialog" class="modal modal--wide" aria-labelledby="communication-email-view-title">
+    <h2 class="card__title" id="communication-email-view-title">Email ελλείψεων</h2>
+    <div class="alert alert--error" data-communication-view-errors hidden></div>
+    <dl class="detail-grid detail-grid--compact">
+        <div>
+            <dt>Προς</dt>
+            <dd data-communication-view-recipient>—</dd>
+        </div>
+        <div>
+            <dt>Κατάσταση</dt>
+            <dd data-communication-view-status>—</dd>
+        </div>
+        <div class="detail-grid__wide">
+            <dt>Απεστάλη</dt>
+            <dd data-communication-view-sent-at>—</dd>
+        </div>
+        <div class="detail-grid__wide">
+            <dt>Θέμα</dt>
+            <dd data-communication-view-subject>—</dd>
+        </div>
+        <div class="detail-grid__wide">
+            <dt>Κείμενο</dt>
+            <dd class="communication-email-body" data-communication-view-body>—</dd>
+        </div>
+    </dl>
+    <div class="form-actions">
+        <button type="button" class="btn btn-secondary" data-dialog-close>Κλείσιμο</button>
+    </div>
+</dialog>

@@ -2,6 +2,7 @@
 {% load case_detail %}
 
 {% block title %}Υπόθεση {{ case.case_number }}{% endblock %}
+{% block body_class %}case-work{% endblock %}
 
 {% block content %}
 <nav class="breadcrumb" aria-label="Πλοήγηση">
@@ -9,6 +10,9 @@
     <span>/</span>
     <span>{{ case.case_number }}</span>
 </nav>
+
+<div class="case-work-layout">
+<div class="case-work-layout__main">
 
 <div class="page-header">
     <h1>Υπόθεση {{ case.case_number }}</h1>
@@ -18,14 +22,8 @@
     </p>
 </div>
 
-<div class="toolbar">
-    <a href="{% url 'cases:section_edit' case.pk '1' %}" class="btn btn-primary">Επεξεργασία (1.1)</a>
-    <a href="{% url 'cases:history' case.pk %}" class="btn btn-secondary">Ιστορικό ενεργειών</a>
-    <a href="{% url 'cases:list' %}" class="btn btn-secondary">Πίσω στον κατάλογο</a>
-</div>
-
-<div class="card">
-    <h2 class="card__title">Ενότητα 1 — Δεδομένα αίτησης Κ.Σ. / Δ.Δ.</h2>
+<section class="card">
+    <h2 class="card__title">{% case_section_heading "1" %}</h2>
     <h3 class="form-section-title">1.1 Βασικά στοιχεία</h3>
     <dl class="detail-grid">
         <div>
@@ -48,16 +46,35 @@
             <dt>Ημερομηνία έναρξης διαδικασίας</dt>
             <dd>{{ case.start_date }}</dd>
         </div>
+        {% if case.is_new_division %}
         <div>
             <dt>Ημερομηνία υποβολής αίτησης Κ.Σ./Δ.Δ.</dt>
             <dd>{{ case.submitted_at|default:"—" }}</dd>
         </div>
+        {% endif %}
         <div>
             <dt>Ηλεκτρονική διεύθυνση επικοινωνίας Κ.Σ./Δ.Δ.</dt>
             <dd>{{ case.contact_email|default:"—" }}</dd>
         </div>
+    </dl>
+
+    {% if case.is_new_division %}
+    <h3 class="form-section-title">1.2 Χαρακτηριστικά Κοινότητας για σκοπούς προτεραιότητας νέου διαχωρισμού</h3>
+    {% case_detail_fields case "priority_turkish_cypriot_properties" "priority_protection_zones" "priority_nuisance_developments" "priority_limited_private_land" "priority_other" "priority_documentation" %}
+    {% endif %}
+
+    <h3 class="form-section-title">1.3 Σχόλια / Παρατηρήσεις Ενότητας 1</h3>
+    {% case_detail_fields case "comments" %}
+</section>
+
+{% if case.is_new_division %}
+<section class="card">
+    <h2 class="card__title">{% case_section_heading "2" %}</h2>
+
+    <h3 class="form-section-title">2.1 Τρέχον αποτέλεσμα ελέγχου</h3>
+    <dl class="detail-grid">
         <div>
-            <dt>Πληρότητα (Ενότητα 2)</dt>
+            <dt>Αποτέλεσμα</dt>
             <dd>
                 {% if case.completeness_result == 'yes' %}
                 <span class="badge badge--pass">{{ case.completeness_result_display }}</span>
@@ -69,112 +86,69 @@
             </dd>
         </div>
         <div>
-            <dt>Απόφαση ΥΠΕΣ (7)</dt>
-            <dd>{{ case.get_ministry_decision_display|default:"—" }}</dd>
-        </div>
-        <div>
-            <dt>Οικόπεδα (8.7 / 8.8)</dt>
-            <dd>{{ completion.parcels_count }}</dd>
+            <dt>Ημερομηνία ελέγχου</dt>
+            <dd>{{ case.latest_completeness_check.check_date|default:"—" }}</dd>
         </div>
     </dl>
 
-    {% if case.is_new_division %}
-    <h3 class="form-section-title">1.2 Χαρακτηριστικά Κοινότητας για σκοπούς προτεραιότητας νέου διαχωρισμού</h3>
-    {% case_detail_fields case "priority_turkish_cypriot_properties" "priority_protection_zones" "priority_nuisance_developments" "priority_limited_private_land" "priority_other" "priority_documentation" %}
-    {% endif %}
-
-    <h3 class="form-section-title">1.3 Σχόλια / Παρατηρήσεις Ενότητας 1</h3>
-    {% case_detail_fields case "comments" %}
-</div>
-
-<div class="card">
-    <h2 class="card__title">Ενέργειες υπόθεσης</h2>
-    <p class="text-muted">
-        {% if case.is_new_division %}
-        Νέο αίτημα διαχωρισμού: ισχύουν οι Ενότητες 1–9.
-        {% else %}
-        Αδιάθετα οικόπεδα: δεν υπάρχει αίτηση Κ.Σ., οπότε τα οικόπεδα καταχωρίζονται απευθείας στην 8.8.
-        {% endif %}
-    </p>
-    <div class="tile-grid">
-        {% for item in actions %}
-        <a
-            href="{% if item.key == '9' %}{% url 'cases:announcement_create' case.pk %}{% else %}{% url 'cases:section_edit' case.pk item.key %}{% endif %}"
-            class="tile"
-            title="{{ item.title }}"
-        >
-            <p class="tile__title">{{ item.action }}</p>
-            <p class="tile__desc">{{ item.summary }}</p>
-        </a>
-        {% endfor %}
-    </div>
-</div>
-
-{% if case.is_new_division %}
-<div class="card">
-    <h2 class="card__title">Ενότητα 2 — Έλεγχος πληρότητας αίτησης Κ.Σ.</h2>
-    <h3 class="form-section-title">2 Πίνακας ελέγχων πληρότητας</h3>
+    <h3 class="form-section-title">Πίνακας ελέγχων πληρότητας</h3>
     <div class="table-wrap">
         <table class="data-table">
             <thead>
             <tr>
-                <th>Έλεγχος</th>
+                <th>Α/Α</th>
+                <th>Ημερομηνία ελέγχου</th>
                 <th>Αποτέλεσμα</th>
-                <th>Ημερομηνία</th>
                 <th>Ελλείψεις</th>
-                <th>Σχόλια</th>
-                <th></th>
             </tr>
             </thead>
             <tbody>
             {% for check in completeness_checks %}
                 <tr>
                     <td>{{ check.sequence }}ος</td>
-                    <td>
-                        {% if check.is_complete %}
-                        <span class="badge badge--pass">{{ check.get_result_display }}</span>
-                        {% else %}
-                        <span class="badge badge--fail">{{ check.get_result_display }}</span>
-                        {% endif %}
-                    </td>
                     <td>{{ check.check_date }}</td>
-                    <td>{{ check.deficiencies|default:"—"|linebreaksbr }}</td>
-                    <td>{{ check.comments|default:"—"|linebreaksbr }}</td>
                     <td>
-                        {% if not check.is_complete and check.deficiencies %}
-                        <form method="post" action="{% url 'cases:deficiency_email_create' case.pk check.pk %}">
-                            {% csrf_token %}
-                            <button type="submit" class="btn btn-ghost btn-sm">Email ελλείψεων</button>
-                        </form>
+                        {% if check.result == 'yes' %}
+                        <span class="badge badge--pass">{{ check.get_result_display }}</span>
+                        {% elif check.result == 'no' %}
+                        <span class="badge badge--fail">{{ check.get_result_display }}</span>
+                        {% else %}
+                        <span class="badge badge--pending">ΕΚΚΡΕΜΕΙ</span>
                         {% endif %}
                     </td>
+                    <td>{{ check.deficiencies|default:"—"|linebreaksbr }}</td>
                 </tr>
             {% empty %}
-                <tr><td colspan="6">Δεν έχει καταχωριστεί έλεγχος πληρότητας.</td></tr>
+                <tr><td colspan="4">Δεν έχουν καταχωριστεί έλεγχοι πληρότητας.</td></tr>
             {% endfor %}
             </tbody>
         </table>
     </div>
-    <h3 class="form-section-title">2 Σχόλια / Παρατηρήσεις Ενότητας 2</h3>
-    {% case_detail_fields case "section2_comments" %}
-</div>
 
-<div class="card">
-    <h2 class="card__title">Ενότητα 3 — Στοιχεία τεμαχίων</h2>
-    <h3 class="form-section-title">3 Πίνακας τεμαχίων</h3>
+    <h3 class="form-section-title">Ιστορικό απεσταλμένων email ελλείψεων</h3>
+    {% include "cases/_case_communication_email_table.html" %}
+
+    <h3 class="form-section-title">2.3 Σχόλια / Παρατηρήσεις</h3>
+    {% case_detail_fields case "section2_comments" %}
+</section>
+
+<section class="card">
+    <h2 class="card__title">{% case_section_heading "3" %}</h2>
+    <h3 class="form-section-title">3.1 Πίνακας τεμαχίων</h3>
     <div class="table-wrap">
         <table class="data-table">
             <thead>
             <tr>
-                <th>Τεμάχιο</th>
-                <th>Σχέδιο</th>
+                <th>Αρ. τεμαχίου</th>
+                <th>Φύλλο/Σχέδιο</th>
                 <th>Τοποθεσία</th>
-                <th>Καθεστώς</th>
-                <th>Εμβαδόν</th>
-                <th>Ζώνη</th>
-                <th>Εντός Ορίου</th>
+                <th>Ιδιοκτησιακό καθεστώς</th>
+                <th>Εμβαδόν (τ.μ.)</th>
+                <th>Πολεοδομική Ζώνη</th>
+                <th>Εντός Ορίου Ανάπτυξης</th>
                 <th>Πρόσβαση</th>
-                <th>Σχόλια</th>
+                <th>Σχόλια / Παρατηρήσεις</th>
+                <th>Αρχεία τεμαχίου</th>
             </tr>
             </thead>
             <tbody>
@@ -183,60 +157,38 @@
                     <td><strong>{{ plot.parcel_number }}</strong></td>
                     <td>{{ plot.sheet_plan|default:"—" }}</td>
                     <td>{{ plot.location|default:"—" }}</td>
-                    <td>{{ plot.get_ownership_status_display|default:"—" }}</td>
+                    <td>{{ plot.ownership_display|default:"—" }}</td>
                     <td>{{ plot.area_sqm|default:"—" }}</td>
                     <td>{{ plot.zone|default:"—" }}</td>
-                    <td>{{ plot.inside_development_zone|yesno:"ΝΑΙ,ΟΧΙ" }}</td>
-                    <td>{{ plot.access|default:"—" }}</td>
+                    <td>{{ plot.get_inside_development_zone_display|default:"—" }}</td>
+                    <td>{{ plot.access_display|default:"—" }}</td>
                     <td>{{ plot.comments|default:"—"|linebreaksbr }}</td>
+                    <td>
+                        {% for attachment in plot.attachments.all %}
+                        <a href="{% url 'cases:attachment_download' case.pk attachment.pk %}">{{ attachment.filename }}</a>{% if not forloop.last %}<br>{% endif %}
+                        {% empty %}—{% endfor %}
+                    </td>
                 </tr>
             {% empty %}
-                <tr><td colspan="9">Δεν έχουν καταχωριστεί τεμάχια.</td></tr>
+                <tr><td colspan="10">Δεν έχουν καταχωριστεί τεμάχια.</td></tr>
             {% endfor %}
             </tbody>
         </table>
     </div>
-    <h3 class="form-section-title">3 Έλεγχος κρατικής γης</h3>
+    <h3 class="form-section-title">3.2 Έλεγχος κρατικής γης</h3>
     {% case_detail_fields case "state_land_remains_sufficient" "state_land_comments" %}
-    <h3 class="form-section-title">3 Σχόλια / Παρατηρήσεις Ενότητας 3</h3>
+    <h3 class="form-section-title">3.3 Σχόλια / Παρατηρήσεις Ενότητας 3</h3>
     {% case_detail_fields case "section3_comments" %}
-</div>
+</section>
 
-<div class="card">
-    <h2 class="card__title">Ενότητα 4 — Τεχνική αξιολόγηση καταλληλότητας</h2>
+<section class="card">
+    <h2 class="card__title">{% case_section_heading "4" %}</h2>
     <h3 class="form-section-title">4.1 Τεχνική αξιολόγηση ανά τεμάχιο</h3>
-    <div class="table-wrap">
-        <table class="data-table">
-            <thead>
-            <tr>
-                <th>Τεμάχιο</th>
-                <th>Μορφολογία</th>
-                <th>Σχόλια μορφολογίας</th>
-                <th>Αξιοποιήσιμο εμβαδόν</th>
-                <th>Εκτιμ. αριθμός οικοπέδων</th>
-                <th>Τεχνική Καταλληλότητα (4.1)</th>
-            </tr>
-            </thead>
-            <tbody>
-            {% for plot in land_plots %}
-                <tr>
-                    <td><strong>{{ plot.parcel_number }}</strong></td>
-                    <td>{{ plot.get_morphology_display|default:"—" }}</td>
-                    <td>{{ plot.morphology_comments|default:"—"|linebreaksbr }}</td>
-                    <td>{{ plot.usable_area_sqm|default:"—" }}</td>
-                    <td>{{ plot.estimated_plots_count|default:"—" }}</td>
-                    <td>{{ plot.get_technical_suitability_display|default:"—" }}</td>
-                </tr>
-            {% empty %}
-                <tr><td colspan="6">Δεν έχουν καταχωριστεί τεμάχια.</td></tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
+    {% include "cases/_plot_evaluation_grid.html" with readonly=True %}
     <h3 class="form-section-title">4.2 Υπηρεσίες κοινής ωφέλειας</h3>
     <div class="table-wrap">
         <table class="data-table">
-            <thead><tr><th>Υπηρεσία</th><th>Εγγύτητα</th><th>Σχόλια</th></tr></thead>
+            <thead><tr><th>Υπηρεσία</th><th>Εγγύτητα με το/τα τεμάχιο/α</th><th>Σχόλια / Παρατηρήσεις</th></tr></thead>
             <tbody>
             {% for service in case.utility_services.all %}
                 <tr>
@@ -250,14 +202,25 @@
             </tbody>
         </table>
     </div>
-    <h3 class="form-section-title">4.3 Τεχνική αξιολόγηση πρόσβασης</h3>
+    <h3 class="form-section-title">4.3 Πρόσβαση</h3>
     {% case_detail_fields case "access_technical_evaluation" %}
+    <h3 class="form-section-title">4.4 Επισυναπτόμενα αρχεία</h3>
+    {% if technical_attachments %}
+    <ul class="attachment-list">
+        {% for attachment in technical_attachments %}
+        <li><a href="{% url 'cases:attachment_download' case.pk attachment.pk %}">{{ attachment.filename }}</a></li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p class="form-readonly">Δεν έχουν επισυναφθεί αρχεία.</p>
+    {% endif %}
     <h3 class="form-section-title">4.5 Σχόλια / Παρατηρήσεις Ενότητας 4</h3>
     {% case_detail_fields case "section4_comments" %}
-</div>
+</section>
 
-<div class="card">
-    <h2 class="card__title">Ενότητα 5 — Διαβουλεύσεις με Τμήματα / Υπηρεσίες</h2>
+<section class="card">
+    <h2 class="card__title">{% case_section_heading "5" %}</h2>
+    <h3 class="form-section-title">Διαβουλεύσεις με Τμήματα / Υπηρεσίες</h3>
     <div class="table-wrap">
         <table class="data-table">
             <thead>
@@ -290,10 +253,10 @@
             </tbody>
         </table>
     </div>
-</div>
+</section>
 
-<div class="card">
-    <h2 class="card__title">Ενότητα 6 — Αξιολόγηση καταλληλότητας</h2>
+<section class="card">
+    <h2 class="card__title">{% case_section_heading "6" %}</h2>
     {% if suitability_summary %}
     <h3 class="form-section-title">6.1 Συνοπτική εικόνα προτεραιότητας Κοινότητας</h3>
     <dl class="detail-grid">
@@ -344,15 +307,18 @@
     </div>
     <h3 class="form-section-title">6.7 Σχόλια / Παρατηρήσεις Ενότητας 6</h3>
     {% case_detail_fields case "section6_comments" %}
-</div>
+</section>
 
-<div class="card">
-    <h2 class="card__title">Ενότητα 7 — Σύσταση προς τον Υπουργό</h2>
-    {% case_detail_fields case "recommendation_letter_date" "recommendation" "ministry_response_date" "ministry_decision" "section7_comments" %}
-</div>
+<section class="card">
+    <h2 class="card__title">{% case_section_heading "7" %}</h2>
+    <h3 class="form-section-title">Σύσταση και απόφαση ΥΠΕΣ</h3>
+    {% case_detail_fields case "recommendation_letter_date" "recommendation" "ministry_response_date" "ministry_decision" %}
+    <h3 class="form-section-title">Σχόλια / Παρατηρήσεις Ενότητας 7</h3>
+    {% case_detail_fields case "section7_comments" %}
+</section>
 
-<div class="card">
-    <h2 class="card__title">Ενότητα 8 — Σχεδιασμός και υλοποίηση διαχωρισμού (8.1–8.6)</h2>
+<section class="card">
+    <h2 class="card__title">{% case_section_heading "8" %}</h2>
     <h3 class="form-section-title">8.1 Ανάθεση μελέτης</h3>
     {% case_detail_fields case "survey_assignment_date" "surveyor_name" "surveyor_phone" "surveyor_email" "survey_assignment_comments" %}
     <h3 class="form-section-title">8.2 Σχεδιασμός διαχωρισμού</h3>
@@ -428,13 +394,13 @@
         </table>
     </div>
     {% case_detail_fields case "works_progress_stage" "works_progress_updated_on" "works_progress_comments" %}
-    <h3 class="form-section-title">8 Σχόλια / Παρατηρήσεις Ενότητας 8</h3>
+    <h3 class="form-section-title">Σχόλια / Παρατηρήσεις Ενότητας 8</h3>
     {% case_detail_fields case "section8_comments" %}
-</div>
+</section>
 {% endif %}
 
-<div class="card">
-    <h2 class="card__title">Ενότητα 8 — Οικόπεδα, εμβαδά και αξία (8.7–8.8)</h2>
+<section class="card">
+    <h2 class="card__title">{% case_section_heading "8-plots" %}</h2>
     <h3 class="form-section-title">8.7 Αίτηση στο ΤΚΧ</h3>
     {% case_detail_fields case "dls_application_date" "dls_file_number" "dls_response_date" "dls_comments" %}
     <h3 class="form-section-title">8.7 Χωράφια</h3>
@@ -524,6 +490,10 @@
     <h3 class="form-section-title">8.8.2 Έλεγχος ολοκλήρωσης (αυτόματο)</h3>
     <dl class="detail-grid">
         <div>
+            <dt>Οικόπεδα</dt>
+            <dd>{{ completion.parcels_count }}</dd>
+        </div>
+        <div>
             <dt>Αξία σε όλα τα οικόπεδα</dt>
             <dd>{% if completion.all_valued %}<span class="badge badge--pass">ΝΑΙ</span>{% else %}<span class="badge badge--fail">ΟΧΙ</span>{% endif %}</dd>
         </div>
@@ -536,10 +506,10 @@
             <dd>{% if completion.is_complete %}<span class="badge badge--pass">ΝΑΙ</span>{% else %}<span class="badge badge--fail">ΟΧΙ</span>{% endif %}</dd>
         </div>
     </dl>
-</div>
+</section>
 
-<div class="card">
-    <h2 class="card__title">Ενότητα 9 — Γνωστοποίηση έναρξης αιτήσεων</h2>
+<section class="card">
+    <h2 class="card__title">{% case_section_heading "9" %}</h2>
     <h3 class="form-section-title">9.4 Έλεγχος ετοιμότητας (αυτόματο)</h3>
     <dl class="detail-grid">
         {% for label, ready in readiness.rows %}
@@ -565,7 +535,6 @@
                 <th>Υποθέσεις</th>
                 <th>Κατάσταση</th>
                 <th>Σχόλια</th>
-                <th></th>
             </tr>
             </thead>
             <tbody>
@@ -583,47 +552,16 @@
                         {% endif %}
                     </td>
                     <td>{{ cycle.comments|default:"—"|linebreaksbr }}</td>
-                    <td><a href="{% url 'cases:announcement_detail' case.pk cycle.pk %}" class="btn btn-ghost btn-sm">Άνοιγμα</a></td>
                 </tr>
             {% empty %}
-                <tr><td colspan="7">Δεν έχει καταχωριστεί γνωστοποίηση.</td></tr>
+                <tr><td colspan="6">Δεν έχει καταχωριστεί γνωστοποίηση.</td></tr>
             {% endfor %}
             </tbody>
         </table>
     </div>
-    <div class="toolbar" style="margin-top: 1rem;">
-        <a href="{% url 'cases:announcement_create' case.pk %}" class="btn btn-primary">Νέα γνωστοποίηση</a>
-    </div>
-</div>
+</section>
 
-<div class="card">
-    <h2 class="card__title">Επικοινωνίες</h2>
-    <div class="table-wrap">
-        <table class="data-table">
-            <thead>
-            <tr><th>Παραλήπτης</th><th>Θέμα</th><th>Κατάσταση</th><th>Απεστάλη</th><th></th></tr>
-            </thead>
-            <tbody>
-            {% for communication in communications %}
-                <tr>
-                    <td>{{ communication.recipient }}</td>
-                    <td>{{ communication.subject }}</td>
-                    <td>{{ communication.status }}</td>
-                    <td>{{ communication.sent_at|default:"—" }}</td>
-                    <td>
-                        {% if communication.status != 'sent' %}
-                        <form method="post" action="{% url 'cases:deficiency_email_send' case.pk communication.pk %}">
-                            {% csrf_token %}
-                            <button type="submit" class="btn btn-ghost btn-sm">Καταγραφή αποστολής</button>
-                        </form>
-                        {% endif %}
-                    </td>
-                </tr>
-            {% empty %}
-                <tr><td colspan="5">Δεν υπάρχουν επικοινωνίες.</td></tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
+</div>
+{% include "cases/_case_actions_sidebar.html" %}
 </div>
 {% endblock %}

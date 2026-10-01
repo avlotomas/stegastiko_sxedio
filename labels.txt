@@ -5,5 +5,5 @@ priority_protection_zones: 1.2 Επηρεασμός συνολικής έκτα�
 priority_nuisance_developments: 1.2 Οχληρές αναπτύξεις στα διοικητικά όρια της Κοινότητας
 priority_limited_private_land: 1.2 Μειωμένη διαθεσιμότητα ιδιωτικής γης για οικιστική ανάπτυξη
 priority_other: 1.2 Άλλο ιδιαίτερο χαρακτηριστικό (περιγραφή)
-priority_documentation: 1.2 Στοιχεία τεκμηρίωσης
+priority_documentation: 1.2 Σχόλια/Παρατηρήσεις
 comments: 1.3 Σχόλια / Παρατηρήσεις Ενότητας 1
