@@ -22,6 +22,9 @@
         Υπόθεση {{ case.case_number }} · {{ case.community.name }} · {{ case.get_case_type_display }}
     </p>
 </div>
+{% if not can_edit %}
+<div class="alert alert--warning">Προβολή μόνο — οι ρόλοι σας δεν επιτρέπουν τροποποίηση αυτής της Ενότητας.</div>
+{% endif %}
 
 {% if section == '6' and summary %}
 <div class="card">
@@ -41,9 +44,9 @@
         </div>
     </dl>
 
-    <h3 class="form-section-title">{% case_subsection_heading "4.1" %}</h3>
+    <h3 class="form-section-title">{% case_subsection_heading "6.2" %}</h3>
     {% include "cases/_plot_evaluation_grid.html" with readonly=True land_plots=summary.land_plots %}
-    <h3 class="form-section-title">{% case_subsection_heading "4.3" %}</h3>
+    <h4 class="form-section-subtitle">{% case_subsection_label "4.3" %}</h4>
     <p class="form-readonly">{{ summary.access_technical_evaluation|default:"—"|linebreaksbr }}</p>
 
     <h3 class="form-section-title">{% case_subsection_heading "6.3" %}</h3>
@@ -181,13 +184,15 @@
 
     {% if section != '5' %}
     <div class="form-actions form-span-all">
+        {% if can_edit %}
         <button type="submit" class="btn btn-primary">Αποθήκευση</button>
-        {% if section == '4' %}
+        {% endif %}
+        {% if section == '4' and access.case_section_4.export %}
         <a href="{% url 'cases:section_4_blank_pdf' case.pk %}" class="btn btn-secondary">Εξαγωγή PDF φόρμας</a>
-        {% elif section == '6' %}
+        {% elif section == '6' and access.case_section_6.export %}
         <a href="{% url 'cases:section_6_report_pdf' case.pk %}" class="btn btn-secondary">Εξαγωγή PDF πινάκων αξιολόγησης</a>
         {% endif %}
-        <a href="{% url 'cases:detail' case.pk %}" class="btn btn-secondary">Ακύρωση</a>
+        <a href="{% url 'cases:detail' case.pk %}" class="btn btn-secondary">{% if can_edit %}Ακύρωση{% else %}Επιστροφή στον φάκελο{% endif %}</a>
     </div>
     {% else %}
     <div class="form-actions form-span-all">

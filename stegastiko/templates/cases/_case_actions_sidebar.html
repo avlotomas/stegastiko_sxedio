@@ -23,8 +23,10 @@
         </nav>
         <p class="case-actions-sidebar__footer">
             <a href="{% url 'cases:detail' case.pk %}">Προβολή φακέλου</a>
+            {% if access.case_history.view %}
             ·
             <a href="{% url 'cases:history' case.pk %}">Ιστορικό</a>
+            {% endif %}
         </p>
     </div>
 </aside>

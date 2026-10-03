@@ -35,6 +35,44 @@ def _persist_history(instance, action, field_name="", old_value="", new_value=""
     )
 
 
+USER_AUDIT_FIELDS = ("username", "first_name", "last_name", "email", "is_active")
+
+
+def user_audit_snapshot(user):
+    return {name: getattr(user, name) for name in USER_AUDIT_FIELDS}
+
+
+def record_user_changes(user, previous=None, password_changed=False):
+    """The auth User is not an AuditedModel, so its screens log changes explicitly."""
+    actor = get_current_user()
+    base = {
+        "entity_type": "User",
+        "entity_id": str(user.pk),
+        "user_id": actor.id if actor and actor.is_authenticated else None,
+    }
+    if previous is None:
+        ActionHistory.objects.create(action=ActionHistory.ActionType.CREATE, **base)
+    else:
+        for name, old_value in previous.items():
+            new_value = getattr(user, name)
+            if old_value != new_value:
+                ActionHistory.objects.create(
+                    action=ActionHistory.ActionType.UPDATE,
+                    field_name=name,
+                    old_value=serialize_field_value(old_value),
+                    new_value=serialize_field_value(new_value),
+                    **base,
+                )
+    if password_changed:
+        ActionHistory.objects.create(
+            action=ActionHistory.ActionType.UPDATE,
+            field_name="password",
+            old_value="********",
+            new_value="********",
+            **base,
+        )
+
+
 @receiver(pre_save)
 def audited_pre_save(sender, instance, **kwargs):
     if not _is_audited_instance(instance):

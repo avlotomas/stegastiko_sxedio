@@ -7,7 +7,6 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
-from django.contrib.auth import get_user_model
 from django.core import mail
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -53,9 +52,8 @@ def community(db):
 
 
 @pytest.fixture
-def staff_client(db, client):
-    user = get_user_model().objects.create_user(username="officer", password="secret")
-    client.force_login(user)
+def staff_client(client, make_user):
+    client.force_login(make_user("officer", "Προϊστάμενος ελέγχου"))
     return client
 
 
@@ -1193,9 +1191,10 @@ def test_section_6_report_pdf_export(community, staff_client):
     assert context["report_title"] == REPORT_TITLE
     assert [c.topic for c in context["summary"]["consultations"]] == ["Αξία"]
     assert context["heading_66"].startswith("6.6 ")
-    assert context["heading_41"].startswith("4.1 ")
+    assert context["heading_62"] == "6.2 Τεχνική αξιολόγηση ανά τεμάχιο"
+    assert context["heading_access"] == "Πρόσβαση"
 
-    # Ενότητα 6 shows the 4.1 grid read-only in place of the old 6.2 table.
+    # Ενότητα 6 shows the 4.1-style grid read-only under heading 6.2.
     section6_html = staff_client.get(reverse("cases:section_edit", args=[case.pk, "6"])).content.decode()
     assert "Εκτιμώμενος αριθμός οικοπέδων" in section6_html
     assert "data-land-plot-open" not in section6_html

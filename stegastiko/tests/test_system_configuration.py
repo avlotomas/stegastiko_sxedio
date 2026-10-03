@@ -1,36 +1,34 @@
 import pytest
-from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group
 from django.urls import reverse
 
 from cases.section_labels import get_case_section_label, save_case_section_label
 from cases.subsection_labels import get_case_subsection_label, save_case_subsection_label
-from core.configuration_forms import SystemConfigurationForm
+from core.configuration_forms import (
+    SystemBrandingSettingsForm,
+    SystemConfigurationForm,
+    SystemEmailSettingsForm,
+    SystemWorkflowSettingsForm,
+)
 from core.models import ActionHistory, Community
-from core.permissions import ROLE_SYSTEM_ADMIN, ensure_groups
 from core.reminders import CONSULTATION_DUE_REMINDER_DAYS_KEY
 from core.services import get_setting, set_setting
 
 
 @pytest.fixture
-def staff_client(db, client):
-    user = get_user_model().objects.create_user(username="officer", password="secret")
-    client.force_login(user)
+def staff_client(client, make_user):
+    client.force_login(make_user("officer", "Λειτουργός καταχώρισης"))
     return client
 
 
 @pytest.fixture
-def admin_client(db, client):
-    ensure_groups()
-    user = get_user_model().objects.create_user(username="sysadmin", password="secret")
-    user.groups.add(Group.objects.get(name=ROLE_SYSTEM_ADMIN))
-    client.force_login(user)
+def admin_client(client, make_user):
+    client.force_login(make_user("sysadmin", "Διαχειριστής συστήματος"))
     return client
 
 
 @pytest.mark.django_db
 def test_system_configuration_requires_admin(staff_client):
-    assert staff_client.get(reverse("system_configuration")).status_code == 302
+    assert staff_client.get(reverse("system_configuration")).status_code == 403
 
 
 @pytest.mark.django_db
@@ -38,9 +36,8 @@ def test_system_configuration_accessible_to_admin(admin_client):
     assert admin_client.get(reverse("system_configuration")).status_code == 200
 
 
-def _configuration_post_data(**overrides):
-    """Every field of the settings screen as currently rendered, plus overrides."""
-    form = SystemConfigurationForm()
+def _form_post_data(form_class, **overrides):
+    form = form_class()
     data = {
         name: "" if field.initial is None else field.initial
         for name, field in form.fields.items()
@@ -49,15 +46,23 @@ def _configuration_post_data(**overrides):
     return data
 
 
+def _configuration_post_data(**overrides):
+    """Every field across all settings forms (bulk regression helper)."""
+    return _form_post_data(SystemConfigurationForm, **overrides)
+
+
 @pytest.mark.django_db
 def test_smtp_settings_are_saved_from_the_settings_screen(admin_client):
-    html = admin_client.get(reverse("system_configuration")).content.decode()
+    url = reverse("system_settings_email")
+    html = admin_client.get(url).content.decode()
     assert "Αποστολή email (SMTP)" in html
     assert "Θέμα email ελλείψεων (2.2)" in html
+    assert "case-actions-nav" in html
 
     response = admin_client.post(
-        reverse("system_configuration"),
-        _configuration_post_data(
+        url,
+        _form_post_data(
+            SystemEmailSettingsForm,
             email_smtpHost="smtp.example.org",
             email_smtpPort="465",
             email_smtpSecurity="ssl",
@@ -73,25 +78,38 @@ def test_smtp_settings_are_saved_from_the_settings_screen(admin_client):
     assert get_setting("smtpSecurity") == "ssl"
     assert get_setting("smtpPassword") == "s3cret"
     assert get_setting("deficiencyEmailSubject") == "Ελλείψεις {case_number}"
-    assert "s3cret" not in admin_client.get(reverse("system_configuration")).content.decode()
+    assert "s3cret" not in admin_client.get(url).content.decode()
 
 
 @pytest.mark.django_db
 def test_blank_smtp_password_keeps_the_stored_one(admin_client):
     set_setting("smtpPassword", "s3cret")
     response = admin_client.post(
-        reverse("system_configuration"),
-        _configuration_post_data(email_smtpHost="smtp.example.org"),
+        reverse("system_settings_email"),
+        _form_post_data(SystemEmailSettingsForm, email_smtpHost="smtp.example.org"),
     )
     assert response.status_code == 302
     assert get_setting("smtpPassword") == "s3cret"
 
 
 @pytest.mark.django_db
+def test_app_title_appears_in_header_after_save(admin_client):
+    custom = "Στεγαστικό Δοκιμής"
+    response = admin_client.post(
+        reverse("system_settings_branding"),
+        _form_post_data(SystemBrandingSettingsForm, setting_appTitle=custom),
+    )
+    assert response.status_code == 302
+    assert get_setting("appTitle") == custom
+    html = admin_client.get(reverse("home")).content.decode()
+    assert f'<span class="site-brand__title">{custom}</span>' in html
+
+
+@pytest.mark.django_db
 def test_consultation_reminder_days_are_saved_from_settings(admin_client):
     response = admin_client.post(
-        reverse("system_configuration"),
-        _configuration_post_data(setting_consultationDueReminderDays="3"),
+        reverse("system_settings_workflow"),
+        _form_post_data(SystemWorkflowSettingsForm, setting_consultationDueReminderDays="3"),
     )
     assert response.status_code == 302
     assert get_setting(CONSULTATION_DUE_REMINDER_DAYS_KEY) == "3"
@@ -190,7 +208,7 @@ def _service_types_post(rows, extra_rows=()):
 
 @pytest.mark.django_db
 def test_utility_service_catalog_requires_admin(staff_client):
-    assert staff_client.get(reverse("utility_service_types")).status_code == 302
+    assert staff_client.get(reverse("utility_service_types")).status_code == 403
 
 
 @pytest.mark.django_db
@@ -198,7 +216,9 @@ def test_utility_service_catalog_is_linked_from_settings(admin_client):
     url = reverse("utility_service_types")
     html = admin_client.get(url).content.decode()
     assert "Κατάλογος υπηρεσιών κοινής ωφέλειας (4.2)" in html
-    assert url in admin_client.get(reverse("system_configuration")).content.decode()
+    overview = admin_client.get(reverse("system_configuration")).content.decode()
+    assert reverse("utility_service_types") in overview
+    assert "case-actions-nav" in overview
 
 
 @pytest.mark.django_db

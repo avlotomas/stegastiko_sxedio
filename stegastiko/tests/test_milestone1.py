@@ -236,15 +236,14 @@ def test_application_form_initial_includes_person_fields(baseline_data):
 
 
 @pytest.mark.django_db
-def test_application_edit_page_login_and_folder_read_only(baseline_data, client):
+def test_application_edit_page_login_and_folder_read_only(baseline_data, client, make_user):
     cycle = baseline_data["cycle"]
     p1 = _create_person("ID-EDIT-2")
     app = _create_application(cycle, p1)
     url = reverse("applications:edit", args=[app.pk])
     assert client.get(url).status_code == 302
 
-    user = get_user_model().objects.create_user(username="staff", password="secret")
-    client.force_login(user)
+    client.force_login(make_user("staff", "Λειτουργός καταχώρισης"))
     response = client.get(url)
     assert response.status_code == 200
     assert app.folder_number.encode() in response.content

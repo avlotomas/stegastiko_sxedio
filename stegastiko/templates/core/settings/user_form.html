@@ -1,0 +1,62 @@
+{% extends "core/settings/_layout.html" %}
+
+{% block title %}{% if target %}Χρήστης {{ target.username }}{% else %}Νέος χρήστης{% endif %} - Ρυθμίσεις{% endblock %}
+
+{% block settings_breadcrumb %}
+<a href="{% url 'system_configuration' %}">Ρυθμίσεις συστήματος</a>
+<span>/</span>
+<a href="{% url 'settings_users' %}">Χρήστες</a>
+<span>/</span>
+<span>{% if target %}{{ target.username }}{% else %}Νέος χρήστης{% endif %}</span>
+{% endblock %}
+
+{% block settings_main %}
+<div class="page-header">
+    <h1>{% if target %}Χρήστης {{ target.username }}{% else %}Νέος χρήστης{% endif %}</h1>
+    {% if target.is_superuser %}
+    <p class="page-header__lead">
+        <span class="badge badge--pass">Υπερχρήστης</span>
+        Έχει πλήρη πρόσβαση ανεξάρτητα από τους ρόλους.
+    </p>
+    {% endif %}
+</div>
+
+<div class="card">
+<form method="post" class="app-form" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+    <div class="alert alert--error form-span-all">
+        {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+    </div>
+    {% endif %}
+    <h2 class="form-section-title">Στοιχεία λογαριασμού</h2>
+    <div class="form-grid">
+        {% include "includes/form_field.html" with field=form.username %}
+        {% include "includes/form_field.html" with field=form.email %}
+        {% include "includes/form_field.html" with field=form.first_name %}
+        {% include "includes/form_field.html" with field=form.last_name %}
+        {% include "includes/form_field.html" with field=form.is_active wide=True %}
+    </div>
+
+    <h2 class="form-section-title">Ρόλοι</h2>
+    <div class="form-grid">
+        {% include "includes/form_field.html" with field=form.roles wide=True %}
+    </div>
+
+    <h2 class="form-section-title">Κωδικός πρόσβασης</h2>
+    <div class="form-grid">
+        {% include "includes/form_field.html" with field=form.password1 %}
+        {% include "includes/form_field.html" with field=form.password2 %}
+    </div>
+
+    <div class="form-actions form-span-all">
+        <button type="submit" class="btn btn-primary">Αποθήκευση</button>
+        <a href="{% url 'settings_users' %}" class="btn btn-secondary">Επιστροφή στους χρήστες</a>
+    </div>
+</form>
+</div>
+
+{% if target %}
+{% include "core/settings/_access_history.html" %}
+{% endif %}
+{% endblock %}

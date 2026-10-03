@@ -42,6 +42,80 @@
 
 
 
+(function () {
+
+    const groups = Array.from(document.querySelectorAll("[data-nav-group]"));
+
+    if (!groups.length) {
+
+        return;
+
+    }
+
+    function setOpen(group, open) {
+
+        group.classList.toggle("is-open", open);
+
+        group.querySelector("[data-nav-group-toggle]").setAttribute("aria-expanded", open ? "true" : "false");
+
+    }
+
+    groups.forEach(function (group) {
+
+        group.querySelector("[data-nav-group-toggle]").addEventListener("click", function () {
+
+            const open = !group.classList.contains("is-open");
+
+            groups.forEach(function (other) {
+
+                setOpen(other, other === group && open);
+
+            });
+
+        });
+
+    });
+
+    document.addEventListener("click", function (event) {
+
+        groups.forEach(function (group) {
+
+            if (!group.contains(event.target)) {
+
+                setOpen(group, false);
+
+            }
+
+        });
+
+    });
+
+    document.addEventListener("keydown", function (event) {
+
+        if (event.key !== "Escape") {
+
+            return;
+
+        }
+
+        groups.forEach(function (group) {
+
+            if (group.classList.contains("is-open")) {
+
+                setOpen(group, false);
+
+                group.querySelector("[data-nav-group-toggle]").focus();
+
+            }
+
+        });
+
+    });
+
+})();
+
+
+
 function bindCompletenessDeficiencies(root) {
 
     const result = root.querySelector("[data-completeness-result]");
@@ -1791,3 +1865,76 @@ bindFilePickers(document);
 })();
 
 
+
+
+// Role permission matrix: «Όλα» per row; any access implies «Προβολή» on the row and on the
+// parent function, and removing «Προβολή» clears the row (and the sub-functions of a function).
+(function () {
+    const matrix = document.querySelector("[data-access-matrix]");
+    if (!matrix) {
+        return;
+    }
+    const grantBoxes = function (row) {
+        return Array.from(row.querySelectorAll('input[type="checkbox"][name^="grant__"]'));
+    };
+    const viewBox = function (row) {
+        return row.querySelector('input[type="checkbox"][name$="__view"]');
+    };
+    const parentRow = function (row) {
+        return matrix.querySelector('tr[data-access-parent][data-access-group="' + row.dataset.accessGroup + '"]');
+    };
+    const childRows = function (row) {
+        return Array.from(matrix.querySelectorAll('tr[data-access-group="' + row.dataset.accessGroup + '"]'))
+            .filter(function (other) { return other !== row; });
+    };
+    const syncToggle = function (row) {
+        const toggle = row.querySelector("[data-access-row-toggle]");
+        const boxes = grantBoxes(row);
+        toggle.checked = boxes.length > 0 && boxes.every(function (box) { return box.checked; });
+        toggle.indeterminate = !toggle.checked && boxes.some(function (box) { return box.checked; });
+    };
+    const syncAll = function () {
+        matrix.querySelectorAll("tr[data-access-row]").forEach(syncToggle);
+    };
+    const ensureView = function (row) {
+        const view = viewBox(row);
+        if (view) {
+            view.checked = true;
+        }
+        if (!row.hasAttribute("data-access-parent")) {
+            const parent = parentRow(row);
+            if (parent && viewBox(parent)) {
+                viewBox(parent).checked = true;
+            }
+        }
+    };
+    const clearRow = function (row) {
+        grantBoxes(row).forEach(function (box) { box.checked = false; });
+        if (row.hasAttribute("data-access-parent")) {
+            childRows(row).forEach(function (child) {
+                grantBoxes(child).forEach(function (box) { box.checked = false; });
+            });
+        }
+    };
+    matrix.addEventListener("change", function (event) {
+        const box = event.target;
+        const row = box.closest("tr[data-access-row]");
+        if (!row) {
+            return;
+        }
+        if (box.hasAttribute("data-access-row-toggle")) {
+            if (box.checked) {
+                grantBoxes(row).forEach(function (other) { other.checked = true; });
+                ensureView(row);
+            } else {
+                clearRow(row);
+            }
+        } else if (box.checked) {
+            ensureView(row);
+        } else if (box === viewBox(row)) {
+            clearRow(row);
+        }
+        syncAll();
+    });
+    syncAll();
+})();

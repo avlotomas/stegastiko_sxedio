@@ -3,7 +3,7 @@
 add/edit/delete. `readonly` hides actions (case folder).
 {% endcomment %}
 <div{% if not readonly %} data-suitability-consultation-container{% endif %}>
-{% if not readonly %}
+{% if not readonly and access.case_section_5.create %}
 <div class="form-actions form-span-all">
     <button type="button"
             class="btn btn-secondary"
@@ -78,15 +78,19 @@ add/edit/delete. `readonly` hides actions (case folder).
                 </td>
                 {% if not readonly %}
                 <td class="data-table__actions">
+                    {% if access.case_section_5.edit %}
                     <button type="button" class="btn btn-secondary btn-sm"
                             data-suitability-consultation-open="{% url 'cases:suitability_consultation_edit' case.pk consultation.pk %}">
                         Επεξεργασία
                     </button>
+                    {% endif %}
+                    {% if access.case_section_5.delete %}
                     <button type="button" class="btn btn-danger btn-sm"
                             data-suitability-consultation-delete="{% url 'cases:suitability_consultation_delete' case.pk consultation.pk %}"
                             data-suitability-consultation-label="{{ consultation.row_label }}">
                         Διαγραφή
                     </button>
+                    {% endif %}
                 </td>
                 {% endif %}
             </tr>

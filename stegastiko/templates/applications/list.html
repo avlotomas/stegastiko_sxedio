@@ -8,10 +8,16 @@
     <p class="page-header__lead">Φάκελοι αιτητών ανά κοινότητα και κύκλο υποβολής.</p>
 </div>
 
+{% if access.applications.create or access.application_import.import %}
 <div class="toolbar">
+    {% if access.applications.create %}
     <a href="{% url 'applications:create' %}" class="btn btn-primary">Νέα αίτηση</a>
+    {% endif %}
+    {% if access.application_import.import %}
     <a href="{% url 'applications:import' %}" class="btn btn-secondary">Εισαγωγή Excel</a>
+    {% endif %}
 </div>
+{% endif %}
 
 <div class="card">
     <h2 class="card__title">Αναζήτηση</h2>
@@ -79,7 +85,11 @@
                     {% endif %}
                 </td>
                 <td>
+                    {% if access.applications.edit %}
                     <a href="{% url 'applications:edit' item.pk %}" class="btn btn-ghost btn-sm">Επεξεργασία</a>
+                    {% else %}
+                    <a href="{% url 'applications:detail' item.pk %}" class="btn btn-ghost btn-sm">Άνοιγμα</a>
+                    {% endif %}
                 </td>
             </tr>
         {% empty %}

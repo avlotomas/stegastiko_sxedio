@@ -1,0 +1,133 @@
+{% extends "core/settings/_layout.html" %}
+
+{% block title %}{% if role %}Ρόλος {{ role.name }}{% else %}Νέος ρόλος{% endif %} - Ρυθμίσεις{% endblock %}
+
+{% block settings_breadcrumb %}
+<a href="{% url 'system_configuration' %}">Ρυθμίσεις συστήματος</a>
+<span>/</span>
+<a href="{% url 'settings_roles' %}">Ρόλοι και δικαιώματα</a>
+<span>/</span>
+<span>{% if role %}{{ role.name }}{% else %}Νέος ρόλος{% endif %}</span>
+{% endblock %}
+
+{% block settings_main %}
+<div class="page-header">
+    <h1>{% if role %}Ρόλος «{{ role.name }}»{% else %}Νέος ρόλος{% endif %}</h1>
+    {% if not can_edit %}
+    <p class="page-header__lead">Προβολή μόνο — δεν έχετε δικαίωμα τροποποίησης ρόλων.</p>
+    {% endif %}
+</div>
+
+<form method="post" class="app-form" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+    <div class="alert alert--error form-span-all">
+        {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="card">
+        <h2 class="card__title">Στοιχεία ρόλου</h2>
+        <div class="form-grid">
+            {% for field in form.detail_fields %}
+                {% include "includes/form_field.html" with field=field wide=True %}
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 class="card__title">Πρόσβαση ανά λειτουργία και υπολειτουργία</h2>
+        <p class="helptext">
+            Η υπολειτουργία λειτουργεί μόνο όταν ο ρόλος έχει «Προβολή» και στη λειτουργία που ανήκει.
+            Κάθε άλλο είδος πρόσβασης απαιτεί και «Προβολή» στην ίδια γραμμή. «—»: το είδος πρόσβασης δεν
+            εφαρμόζεται στη συγκεκριμένη λειτουργία.
+        </p>
+        <div class="table-wrap">
+            <table class="data-table access-matrix" data-access-matrix>
+                <thead>
+                <tr>
+                    <th>Λειτουργία / Υπολειτουργία</th>
+                    <th class="access-matrix__cell">Όλα</th>
+                    {% for action, label in form.access_columns %}
+                    <th class="access-matrix__cell">{{ label }}</th>
+                    {% endfor %}
+                </tr>
+                </thead>
+                <tbody>
+                {% for row in form.matrix_rows %}
+                <tr class="{% if row.is_child %}access-matrix__sub{% else %}access-matrix__function{% endif %}"
+                    data-access-row
+                    data-access-group="{{ row.group }}"
+                    {% if not row.is_child %}data-access-parent{% endif %}>
+                    <td>
+                        <span class="access-matrix__label">{{ row.label }}</span>
+                        {% if row.function.description %}<br><span class="text-muted">{{ row.function.description }}</span>{% endif %}
+                    </td>
+                    <td class="access-matrix__cell">
+                        <input type="checkbox" data-access-row-toggle
+                               aria-label="Όλα: {{ row.label }}"
+                               {% if not can_edit %}disabled{% endif %}>
+                    </td>
+                    {% for cell in row.cells %}
+                    <td class="access-matrix__cell">
+                        {% if cell %}
+                        <label class="visually-hidden" for="{{ cell.id_for_label }}">{{ cell.label }}</label>
+                        {{ cell }}
+                        {% else %}
+                        <span class="text-muted" aria-hidden="true">—</span>
+                        {% endif %}
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="form-actions form-span-all">
+        {% if can_edit %}
+        <button type="submit" class="btn btn-primary">Αποθήκευση</button>
+        {% endif %}
+        <a href="{% url 'settings_roles' %}" class="btn btn-secondary">Επιστροφή στους ρόλους</a>
+    </div>
+</form>
+
+{% if role %}
+<div class="card">
+    <h2 class="card__title">Χρήστες με τον ρόλο</h2>
+    {% if members %}
+    <ul class="attachment-list">
+        {% for member in members %}
+        <li>
+            {% if access.settings_users.edit %}
+            <a href="{% url 'settings_user_edit' member.pk %}">{{ member.username }}</a>
+            {% else %}
+            {{ member.username }}
+            {% endif %}
+            {% if member.get_full_name %}— {{ member.get_full_name }}{% endif %}
+            {% if not member.is_active %}<span class="text-muted">(ανενεργός)</span>{% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-muted">Ο ρόλος δεν έχει ανατεθεί σε χρήστη.</p>
+    {% endif %}
+    <p class="helptext">Η ανάθεση ρόλου γίνεται από την οθόνη <a href="{% url 'settings_users' %}">Χρήστες</a>.</p>
+</div>
+
+{% if can_delete %}
+<div class="card">
+    <h2 class="card__title">Διαγραφή ρόλου</h2>
+    <p class="helptext">Διαγράφεται μόνο ρόλος χωρίς χρήστες· αλλιώς απενεργοποιήστε τον.</p>
+    <form method="post" action="{% url 'settings_role_delete' role.pk %}" class="inline-form"
+          onsubmit="return window.confirm('Διαγραφή του ρόλου «{{ role.name|escapejs }}»;');">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger"{% if members %} disabled{% endif %}>Διαγραφή ρόλου</button>
+    </form>
+</div>
+{% endif %}
+
+{% include "core/settings/_access_history.html" %}
+{% endif %}
+{% endblock %}

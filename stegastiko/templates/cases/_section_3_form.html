@@ -6,12 +6,14 @@
 <h3 class="form-section-title">{% case_subsection_heading "3.1" %}</h3>
 
 <div class="form-span-all" data-land-plot-status></div>
+{% if access.case_section_3.create %}
 <div class="toolbar">
     <button type="button" class="btn btn-primary btn-sm"
             data-land-plot-open="{% url 'cases:land_plot_create' case.pk %}">
         + Προσθήκη τεμαχίου
     </button>
 </div>
+{% endif %}
 {% include "cases/_land_plot_grid.html" %}
 <p class="helptext">
     Η προσθήκη, η επεξεργασία και η διαγραφή τεμαχίων αποθηκεύονται αμέσως·

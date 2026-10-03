@@ -15,7 +15,9 @@
 </div>
 
 <div class="toolbar">
+    {% if access.applications.edit %}
     <a href="{% url 'applications:edit' application.pk %}" class="btn btn-primary">Επεξεργασία</a>
+    {% endif %}
     <a href="{% url 'applications:list' %}" class="btn btn-secondary">Πίσω στον κατάλογο</a>
 </div>
 

@@ -1,6 +1,6 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -20,7 +20,9 @@ from applications.services import (
     upsert_eligibility_checks,
 )
 from cases.models import SubmissionCycle
+from core.function_catalog import CREATE, EDIT, IMPORT
 from core.models import Community
+from core.permissions import access_required, has_access, has_any_access
 
 
 def _person_to_json(person):
@@ -41,7 +43,7 @@ def _person_to_json(person):
     }
 
 
-@login_required
+@access_required("applications")
 def application_list(request):
     applications = Application.objects.select_related(
         "submission_cycle", "submission_cycle__community", "person", "person2"
@@ -111,7 +113,7 @@ def _save_application_from_form(form, formset, existing: Application | None = No
     return application
 
 
-@login_required
+@access_required("applications", CREATE)
 def application_create(request):
     if request.method == "POST":
         form = ApplicationForm(request.POST)
@@ -141,7 +143,7 @@ def application_create(request):
     )
 
 
-@login_required
+@access_required("applications", EDIT)
 def application_edit(request, pk):
     application = get_object_or_404(
         Application.objects.select_related("person", "person2", "submission_cycle__community"), pk=pk
@@ -173,7 +175,7 @@ def application_edit(request, pk):
     )
 
 
-@login_required
+@access_required("applications")
 def application_detail(request, pk):
     application = get_object_or_404(
         Application.objects.select_related("person", "person2", "submission_cycle__community"), pk=pk
@@ -186,8 +188,18 @@ def application_detail(request, pk):
     )
 
 
+def _require_person_check_access(user, *, allow_import=False):
+    """Person lookup / compare serve the application form (and the Excel import preview)."""
+    allowed = has_any_access(user, "applications", (CREATE, EDIT)) or (
+        allow_import and has_access(user, "application_import", IMPORT)
+    )
+    if not allowed:
+        raise PermissionDenied("Δεν έχετε πρόσβαση σε αυτή τη λειτουργία.")
+
+
 @login_required
 def person_lookup(request):
+    _require_person_check_access(request.user)
     identity = (request.GET.get("identity") or "").strip()
     if not identity:
         return JsonResponse({"found": False})
@@ -240,6 +252,8 @@ def person_lookup(request):
 def person_compare(request):
     """Compare submitted Person fields (form/import) with stored Person by ΑΔΤ."""
     import json
+
+    _require_person_check_access(request.user, allow_import=True)
 
     if request.method != "POST":
         return JsonResponse({"error": "POST required"}, status=405)
@@ -304,7 +318,7 @@ def _parsed_from_session(data: dict) -> ParsedImport:
     )
 
 
-@login_required
+@access_required("application_import", IMPORT)
 def application_import(request):
     if request.method == "POST" and request.POST.get("action") == "confirm":
         payload = request.session.get(IMPORT_SESSION_KEY)

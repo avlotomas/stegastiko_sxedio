@@ -150,6 +150,62 @@ img {
     color: #fff;
 }
 
+.site-nav__group {
+    position: relative;
+}
+
+.site-nav__group-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    background: none;
+    border: none;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.site-nav__caret {
+    font-size: 0.7rem;
+    opacity: 0.85;
+}
+
+.site-nav__submenu {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 110;
+    min-width: 13rem;
+    padding: 0.35rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-md);
+}
+
+.site-nav__group:hover .site-nav__submenu,
+.site-nav__group.is-open .site-nav__submenu {
+    display: block;
+}
+
+.site-nav__sublink {
+    display: block;
+    padding: 0.5rem 0.7rem;
+    border-radius: var(--radius-sm);
+    color: var(--color-text);
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.site-nav__sublink:hover,
+.site-nav__sublink.is-active {
+    background: var(--color-primary-soft);
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
 .site-nav__user {
     display: flex;
     align-items: center;
@@ -157,6 +213,16 @@ img {
     margin-left: 0.35rem;
     padding-left: 0.65rem;
     border-left: 1px solid rgba(255, 255, 255, 0.28);
+}
+
+.site-nav__account {
+    text-decoration: none;
+    color: inherit;
+}
+
+.site-nav__account:hover,
+.site-nav__account.is-active {
+    color: var(--color-primary);
 }
 
 .site-nav__username {
@@ -207,6 +273,37 @@ img {
 
     .site-nav__link {
         padding: 0.7rem 0.85rem;
+    }
+
+    .site-nav__group-toggle {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .site-nav__submenu,
+    .site-nav__group:hover .site-nav__submenu {
+        display: none;
+        position: static;
+        min-width: 0;
+        padding: 0 0 0.25rem 0.85rem;
+        background: none;
+        border: none;
+        box-shadow: none;
+    }
+
+    .site-nav__group.is-open .site-nav__submenu {
+        display: block;
+    }
+
+    .site-nav__sublink {
+        padding: 0.6rem 0.85rem;
+        color: rgba(255, 255, 255, 0.9);
+    }
+
+    .site-nav__sublink:hover,
+    .site-nav__sublink.is-active {
+        background: rgba(255, 255, 255, 0.16);
+        color: #fff;
     }
 
     .site-nav__user {
@@ -373,6 +470,42 @@ body.case-work .page {
     font-weight: 600;
     padding-bottom: 0.55rem;
     border-bottom: 1px solid var(--color-border);
+}
+
+.card__lead {
+    margin: -0.35rem 0 1rem;
+    font-size: 0.88rem;
+    color: var(--color-text-muted);
+    line-height: 1.45;
+}
+
+.settings-toc__label {
+    margin: 0 0 0.5rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+}
+
+.settings-toc__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1.1rem;
+}
+
+.settings-toc__list a {
+    font-size: 0.9rem;
+}
+
+.settings-form__actions {
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+}
+
+.settings-form__actions .form-actions {
+    margin: 0;
 }
 
 /* ——— Alerts ——— */
@@ -642,6 +775,13 @@ textarea.input:focus,
 
 .form-section-title:first-child {
     margin-top: 0;
+}
+
+.form-section-subtitle {
+    margin: 1rem 0 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--color-text);
 }
 
 .form-grid {
@@ -1085,4 +1225,29 @@ code {
     background: #e8eef4;
     padding: 0.12rem 0.4rem;
     border-radius: 4px;
+}
+
+/* Role permission matrix (Ρυθμίσεις → Ρόλοι και δικαιώματα) */
+.access-matrix__cell {
+    text-align: center;
+    white-space: nowrap;
+    width: 1%;
+}
+
+.access-matrix__cell input[type="checkbox"] {
+    width: 1.1rem;
+    height: 1.1rem;
+}
+
+.access-matrix__function td {
+    background: #eef4f9;
+    border-top: 2px solid var(--color-border);
+}
+
+.access-matrix__function .access-matrix__label {
+    font-weight: 700;
+}
+
+.access-matrix__sub td:first-child {
+    padding-left: 2rem;
 }

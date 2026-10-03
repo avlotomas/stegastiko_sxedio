@@ -4,10 +4,10 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}Στεγαστικό Σχέδιο{% endblock %}</title>
-    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=7">
+    <title>{% block title %}{{ app_title }}{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=11">
     <script src="{% static 'vendor/htmx.min.js' %}" defer></script>
-    <script src="{% static 'js/app.js' %}?v=4" defer></script>
+    <script src="{% static 'js/app.js' %}?v=6" defer></script>
     {% block extra_head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
@@ -15,24 +15,51 @@
 <header class="site-header">
     <div class="site-header__inner">
         <a href="{% url 'home' %}" class="site-brand">
-            <span class="site-brand__title">Στεγαστικό Σχέδιο</span>
+            <span class="site-brand__title">{{ app_title }}</span>
             <span class="site-brand__sub">Επαρχία Λευκωσίας</span>
         </a>
         <button type="button" class="nav-toggle" data-nav-toggle aria-expanded="false" aria-label="Μενού">
             ☰
         </button>
         <nav class="site-nav" data-site-nav aria-label="Κύρια πλοήγηση">
-            <a href="{% url 'home' %}" class="site-nav__link{% if request.resolver_match.url_name == 'home' %} is-active{% endif %}">Αρχική</a>
-            <a href="{% url 'reminders' %}" class="site-nav__link{% if request.resolver_match.url_name == 'reminders' %} is-active{% endif %}">Υπενθυμίσεις</a>
-            <a href="{% url 'cases:list' %}" class="site-nav__link{% if request.resolver_match.namespace == 'cases' %} is-active{% endif %}">Αιτήσεις Κ.Σ. / Δ.Δ.</a>
-            <a href="{% url 'applications:list' %}" class="site-nav__link{% if request.resolver_match.namespace == 'applications' %} is-active{% endif %}">Αιτήσεις Πολιτών</a>
-            <a href="{% url 'applications:import' %}" class="site-nav__link">Εισαγωγή Excel</a>
-            {% if user_is_system_admin %}
-            <a href="{% url 'system_configuration' %}" class="site-nav__link{% if request.resolver_match.url_name == 'system_configuration' %} is-active{% endif %}">Ρυθμίσεις</a>
+            {% with namespace=request.resolver_match.namespace %}
+            <a href="{% url 'home' %}" class="site-nav__link{% if request.resolver_match.url_name == 'home' %} is-active{% endif %}">{{ menu.home }}</a>
+            {% if access.cases.view or access.applications.view %}
+            <div class="site-nav__group" data-nav-group>
+                <button type="button" class="site-nav__link site-nav__group-toggle{% if namespace == 'cases' or namespace == 'applications' %} is-active{% endif %}" aria-haspopup="true" aria-expanded="false" data-nav-group-toggle>
+                    {{ menu.applications }}<span class="site-nav__caret" aria-hidden="true">▾</span>
+                </button>
+                <div class="site-nav__submenu">
+                    {% if access.cases.view %}
+                    <a href="{% url 'cases:list' %}" class="site-nav__sublink{% if namespace == 'cases' %} is-active{% endif %}">{{ menu.applications_division }}</a>
+                    {% endif %}
+                    {% if access.applications.view %}
+                    <a href="{% url 'applications:list' %}" class="site-nav__sublink{% if namespace == 'applications' %} is-active{% endif %}">{{ menu.applications_plot }}</a>
+                    {% endif %}
+                </div>
+            </div>
             {% endif %}
-            <a href="/admin/" class="site-nav__link">Διαχείριση</a>
+            {% if access.reminders.view %}
+            <a href="{% url 'reminders' %}" class="site-nav__link{% if request.resolver_match.url_name == 'reminders' %} is-active{% endif %}">{{ menu.reminders }}</a>
+            {% endif %}
+            {% if access.settings.view or user.is_staff %}
+            <div class="site-nav__group" data-nav-group>
+                <button type="button" class="site-nav__link site-nav__group-toggle{% if settings_nav %} is-active{% endif %}" aria-haspopup="true" aria-expanded="false" data-nav-group-toggle>
+                    {{ menu.settings }}<span class="site-nav__caret" aria-hidden="true">▾</span>
+                </button>
+                <div class="site-nav__submenu">
+                    {% if access.settings.view %}
+                    <a href="{% url 'system_configuration' %}" class="site-nav__sublink{% if settings_nav %} is-active{% endif %}">{{ menu.settings_basic }}</a>
+                    {% endif %}
+                    {% if user.is_staff %}
+                    <a href="/admin/" class="site-nav__sublink">{{ menu.settings_system }}</a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+            {% endwith %}
             <div class="site-nav__user">
-                <span class="site-nav__username" title="{{ user.get_username }}">{{ user.get_username }}</span>
+                <a href="{% url 'account' %}" class="site-nav__username site-nav__account{% if request.resolver_match.url_name == 'account' %} is-active{% endif %}" title="Ο λογαριασμός μου">{{ user.get_username }}</a>
                 <form method="post" action="{% url 'logout' %}">
                     {% csrf_token %}
                     <button type="submit" class="btn-logout">Έξοδος</button>
@@ -45,7 +72,7 @@
 <header class="site-header site-header--minimal">
     <div class="site-header__inner">
         <span class="site-brand site-brand--static">
-            <span class="site-brand__title">Στεγαστικό Σχέδιο</span>
+            <span class="site-brand__title">{{ app_title }}</span>
             <span class="site-brand__sub">Επαρχία Λευκωσίας</span>
         </span>
     </div>

@@ -1,7 +1,6 @@
 from datetime import date, timedelta
 
 import pytest
-from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.utils import timezone
 
@@ -15,9 +14,8 @@ from core.services import set_setting
 
 
 @pytest.fixture
-def officer_client(db, client):
-    user = get_user_model().objects.create_user(username="officer-rem", password="secret")
-    client.force_login(user)
+def officer_client(client, make_user):
+    client.force_login(make_user("officer-rem", "Λειτουργός καταχώρισης"))
     return client
 
 

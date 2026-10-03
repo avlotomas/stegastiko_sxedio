@@ -60,7 +60,18 @@ from cases.services import (
 from cases.section_labels import case_section_heading, get_case_section_label
 from cases.subsection_labels import CASE_SUBSECTION_LABEL_KEYS, case_subsection_heading
 from cases.services import case_history as case_history_entries
+from core.function_catalog import (
+    CREATE,
+    DELETE,
+    EDIT,
+    EXPORT,
+    PUBLISH,
+    SEND,
+    VIEW,
+    case_section_function,
+)
 from core.models import Attachment, Communication, Community
+from core.permissions import access_required, has_access, require_access
 from core.services import smtp_is_configured
 
 # Each entry drives one action screen of the Κ.Σ./Δ.Δ. application: the label shown on
@@ -190,8 +201,8 @@ SECTION_9_NAV = {
 }
 
 
-def case_nav_items(case, active_key=None):
-    """Sidebar navigation for case work screens (sections 1–8 and 9)."""
+def case_nav_items(case, user, active_key=None):
+    """Sidebar navigation for case work screens (sections 1–8 and 9) the user may view."""
     items = [
         {
             "key": key,
@@ -201,8 +212,9 @@ def case_nav_items(case, active_key=None):
             "is_active": active_key == key,
         }
         for key in section_screens_for(case)
+        if has_access(user, case_section_function(key))
     ]
-    if "9" in case.applicable_sections:
+    if "9" in case.applicable_sections and has_access(user, case_section_function("9")):
         items.append(
             {
                 "key": "9",
@@ -215,7 +227,7 @@ def case_nav_items(case, active_key=None):
     return items
 
 
-@login_required
+@access_required("cases")
 def case_list(request):
     cases = Case.objects.select_related("community").all()
     communities = Community.objects.filter(is_active=True).order_by("name")
@@ -242,7 +254,7 @@ def case_list(request):
     )
 
 
-@login_required
+@access_required("cases", CREATE)
 def case_create(request):
     if request.method == "POST":
         form = CaseCreateForm(request.POST)
@@ -274,7 +286,7 @@ def case_create(request):
     )
 
 
-@login_required
+@access_required("cases")
 def case_detail(request, pk):
     case = get_object_or_404(Case.objects.select_related("community"), pk=pk)
     return render(
@@ -282,7 +294,7 @@ def case_detail(request, pk):
         "cases/detail.html",
         {
             "case": case,
-            "case_nav": case_nav_items(case),
+            "case_nav": case_nav_items(case, request.user),
             "suitability_summary": suitability_summary(case) if case.is_new_division else None,
             "completeness_checks": case.completeness_checks.all(),
             "land_plots": case.land_plots.prefetch_related("attachments"),
@@ -302,7 +314,7 @@ def case_detail(request, pk):
     )
 
 
-@login_required
+@access_required("case_history")
 def case_history(request, pk):
     case = get_object_or_404(Case, pk=pk)
     return render(
@@ -311,18 +323,22 @@ def case_history(request, pk):
         {
             "case": case,
             "history_entries": case_history_entries(case),
-            "case_nav": case_nav_items(case),
+            "case_nav": case_nav_items(case, request.user),
         },
     )
+
+
+def _disable_fields(form):
+    for field in form.fields.values():
+        field.disabled = True
 
 
 @login_required
 def case_section_edit(request, pk, section):
     if section not in SECTIONS:
         raise Http404("Άγνωστη ενότητα.")
-    case = get_object_or_404(Case.objects.select_related("community"), pk=pk)
-    if section not in case.applicable_sections:
-        raise Http404("Η ενότητα δεν ισχύει για αυτόν τον τύπο διαδικασίας.")
+    case = _case_for_section(request, pk, section, EDIT if request.method == "POST" else VIEW)
+    can_edit = has_access(request.user, case_section_function(section), EDIT)
     section_config = SECTIONS[section]
     form_class = section_config["form"]
 
@@ -342,6 +358,12 @@ def case_section_edit(request, pk, section):
     else:
         form = form_class(instance=case) if form_class else None
         formsets = _build_formsets(section, case)
+    if not can_edit:
+        if form:
+            _disable_fields(form)
+        for _, formset in formsets:
+            for child in formset:
+                _disable_fields(child)
 
     context = {
         "case": case,
@@ -349,9 +371,10 @@ def case_section_edit(request, pk, section):
         "section_title": get_case_section_label(section),
         "form": form,
         "formsets": formsets,
+        "can_edit": can_edit,
         "summary": suitability_summary(case) if section == "6" else None,
         "completion": section8_completion(case) if section == "8-plots" else None,
-        "case_nav": case_nav_items(case, active_key=section),
+        "case_nav": case_nav_items(case, request.user, active_key=section),
     }
     if section == "3":
         context["land_plots"] = case.land_plots.prefetch_related("attachments")
@@ -380,9 +403,7 @@ def case_section_edit(request, pk, section):
 @login_required
 def section_4_blank_pdf(request, pk):
     """Blank Ενότητα 4 form for printing / field completion (PDF)."""
-    case = get_object_or_404(Case.objects.select_related("community"), pk=pk)
-    if "4" not in case.applicable_sections:
-        raise Http404("Η ενότητα δεν ισχύει για αυτόν τον τύπο διαδικασίας.")
+    case = _case_for_section(request, pk, "4", EXPORT)
     pdf_bytes = render_section4_blank_pdf(case)
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
     response["Content-Disposition"] = content_disposition_header(
@@ -395,7 +416,7 @@ def section_4_blank_pdf(request, pk):
 @login_required
 def section_6_report_pdf(request, pk):
     """Ενότητα 6 report «Πίνακες αξιολόγησης καταλληλότητας κρατικής γης» (PDF)."""
-    case = _case_for_section(pk, "6")
+    case = _case_for_section(request, pk, "6", EXPORT)
     pdf_bytes = render_section6_report_pdf(case)
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
     response["Content-Disposition"] = content_disposition_header(
@@ -412,7 +433,7 @@ def _wants_json(request):
 @login_required
 def completeness_check_form(request, pk, check_id=None):
     """2.1 Add or edit one completeness check from the grid modal."""
-    case = _case_for_section(pk, "2")
+    case = _case_for_section(request, pk, "2", CREATE if check_id is None else EDIT)
     if not _wants_json(request):
         raise Http404()
     if check_id is None:
@@ -447,7 +468,7 @@ def completeness_check_form(request, pk, check_id=None):
 @login_required
 def completeness_check_delete(request, pk, check_id):
     """2.1 Delete one completeness check when it has no sent emails."""
-    case = _case_for_section(pk, "2")
+    case = _case_for_section(request, pk, "2", DELETE)
     if request.method != "POST" or not _wants_json(request):
         raise Http404("Επιτρέπεται μόνο POST.")
     check = get_object_or_404(CompletenessCheck, pk=check_id, case=case)
@@ -471,11 +492,9 @@ def completeness_check_delete(request, pk, check_id):
 @login_required
 def case_deficiency_email_send(request, pk, check_id):
     """2.2 Send the deficiencies email for one completeness check."""
-    case = get_object_or_404(Case.objects.select_related("community"), pk=pk)
     if request.method != "POST":
         raise Http404("Επιτρέπεται μόνο POST.")
-    if "2" not in case.applicable_sections:
-        raise Http404("Η ενότητα δεν ισχύει για αυτόν τον τύπο διαδικασίας.")
+    case = _case_for_section(request, pk, "2", SEND)
     check = get_object_or_404(CompletenessCheck, pk=check_id, case=case)
 
     form = DeficiencyEmailForm(request.POST)
@@ -559,6 +578,7 @@ def _communication_detail_payload(communication: Communication) -> dict:
 @login_required
 def case_communication_detail(request, pk, communication_id):
     """Return one sent email for the 2.2 history view modal."""
+    require_access(request.user, case_section_function("2"))
     case = get_object_or_404(Case, pk=pk)
     case_type = ContentType.objects.get_for_model(Case)
     check_type = ContentType.objects.get_for_model(CompletenessCheck)
@@ -576,7 +596,8 @@ def case_communication_detail(request, pk, communication_id):
     return JsonResponse({"ok": True, **_communication_detail_payload(communication)})
 
 
-def _case_for_section(pk, section):
+def _case_for_section(request, pk, section, action=VIEW):
+    require_access(request.user, case_section_function(section), action)
     case = get_object_or_404(Case.objects.select_related("community"), pk=pk)
     if section not in case.applicable_sections:
         raise Http404("Η ενότητα δεν ισχύει για αυτόν τον τύπο διαδικασίας.")
@@ -600,7 +621,7 @@ def _land_plot_form_html(request, case, form):
 @login_required
 def land_plot_form(request, pk, plot_id=None):
     """3.1 Add or edit one land plot from the grid modal; files stay on the plot."""
-    case = _case_for_section(pk, "3")
+    case = _case_for_section(request, pk, "3", CREATE if plot_id is None else EDIT)
     if not _wants_json(request):
         raise Http404()
     if plot_id is None:
@@ -635,7 +656,7 @@ def land_plot_form(request, pk, plot_id=None):
 @login_required
 def land_plot_delete(request, pk, plot_id):
     """3.1 Delete one land plot (and its files) from the grid."""
-    case = _case_for_section(pk, "3")
+    case = _case_for_section(request, pk, "3", DELETE)
     if request.method != "POST" or not _wants_json(request):
         raise Http404("Επιτρέπεται μόνο POST.")
     plot = get_object_or_404(LandPlot, pk=plot_id, case=case)
@@ -686,7 +707,7 @@ def land_plot_evaluation_form(request, pk, plot_id):
 
     The rows follow the 3.1 plots one-to-one, so plots are never added or removed here.
     """
-    case = _case_for_section(pk, "4")
+    case = _case_for_section(request, pk, "4", EDIT)
     if not _wants_json(request):
         raise Http404()
     plot = get_object_or_404(LandPlot, pk=plot_id, case=case)
@@ -740,7 +761,7 @@ def _utility_service_form_html(request, case, form):
 @login_required
 def utility_service_form(request, pk, service_id=None):
     """4.2 Add or edit one utility service row from the grid modal."""
-    case = _case_for_section(pk, "4")
+    case = _case_for_section(request, pk, "4", CREATE if service_id is None else EDIT)
     if not _wants_json(request):
         raise Http404()
     if service_id is None:
@@ -775,7 +796,7 @@ def utility_service_form(request, pk, service_id=None):
 @login_required
 def utility_service_delete(request, pk, service_id):
     """4.2 Delete one utility service row from the grid."""
-    case = _case_for_section(pk, "4")
+    case = _case_for_section(request, pk, "4", DELETE)
     if request.method != "POST" or not _wants_json(request):
         raise Http404("Επιτρέπεται μόνο POST.")
     service = get_object_or_404(UtilityService, pk=service_id, case=case)
@@ -810,7 +831,7 @@ def _suitability_consultation_form_html(request, case, form):
 @login_required
 def suitability_consultation_form(request, pk, consultation_id=None):
     """5 Add or edit one suitability consultation from the grid modal."""
-    case = _case_for_section(pk, "5")
+    case = _case_for_section(request, pk, "5", CREATE if consultation_id is None else EDIT)
     if not _wants_json(request):
         raise Http404()
     if consultation_id is None:
@@ -857,7 +878,7 @@ def suitability_consultation_form(request, pk, consultation_id=None):
 @login_required
 def suitability_consultation_delete(request, pk, consultation_id):
     """5 Delete one suitability consultation (and its files) from the grid."""
-    case = _case_for_section(pk, "5")
+    case = _case_for_section(request, pk, "5", DELETE)
     if request.method != "POST" or not _wants_json(request):
         raise Http404("Επιτρέπεται μόνο POST.")
     consultation = get_object_or_404(
@@ -882,23 +903,26 @@ def suitability_consultation_delete(request, pk, consultation_id):
     )
 
 
-@login_required
+@access_required("cases")
 def case_attachment_download(request, pk, attachment_id):
-    """Download a file of the case: 3.1 files of its land plots or 4.4 files of the case."""
+    """Download a file of the case: 3.1 plot files, 4.4 case files or 5 consultation files."""
     case = get_object_or_404(Case, pk=pk)
-    plot_files = Q(
-        content_type=ContentType.objects.get_for_model(LandPlot),
-        object_id__in=case.land_plots.values("pk"),
-    )
-    case_files = Q(content_type=ContentType.objects.get_for_model(Case), object_id=case.pk)
+    plot_type = ContentType.objects.get_for_model(LandPlot)
+    case_type = ContentType.objects.get_for_model(Case)
+    consultation_type = ContentType.objects.get_for_model(Consultation)
+    plot_files = Q(content_type=plot_type, object_id__in=case.land_plots.values("pk"))
+    case_files = Q(content_type=case_type, object_id=case.pk)
     consultation_files = Q(
-        content_type=ContentType.objects.get_for_model(Consultation),
-        object_id__in=case.consultations.values("pk"),
+        content_type=consultation_type, object_id__in=case.consultations.values("pk")
     )
     attachment = get_object_or_404(
         Attachment.objects.filter(plot_files | case_files | consultation_files),
         pk=attachment_id,
     )
+    owning_section = {plot_type.pk: "3", case_type.pk: "4", consultation_type.pk: "5"}[
+        attachment.content_type_id
+    ]
+    require_access(request.user, case_section_function(owning_section))
     response = HttpResponse(
         bytes(attachment.data), content_type=attachment.content_type_name
     )
@@ -911,6 +935,7 @@ def case_attachment_download(request, pk, attachment_id):
 @login_required
 def announcement_create(request, pk):
     """9.1 Create the announcement of a case, gated by the 9.4 readiness check."""
+    require_access(request.user, "case_section_9", CREATE if request.method == "POST" else VIEW)
     case = get_object_or_404(Case.objects.select_related("community"), pk=pk)
     readiness = announcement_readiness(case)
     if request.method == "POST":
@@ -936,7 +961,7 @@ def announcement_create(request, pk):
             "form": form,
             "readiness": readiness,
             "submission_cycles": case.submission_cycles.all(),
-            "case_nav": case_nav_items(case, active_key="9"),
+            "case_nav": case_nav_items(case, request.user, active_key="9"),
             "section_title": get_case_section_label("9"),
         },
     )
@@ -945,6 +970,7 @@ def announcement_create(request, pk):
 @login_required
 def announcement_detail(request, pk, cycle_id):
     """9.2–9.4 Publication methods, announcement text and readiness."""
+    require_access(request.user, "case_section_9", EDIT if request.method == "POST" else VIEW)
     case = get_object_or_404(Case.objects.select_related("community"), pk=pk)
     cycle = get_object_or_404(SubmissionCycle, pk=cycle_id, cases=case)
 
@@ -962,6 +988,10 @@ def announcement_detail(request, pk, cycle_id):
     else:
         text_form = AnnouncementTextForm(instance=cycle)
         publications = SubmissionCyclePublicationFormSet(instance=cycle, prefix="publications")
+    if not has_access(request.user, "case_section_9", EDIT):
+        _disable_fields(text_form)
+        for child in publications:
+            _disable_fields(child)
 
     return render(
         request,
@@ -974,7 +1004,7 @@ def announcement_detail(request, pk, cycle_id):
             "readiness_by_case": [
                 (linked, announcement_readiness(linked)) for linked in cycle.cases.all()
             ],
-            "case_nav": case_nav_items(case, active_key="9"),
+            "case_nav": case_nav_items(case, request.user, active_key="9"),
             "section_title": get_case_section_label("9"),
         },
     )
@@ -983,6 +1013,7 @@ def announcement_detail(request, pk, cycle_id):
 @login_required
 def announcement_regenerate(request, pk, cycle_id):
     """9.3 Rebuild the draft from current case data."""
+    require_access(request.user, "case_section_9", EDIT)
     case = get_object_or_404(Case, pk=pk)
     cycle = get_object_or_404(SubmissionCycle, pk=cycle_id, cases=case)
     if request.method != "POST":
@@ -999,6 +1030,7 @@ def announcement_regenerate(request, pk, cycle_id):
 @login_required
 def announcement_publish(request, pk, cycle_id):
     """9.3 Finalise and issue the announcement."""
+    require_access(request.user, "case_section_9", PUBLISH)
     case = get_object_or_404(Case, pk=pk)
     cycle = get_object_or_404(SubmissionCycle, pk=cycle_id, cases=case)
     if request.method != "POST":

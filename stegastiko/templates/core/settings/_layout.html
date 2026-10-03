@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block content %}
+<nav class="breadcrumb" aria-label="Πλοήγηση">
+    <a href="{% url 'home' %}">Αρχική</a>
+    <span>/</span>
+    {% block settings_breadcrumb %}
+    <span>Ρυθμίσεις συστήματος</span>
+    {% endblock %}
+</nav>
+
+<div class="case-work-layout">
+    <div class="case-work-layout__main">
+        {% block settings_main %}{% endblock %}
+    </div>
+    {% include "core/settings/_sidebar.html" %}
+</div>
+{% endblock %}

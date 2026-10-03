@@ -1,0 +1,61 @@
+{% extends "core/settings/_layout.html" %}
+
+{% block title %}Ρόλοι και δικαιώματα - Ρυθμίσεις{% endblock %}
+
+{% block settings_breadcrumb %}
+<a href="{% url 'system_configuration' %}">Ρυθμίσεις συστήματος</a>
+<span>/</span>
+<span>Ρόλοι και δικαιώματα</span>
+{% endblock %}
+
+{% block settings_main %}
+<div class="page-header">
+    <h1>Ρόλοι και δικαιώματα</h1>
+    <p class="page-header__lead">
+        Η πρόσβαση σε κάθε λειτουργία και υπολειτουργία δίνεται στον ρόλο· οι χρήστες
+        αποκτούν την πρόσβαση όταν τους ανατεθεί ο ρόλος (οθόνη <a href="{% url 'settings_users' %}">Χρήστες</a>).
+    </p>
+</div>
+
+{% if can_create %}
+<div class="toolbar">
+    <a href="{% url 'settings_role_create' %}" class="btn btn-primary">Νέος ρόλος</a>
+</div>
+{% endif %}
+
+<div class="table-wrap">
+    <table class="data-table">
+        <thead>
+        <tr>
+            <th>Ρόλος</th>
+            <th>Περιγραφή</th>
+            <th>Χρήστες</th>
+            <th>Δικαιώματα</th>
+            <th>Κατάσταση</th>
+            <th><span class="visually-hidden">Ενέργειες</span></th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for role in roles %}
+            <tr>
+                <td><a href="{% url 'settings_role_edit' role.pk %}"><strong>{{ role.name }}</strong></a></td>
+                <td>{{ role.description|default:"—" }}</td>
+                <td>{{ role.members_count }}</td>
+                <td>{{ role.grants_count }}</td>
+                <td>
+                    {% if role.is_active %}<span class="badge badge--pass">Ενεργός</span>{% else %}<span class="badge badge--fail">Ανενεργός</span>{% endif %}
+                </td>
+                <td class="data-table__actions">
+                    <a href="{% url 'settings_role_edit' role.pk %}" class="btn btn-secondary btn-sm">Άνοιγμα</a>
+                    {% if can_create %}
+                    <a href="{% url 'settings_role_create' %}?copy={{ role.pk }}" class="btn btn-ghost btn-sm">Αντιγραφή</a>
+                    {% endif %}
+                </td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="6">Δεν υπάρχουν ρόλοι.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

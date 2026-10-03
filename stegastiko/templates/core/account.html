@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}Ο λογαριασμός μου{% endblock %}
+
+{% block content %}
+<nav class="breadcrumb" aria-label="Πλοήγηση">
+    <a href="{% url 'home' %}">Αρχική</a>
+    <span>/</span>
+    <span>Ο λογαριασμός μου</span>
+</nav>
+
+<div class="page-header">
+    <h1>Ο λογαριασμός μου</h1>
+</div>
+
+<div class="card">
+    <h2 class="card__title">Στοιχεία σύνδεσης</h2>
+    <dl class="detail-grid detail-grid--compact">
+        <div>
+            <dt>Όνομα χρήστη</dt>
+            <dd>{{ user.get_username }}</dd>
+        </div>
+    </dl>
+</div>
+
+<div class="card">
+    <h2 class="card__title">Αλλαγή κωδικού πρόσβασης</h2>
+    <form method="post" class="app-form" novalidate>
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+        <div class="alert alert--error form-span-all">
+            {% for error in form.non_field_errors %}{{ error }}{% endfor %}
+        </div>
+        {% endif %}
+        <div class="form-grid">
+            {% for field in form %}
+                {% include "includes/form_field.html" with field=field wide=True %}
+            {% endfor %}
+        </div>
+        <div class="form-actions form-span-all">
+            <button type="submit" class="btn btn-primary">Αποθήκευση νέου κωδικού</button>
+            <a href="{% url 'home' %}" class="btn btn-secondary">Ακύρωση</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

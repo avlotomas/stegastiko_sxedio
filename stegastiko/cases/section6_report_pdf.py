@@ -11,7 +11,7 @@ from django.utils import timezone
 from cases.models import Case
 from cases.pdf_rendering import render_pdf, safe_case_number
 from cases.services import suitability_summary
-from cases.subsection_labels import case_subsection_heading
+from cases.subsection_labels import case_subsection_heading, get_case_subsection_label
 
 REPORT_TITLE = "ΠΙΝΑΚΕΣ ΑΞΙΟΛΟΓΗΣΗΣ ΚΑΤΑΛΛΗΛΟΤΗΤΑΣ ΚΡΑΤΙΚΗΣ ΓΗΣ"
 
@@ -25,8 +25,8 @@ def section6_report_context(case: Case) -> dict:
         "summary": suitability_summary(case),
         "land_plots": list(case.land_plots.all()),
         "state_land_question": state_land_question.removeprefix("3.2 "),
-        "heading_41": case_subsection_heading("4.1"),
-        "heading_43": case_subsection_heading("4.3"),
+        "heading_62": case_subsection_heading("6.2"),
+        "heading_access": get_case_subsection_label("4.3"),
         "heading_61": case_subsection_heading("6.1"),
         "heading_63": case_subsection_heading("6.3"),
         "heading_64": case_subsection_heading("6.4"),

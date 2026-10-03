@@ -36,16 +36,20 @@
                     {% empty %}—{% endfor %}
                 </td>
                 <td class="data-table__actions">
+                    {% if access.case_section_3.edit %}
                     <button type="button" class="btn btn-secondary btn-sm"
                             data-land-plot-open="{% url 'cases:land_plot_edit' case.pk plot.pk %}">
                         Επεξεργασία
                     </button>
+                    {% endif %}
+                    {% if access.case_section_3.delete %}
                     <button type="button" class="btn btn-danger btn-sm"
                             data-land-plot-delete="{% url 'cases:land_plot_delete' case.pk plot.pk %}"
                             data-land-plot-label="{{ plot.parcel_number }}"
                             {% if plot.has_technical_evaluation %}data-land-plot-warning="{{ plot.deletion_warning }}"{% endif %}>
                         Διαγραφή
                     </button>
+                    {% endif %}
                 </td>
             </tr>
         {% empty %}

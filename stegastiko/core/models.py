@@ -208,6 +208,29 @@ class ReminderRead(AuditedModel):
         return f"{self.user_id}:{self.reminder_key}"
 
 
+class Role(AuditedModel):
+    """User role (§Β.3): access to functions is granted to roles, roles are given to users."""
+
+    name = models.CharField(max_length=128, unique=True, help_text="Ονομασία ρόλου")
+    description = models.TextField(blank=True, help_text="Περιγραφή")
+    is_active = models.BooleanField(
+        default=True, help_text="Ενεργός (ανενεργός ρόλος δεν δίνει πρόσβαση)"
+    )
+    # Sorted "function_code:access_type" strings from core.function_catalog.
+    grants = models.JSONField(default=list, blank=True)
+    # Assignments must change from the role side (role.members.add/remove) so that
+    # the m2m audit receiver records them on this audited model.
+    members = models.ManyToManyField(
+        settings.AUTH_USER_MODEL, related_name="app_roles", blank=True
+    )
+
+    class Meta:
+        ordering = ("name",)
+
+    def __str__(self):
+        return self.name
+
+
 class DocumentCatalogItem(AuditedModel):
     code = models.CharField(max_length=32, unique=True)
     title = models.CharField(max_length=255)

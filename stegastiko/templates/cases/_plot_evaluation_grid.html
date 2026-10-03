@@ -45,10 +45,12 @@ The first four columns come from 3.1. Re-rendered after every modal edit; `reado
                 </td>
                 {% if not readonly %}
                 <td class="data-table__actions">
+                    {% if access.case_section_4.edit %}
                     <button type="button" class="btn btn-secondary btn-sm"
                             data-land-plot-open="{% url 'cases:land_plot_evaluation' case.pk plot.pk %}">
                         Επεξεργασία
                     </button>
+                    {% endif %}
                 </td>
                 {% endif %}
             </tr>

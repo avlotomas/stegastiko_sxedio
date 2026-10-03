@@ -1,0 +1,40 @@
+{% extends "core/settings/_layout.html" %}
+
+{% block title %}{{ page_title }} — Ρυθμίσεις{% endblock %}
+
+{% block settings_breadcrumb %}
+<a href="{% url 'system_configuration' %}">Ρυθμίσεις συστήματος</a>
+<span>/</span>
+<span>{{ page_title }}</span>
+{% endblock %}
+
+{% block settings_main %}
+<div class="page-header">
+    <h1>{{ page_title }}</h1>
+    {% if page_lead %}
+    <p class="page-header__lead">{{ page_lead }}</p>
+    {% endif %}
+</div>
+
+<div class="card">
+<form method="post" class="app-form" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+    <div class="alert alert--error form-span-all">
+        {% for error in form.non_field_errors %}{{ error }}{% endfor %}
+    </div>
+    {% endif %}
+    <div class="form-grid">
+        {% for field in form %}
+            {% include "includes/form_field.html" with field=field wide=True %}
+        {% endfor %}
+    </div>
+    <div class="form-actions form-span-all">
+        {% if can_edit %}
+        <button type="submit" class="btn btn-primary">Αποθήκευση</button>
+        {% endif %}
+        <a href="{% url 'system_configuration' %}" class="btn btn-secondary">Ακύρωση</a>
+    </div>
+</form>
+</div>
+{% endblock %}

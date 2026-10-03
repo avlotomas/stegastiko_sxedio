@@ -82,6 +82,7 @@
 </div>
 {% endif %}
 
+{% if access.case_section_9.create %}
 <div class="card">
 <h2 class="card__title">Νέα γνωστοποίηση</h2>
 <form method="post" class="app-form" novalidate>
@@ -112,6 +113,7 @@
     </div>
 </form>
 </div>
+{% endif %}
 
 </div>
 {% include "cases/_case_actions_sidebar.html" %}

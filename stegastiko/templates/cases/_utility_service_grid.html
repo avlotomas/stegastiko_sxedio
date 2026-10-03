@@ -3,7 +3,7 @@
 click; re-rendered after every modal add/edit/delete. `readonly` hides the actions.
 {% endcomment %}
 <div{% if not readonly %} data-utility-service-container{% endif %}>
-{% if not readonly %}
+{% if not readonly and access.case_section_4.create %}
 <div class="form-actions form-span-all">
     <button type="button"
             class="btn btn-secondary"
@@ -42,15 +42,19 @@ click; re-rendered after every modal add/edit/delete. `readonly` hides the actio
                 <td data-sort-comments="{{ service.comments }}">{{ service.comments|default:"—"|linebreaksbr }}</td>
                 {% if not readonly %}
                 <td class="data-table__actions">
+                    {% if access.case_section_4.edit %}
                     <button type="button" class="btn btn-secondary btn-sm"
                             data-utility-service-open="{% url 'cases:utility_service_edit' case.pk service.pk %}">
                         Επεξεργασία
                     </button>
+                    {% endif %}
+                    {% if access.case_section_4.delete %}
                     <button type="button" class="btn btn-danger btn-sm"
                             data-utility-service-delete="{% url 'cases:utility_service_delete' case.pk service.pk %}"
                             data-utility-service-label="{{ service.row_label }}">
                         Διαγραφή
                     </button>
+                    {% endif %}
                 </td>
                 {% endif %}
             </tr>

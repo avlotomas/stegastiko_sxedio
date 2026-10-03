@@ -49,6 +49,12 @@
             border-bottom: 1px solid #000;
             -pdf-keep-with-next: true;
         }
+        h3.sub {
+            font-size: 9pt;
+            font-weight: bold;
+            margin: 3mm 0 1.5mm 0;
+            -pdf-keep-with-next: true;
+        }
         table.case-info {
             margin-bottom: 2mm;
         }
@@ -161,7 +167,7 @@
     <tr><td class="label">Σχόλια</td><td>{{ summary.priority_documentation|default:"—"|linebreaksbr }}</td></tr>
 </table>
 
-<h2>{{ heading_41 }}</h2>
+<h2>{{ heading_62 }}</h2>
 <table class="plots" repeat="1">
     <tr>
         <th width="7%">Τεμάχιο</th>
@@ -193,7 +199,7 @@
     {% endfor %}
 </table>
 
-<h2>{{ heading_43 }}</h2>
+<h3 class="sub">{{ heading_access }}</h3>
 <div class="text-block">{{ summary.access_technical_evaluation|default:"—"|linebreaksbr }}</div>
 
 <h2>{{ heading_63 }}</h2>

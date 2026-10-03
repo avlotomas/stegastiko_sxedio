@@ -120,7 +120,7 @@
 
     <div class="card">
         <div class="form-actions" style="margin-top: 0; padding-top: 0; border-top: none;">
-            {% if not cycle.is_published %}
+            {% if not cycle.is_published and access.case_section_9.edit %}
             <button type="submit" class="btn btn-primary">Αποθήκευση</button>
             {% endif %}
             <a href="{% url 'cases:detail' case.pk %}" class="btn btn-secondary">Πίσω στην υπόθεση</a>
@@ -129,23 +129,29 @@
 </form>
 
 {% if not cycle.is_published %}
+{% if access.case_section_9.edit or access.case_section_9.publish %}
 <div class="card">
     <h2 class="card__title">Ενέργειες ανακοίνωσης</h2>
     <div class="toolbar">
+        {% if access.case_section_9.edit %}
         <form method="post" action="{% url 'cases:announcement_regenerate' case.pk cycle.pk %}">
             {% csrf_token %}
             <button type="submit" class="btn btn-secondary">Νέο προσχέδιο από τα στοιχεία</button>
         </form>
+        {% endif %}
+        {% if access.case_section_9.publish %}
         <form method="post" action="{% url 'cases:announcement_publish' case.pk cycle.pk %}">
             {% csrf_token %}
             <button type="submit" class="btn btn-primary">Οριστικοποίηση και έκδοση</button>
         </form>
+        {% endif %}
     </div>
     <p class="helptext">
         Η έκδοση επιτρέπεται μόνο όταν ο έλεγχος ετοιμότητας (9.4) δίνει ΝΑΙ για κάθε
         συνδεδεμένη υπόθεση.
     </p>
 </div>
+{% endif %}
 {% else %}
 <div class="card">
     <h2 class="card__title">Εκδοθείσα ανακοίνωση</h2>

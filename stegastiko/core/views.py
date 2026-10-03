@@ -1,19 +1,33 @@
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib.auth import update_session_auth_hash
+from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView, LogoutView
 from django.db import transaction
-from django.http import Http404
+from django.http import Http404, JsonResponse
 from django.shortcuts import redirect, render
 
 from cases.forms import UtilityServiceTypeFormSet
 from cases.models import UtilityServiceType
-from core.configuration_forms import SystemConfigurationForm
-from core.permissions import user_is_system_admin
+from core.forms import AppPasswordChangeForm
+from core.function_catalog import EDIT
+from core.permissions import access_required, has_access
 from core.reminders import (
     CONSULTATION_DUE_REMINDER_TYPE,
     consultation_due_reminders,
     mark_reminder_read,
 )
+from core.settings_navigation import settings_nav
+
+PERMISSION_DENIED_MESSAGE = "Δεν έχετε πρόσβαση σε αυτή τη λειτουργία."
+
+
+def permission_denied(request, exception=None):
+    if "application/json" in request.headers.get("Accept", ""):
+        return JsonResponse(
+            {"ok": False, "message": PERMISSION_DENIED_MESSAGE, "errors": [PERMISSION_DENIED_MESSAGE]},
+            status=403,
+        )
+    return render(request, "403.html", {"message": PERMISSION_DENIED_MESSAGE}, status=403)
 
 
 class AppLoginView(LoginView):
@@ -28,7 +42,9 @@ class AppLogoutView(LogoutView):
 
 @login_required
 def home(request):
-    reminders = consultation_due_reminders(request.user, include_read=False)
+    reminders = []
+    if has_access(request.user, "reminders"):
+        reminders = consultation_due_reminders(request.user, include_read=False)
     return render(
         request,
         "core/home.html",
@@ -40,6 +56,20 @@ def home(request):
 
 
 @login_required
+def account(request):
+    if request.method == "POST":
+        form = AppPasswordChangeForm(request.user, request.POST)
+        if form.is_valid():
+            user = form.save()
+            update_session_auth_hash(request, user)
+            messages.success(request, "Ο κωδικός πρόσβασης ενημερώθηκε.")
+            return redirect("account")
+    else:
+        form = AppPasswordChangeForm(request.user)
+    return render(request, "core/account.html", {"form": form})
+
+
+@access_required("reminders")
 def reminders(request):
     return render(
         request,
@@ -48,7 +78,7 @@ def reminders(request):
     )
 
 
-@login_required
+@access_required("reminders")
 def reminder_mark_read(request):
     if request.method != "POST":
         raise Http404("Επιτρέπεται μόνο POST.")
@@ -65,26 +95,7 @@ def reminder_mark_read(request):
     return redirect(next_url)
 
 
-@login_required
-@user_passes_test(user_is_system_admin)
-def system_configuration(request):
-    if request.method == "POST":
-        form = SystemConfigurationForm(request.POST)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "Οι ρυθμίσεις αποθηκεύτηκαν.")
-            return redirect("system_configuration")
-    else:
-        form = SystemConfigurationForm()
-    return render(
-        request,
-        "core/system_configuration.html",
-        {"form": form},
-    )
-
-
-@login_required
-@user_passes_test(user_is_system_admin)
+@access_required("settings_catalogs", post_action=EDIT)
 def utility_service_types(request):
     """4.2 Values of the «Υπηρεσία» dropdown: rename, add, order, deactivate."""
     queryset = UtilityServiceType.objects.all()
@@ -97,4 +108,17 @@ def utility_service_types(request):
             return redirect("utility_service_types")
     else:
         formset = UtilityServiceTypeFormSet(queryset=queryset, prefix="service_types")
-    return render(request, "core/utility_service_types.html", {"formset": formset})
+    can_edit = has_access(request.user, "settings_catalogs", EDIT)
+    if not can_edit:
+        for form in formset:
+            for field in form.fields.values():
+                field.disabled = True
+    return render(
+        request,
+        "core/utility_service_types.html",
+        {
+            "formset": formset,
+            "settings_nav": settings_nav(request.user, "catalogs"),
+            "can_edit": can_edit,
+        },
+    )

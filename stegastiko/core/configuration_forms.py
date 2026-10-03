@@ -12,17 +12,23 @@ from cases.subsection_labels import (
     get_case_subsection_label,
     save_case_subsection_label,
 )
+from cases.services import DEFICIENCY_EMAIL_SUBJECT_DEFAULT, DEFICIENCY_EMAIL_SUBJECT_KEY
+from core.branding import APP_TITLE_DEFAULT, APP_TITLE_SETTING_KEY
+from core.menu_labels import MENU_LABEL_FIELDS, get_menu_labels, save_menu_label
 from core.reminders import (
     CONSULTATION_DUE_REMINDER_DAYS_DEFAULT,
     CONSULTATION_DUE_REMINDER_DAYS_KEY,
 )
-from cases.services import DEFICIENCY_EMAIL_SUBJECT_DEFAULT, DEFICIENCY_EMAIL_SUBJECT_KEY
 from core.services import SMTP_SECURITY_CHOICES, SMTP_SETTING_DEFAULTS, get_setting, set_setting
 
-GENERAL_SETTING_FIELDS = (
+BRANDING_SETTING_FIELDS = (
+    (APP_TITLE_SETTING_KEY, "Τίτλος εφαρμογής (κεφαλίδα, πάνω αριστερά)"),
+)
+WORKFLOW_SETTING_FIELDS = (
     ("applicationFolderPrefix", "Πρόθεμα Αρ. Φακέλου Αιτητή (10.1.1)"),
     ("folderSequenceDigits", "Πλήθος ψηφίων ακολουθίας ανά Κοινότητα"),
 )
+GENERAL_SETTING_FIELDS = (*BRANDING_SETTING_FIELDS, *WORKFLOW_SETTING_FIELDS)
 EMAIL_SETTING_DEFAULTS = {
     **SMTP_SETTING_DEFAULTS,
     DEFICIENCY_EMAIL_SUBJECT_KEY: DEFICIENCY_EMAIL_SUBJECT_DEFAULT,
@@ -62,25 +68,163 @@ def email_field_name(setting_key):
     return f"email_{setting_key}"
 
 
+def _add_section_label_fields(form):
+    for section_key in CASE_SECTION_LABEL_KEYS:
+        field_name = form_field_name_for_section_label(section_key)
+        form.fields[field_name] = forms.CharField(
+            label=f"Ενότητα {section_key} — τίτλος εμφάνισης",
+            max_length=255,
+            widget=forms.TextInput(attrs={"class": "input"}),
+        )
+    if not form.is_bound:
+        for section_key in CASE_SECTION_LABEL_KEYS:
+            fname = form_field_name_for_section_label(section_key)
+            form.fields[fname].initial = get_case_section_label(section_key)
+
+
+def _add_subsection_label_fields(form):
+    for subsection_key in CASE_SUBSECTION_LABEL_KEYS:
+        field_name = form_field_name_for_subsection_label(subsection_key)
+        form.fields[field_name] = forms.CharField(
+            label=f"Υποενότητα {subsection_key} — τίτλος εμφάνισης",
+            max_length=255,
+            widget=forms.TextInput(attrs={"class": "input"}),
+        )
+    if not form.is_bound:
+        for subsection_key in CASE_SUBSECTION_LABEL_KEYS:
+            fname = form_field_name_for_subsection_label(subsection_key)
+            form.fields[fname].initial = get_case_subsection_label(subsection_key)
+
+
+class SystemBrandingSettingsForm(forms.Form):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for setting_key, label in BRANDING_SETTING_FIELDS:
+            self.fields[f"setting_{setting_key}"] = forms.CharField(
+                label=label,
+                max_length=512,
+                widget=forms.TextInput(attrs={"class": "input"}),
+            )
+        if not self.is_bound:
+            for setting_key, _ in BRANDING_SETTING_FIELDS:
+                default = APP_TITLE_DEFAULT if setting_key == APP_TITLE_SETTING_KEY else ""
+                self.fields[f"setting_{setting_key}"].initial = get_setting(setting_key, default)
+
+    def save(self):
+        for setting_key, description in BRANDING_SETTING_FIELDS:
+            set_setting(
+                setting_key,
+                self.cleaned_data[f"setting_{setting_key}"],
+                description,
+            )
+
+
+class SystemMenuLabelSettingsForm(forms.Form):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        current = {} if self.is_bound else get_menu_labels()
+        for key, default, description in MENU_LABEL_FIELDS:
+            self.fields[f"menu_{key}"] = forms.CharField(
+                label=description,
+                max_length=64,
+                initial=current.get(key),
+                help_text=f"Προεπιλογή: «{default}».",
+                widget=forms.TextInput(attrs={"class": "input"}),
+            )
+
+    def save(self):
+        for key, _, description in MENU_LABEL_FIELDS:
+            save_menu_label(key, self.cleaned_data[f"menu_{key}"], description)
+
+
+class SystemWorkflowSettingsForm(forms.Form):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for setting_key, label in WORKFLOW_SETTING_FIELDS:
+            self.fields[f"setting_{setting_key}"] = forms.CharField(
+                label=label,
+                max_length=512,
+                widget=forms.TextInput(attrs={"class": "input"}),
+            )
+        self.fields[f"setting_{CONSULTATION_DUE_REMINDER_DAYS_KEY}"] = forms.IntegerField(
+            label="Ημέρες υπενθύμισης προθεσμίας διαβουλεύσεων (Dashboard)",
+            min_value=0,
+            widget=forms.NumberInput(attrs={"class": "input"}),
+            help_text="Πόσες ημέρες πριν από την προθεσμία απάντησης εμφανίζεται υπενθύμιση.",
+        )
+        if not self.is_bound:
+            for setting_key, _ in WORKFLOW_SETTING_FIELDS:
+                self.fields[f"setting_{setting_key}"].initial = get_setting(setting_key, "")
+            self.fields[f"setting_{CONSULTATION_DUE_REMINDER_DAYS_KEY}"].initial = get_setting(
+                CONSULTATION_DUE_REMINDER_DAYS_KEY,
+                str(CONSULTATION_DUE_REMINDER_DAYS_DEFAULT),
+            )
+
+    def save(self):
+        for setting_key, description in WORKFLOW_SETTING_FIELDS:
+            set_setting(
+                setting_key,
+                self.cleaned_data[f"setting_{setting_key}"],
+                description,
+            )
+        set_setting(
+            CONSULTATION_DUE_REMINDER_DAYS_KEY,
+            str(self.cleaned_data[f"setting_{CONSULTATION_DUE_REMINDER_DAYS_KEY}"]),
+            "Ημέρες υπενθύμισης προθεσμίας διαβουλεύσεων (Dashboard)",
+        )
+
+
+class SystemSectionLabelSettingsForm(forms.Form):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        _add_section_label_fields(self)
+
+    def save(self):
+        for section_key in CASE_SECTION_LABEL_KEYS:
+            fname = form_field_name_for_section_label(section_key)
+            save_case_section_label(section_key, self.cleaned_data[fname])
+
+
+class SystemSubsectionLabelSettingsForm(forms.Form):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        _add_subsection_label_fields(self)
+
+    def save(self):
+        for subsection_key in CASE_SUBSECTION_LABEL_KEYS:
+            fname = form_field_name_for_subsection_label(subsection_key)
+            save_case_subsection_label(subsection_key, self.cleaned_data[fname])
+
+
+class SystemEmailSettingsForm(forms.Form):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for setting_key, field in _email_setting_fields().items():
+            field.widget.attrs.setdefault("class", "input")
+            self.fields[email_field_name(setting_key)] = field
+        if not self.is_bound:
+            for setting_key, default in EMAIL_SETTING_DEFAULTS.items():
+                if setting_key != "smtpPassword":
+                    self.fields[email_field_name(setting_key)].initial = get_setting(
+                        setting_key, default
+                    )
+
+    def save(self):
+        for setting_key in EMAIL_SETTING_DEFAULTS:
+            field_name = email_field_name(setting_key)
+            value = self.cleaned_data[field_name]
+            if setting_key == "smtpPassword" and not value:
+                continue
+            set_setting(setting_key, str(value), str(self.fields[field_name].label))
+
+
 class SystemConfigurationForm(forms.Form):
-    """Administrator-only application parameters."""
+    """All settings fields (used in tests and bulk scenarios)."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        for section_key in CASE_SECTION_LABEL_KEYS:
-            field_name = form_field_name_for_section_label(section_key)
-            self.fields[field_name] = forms.CharField(
-                label=f"Ενότητα {section_key} — τίτλος εμφάνισης",
-                max_length=255,
-                widget=forms.TextInput(attrs={"class": "input"}),
-            )
-        for subsection_key in CASE_SUBSECTION_LABEL_KEYS:
-            field_name = form_field_name_for_subsection_label(subsection_key)
-            self.fields[field_name] = forms.CharField(
-                label=f"Υποενότητα {subsection_key} — τίτλος εμφάνισης",
-                max_length=255,
-                widget=forms.TextInput(attrs={"class": "input"}),
-            )
+        _add_section_label_fields(self)
+        _add_subsection_label_fields(self)
         for setting_key, label in GENERAL_SETTING_FIELDS:
             self.fields[f"setting_{setting_key}"] = forms.CharField(
                 label=label,
@@ -97,14 +241,9 @@ class SystemConfigurationForm(forms.Form):
             field.widget.attrs.setdefault("class", "input")
             self.fields[email_field_name(setting_key)] = field
         if not self.is_bound:
-            for section_key in CASE_SECTION_LABEL_KEYS:
-                fname = form_field_name_for_section_label(section_key)
-                self.fields[fname].initial = get_case_section_label(section_key)
-            for subsection_key in CASE_SUBSECTION_LABEL_KEYS:
-                fname = form_field_name_for_subsection_label(subsection_key)
-                self.fields[fname].initial = get_case_subsection_label(subsection_key)
             for setting_key, _ in GENERAL_SETTING_FIELDS:
-                self.fields[f"setting_{setting_key}"].initial = get_setting(setting_key, "")
+                default = APP_TITLE_DEFAULT if setting_key == APP_TITLE_SETTING_KEY else ""
+                self.fields[f"setting_{setting_key}"].initial = get_setting(setting_key, default)
             self.fields[f"setting_{CONSULTATION_DUE_REMINDER_DAYS_KEY}"].initial = get_setting(
                 CONSULTATION_DUE_REMINDER_DAYS_KEY,
                 str(CONSULTATION_DUE_REMINDER_DAYS_DEFAULT),

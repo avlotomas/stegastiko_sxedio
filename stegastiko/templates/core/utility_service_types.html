@@ -1,16 +1,14 @@
-{% extends "base.html" %}
+{% extends "core/settings/_layout.html" %}
 
 {% block title %}Κατάλογος υπηρεσιών κοινής ωφέλειας{% endblock %}
 
-{% block content %}
-<nav class="breadcrumb" aria-label="Πλοήγηση">
-    <a href="{% url 'home' %}">Αρχική</a>
-    <span>/</span>
-    <a href="{% url 'system_configuration' %}">Ρυθμίσεις συστήματος</a>
-    <span>/</span>
-    <span>Κατάλογος υπηρεσιών κοινής ωφέλειας</span>
-</nav>
+{% block settings_breadcrumb %}
+<a href="{% url 'system_configuration' %}">Ρυθμίσεις συστήματος</a>
+<span>/</span>
+<span>Κατάλογος υπηρεσιών κοινής ωφέλειας</span>
+{% endblock %}
 
+{% block settings_main %}
 <div class="page-header">
     <h1>Κατάλογος υπηρεσιών κοινής ωφέλειας (4.2)</h1>
     <p class="page-header__lead">
@@ -75,7 +73,9 @@
     <p class="helptext form-span-all">Συμπληρώστε τις κενές γραμμές για να προσθέσετε νέες υπηρεσίες.</p>
 
     <div class="form-actions form-span-all">
+        {% if can_edit %}
         <button type="submit" class="btn btn-primary">Αποθήκευση καταλόγου</button>
+        {% endif %}
         <a href="{% url 'system_configuration' %}" class="btn btn-secondary">Ακύρωση</a>
     </div>
 </form>

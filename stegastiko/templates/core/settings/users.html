@@ -1,0 +1,71 @@
+{% extends "core/settings/_layout.html" %}
+
+{% block title %}Χρήστες - Ρυθμίσεις{% endblock %}
+
+{% block settings_breadcrumb %}
+<a href="{% url 'system_configuration' %}">Ρυθμίσεις συστήματος</a>
+<span>/</span>
+<span>Χρήστες</span>
+{% endblock %}
+
+{% block settings_main %}
+<div class="page-header">
+    <h1>Χρήστες</h1>
+    <p class="page-header__lead">
+        Κάθε χρήστης αποκτά πρόσβαση μόνο μέσω των ρόλων του. Τα δικαιώματα ορίζονται στους
+        <a href="{% url 'settings_roles' %}">Ρόλους και δικαιώματα</a>.
+    </p>
+</div>
+
+{% if can_create %}
+<div class="toolbar">
+    <a href="{% url 'settings_user_create' %}" class="btn btn-primary">Νέος χρήστης</a>
+</div>
+{% endif %}
+
+<div class="table-wrap">
+    <table class="data-table">
+        <thead>
+        <tr>
+            <th>Όνομα χρήστη</th>
+            <th>Ονοματεπώνυμο</th>
+            <th>Email</th>
+            <th>Ρόλοι</th>
+            <th>Κατάσταση</th>
+            <th>Τελευταία σύνδεση</th>
+            {% if can_edit %}<th><span class="visually-hidden">Ενέργειες</span></th>{% endif %}
+        </tr>
+        </thead>
+        <tbody>
+        {% for item in users %}
+            <tr>
+                <td><strong>{{ item.username }}</strong></td>
+                <td>{{ item.get_full_name|default:"—" }}</td>
+                <td>{{ item.email|default:"—" }}</td>
+                <td>
+                    {% if item.is_superuser %}<span class="badge badge--pass">Υπερχρήστης — πλήρης πρόσβαση</span>{% endif %}
+                    {% for role in item.app_roles.all %}
+                        {{ role.name }}{% if not role.is_active %} <span class="text-muted">(ανενεργός)</span>{% endif %}{% if not forloop.last %}<br>{% endif %}
+                    {% empty %}
+                        {% if not item.is_superuser %}<span class="text-muted">Χωρίς ρόλο</span>{% endif %}
+                    {% endfor %}
+                </td>
+                <td>
+                    {% if item.is_active %}<span class="badge badge--pass">Ενεργός</span>{% else %}<span class="badge badge--fail">Ανενεργός</span>{% endif %}
+                </td>
+                <td>{{ item.last_login|default:"—" }}</td>
+                {% if can_edit %}
+                <td class="data-table__actions">
+                    {% if not item.is_superuser or user.is_superuser %}
+                    <a href="{% url 'settings_user_edit' item.pk %}" class="btn btn-secondary btn-sm">Επεξεργασία</a>
+                    {% endif %}
+                </td>
+                {% endif %}
+            </tr>
+        {% empty %}
+            <tr><td colspan="7">Δεν υπάρχουν χρήστες.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

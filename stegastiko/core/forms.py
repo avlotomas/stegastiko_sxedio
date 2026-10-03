@@ -3,6 +3,7 @@
 import re
 
 from django import forms
+from django.contrib.auth.forms import PasswordChangeForm
 
 # Greek locale renders dates as d/m/Y, but <input type="date"> only accepts ISO, so an
 # unformatted widget shows an empty picker and silently clears the stored date on save.
@@ -91,3 +92,19 @@ def apply_greek_labels(form):
             continue
         field.label = text
         field.help_text = ""
+
+
+class AppPasswordChangeForm(PasswordChangeForm):
+    """Greek labels and app styling for the signed-in user password screen."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        labels = {
+            "old_password": "Τρέχων κωδικός πρόσβασης",
+            "new_password1": "Νέος κωδικός πρόσβασης",
+            "new_password2": "Επιβεβαίωση νέου κωδικού",
+        }
+        for name, label in labels.items():
+            self.fields[name].label = label
+            self.fields[name].widget.attrs.setdefault("class", "input")
+            self.fields[name].widget.attrs.setdefault("autocomplete", "off")

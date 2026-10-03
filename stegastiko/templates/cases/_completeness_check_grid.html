@@ -1,5 +1,6 @@
 {% comment %}2.1 Grid of completeness checks, edited from modal with immediate save.{% endcomment %}
 <div data-completeness-check-container>
+{% if access.case_section_2.create %}
 <div class="form-actions form-span-all">
     <button type="button"
             class="btn btn-secondary"
@@ -7,6 +8,7 @@
         Προσθήκη ελέγχου
     </button>
 </div>
+{% endif %}
 <div class="table-wrap" data-completeness-check-grid>
     <table class="data-table" data-completeness-check-table>
         <thead>
@@ -56,11 +58,14 @@
                 <td data-sort-deficiencies="{{ check.deficiencies|lower }}">{{ check.deficiencies|default:"—"|truncatechars:80 }}</td>
                 <td data-sort-emails="{{ check.communications.count }}">{{ check.communications.count }}</td>
                 <td class="data-table__actions">
+                    {% if access.case_section_2.edit %}
                     <button type="button"
                             class="btn btn-secondary btn-sm"
                             data-completeness-check-open="{% url 'cases:completeness_check_edit' case.pk check.pk %}">
                         Επεξεργασία
                     </button>
+                    {% endif %}
+                    {% if access.case_section_2.delete %}
                     <button type="button"
                             class="btn btn-danger btn-sm"
                             data-completeness-check-delete="{% url 'cases:completeness_check_delete' case.pk check.pk %}"
@@ -71,6 +76,8 @@
                             {% endif %}>
                         Διαγραφή
                     </button>
+                    {% endif %}
+                    {% if access.case_section_2.send %}
                     <button type="button"
                             class="btn btn-secondary btn-sm"
                             data-dialog-open="deficiency-email-dialog"
@@ -80,6 +87,7 @@
                             {% if not case.contact_email or not smtp_ready %}disabled{% endif %}>
                         Αποστολή Email
                     </button>
+                    {% endif %}
                 </td>
             </tr>
         {% empty %}

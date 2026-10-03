@@ -11,9 +11,11 @@
     </p>
 </div>
 
+{% if access.cases.create %}
 <div class="toolbar">
     <a href="{% url 'cases:create' %}" class="btn btn-primary">Νέα αίτηση Κ.Σ. / Δ.Δ.</a>
 </div>
+{% endif %}
 
 <div class="card">
     <h2 class="card__title">Αναζήτηση</h2>
