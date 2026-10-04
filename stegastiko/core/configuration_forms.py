@@ -2,12 +2,16 @@ from django import forms
 
 from cases.section_labels import (
     CASE_SECTION_LABEL_KEYS,
+    DEFAULT_CASE_SECTION_LABELS,
+    case_section_number,
     form_field_name_for_section_label,
     get_case_section_label,
     save_case_section_label,
 )
 from cases.subsection_labels import (
     CASE_SUBSECTION_LABEL_KEYS,
+    DEFAULT_CASE_SUBSECTION_LABELS,
+    SUBSECTION_HEADING_NUMBERS,
     form_field_name_for_subsection_label,
     get_case_subsection_label,
     save_case_subsection_label,
@@ -68,12 +72,20 @@ def email_field_name(setting_key):
     return f"email_{setting_key}"
 
 
-def _add_section_label_fields(form):
+def _add_section_label_fields(form, *, compact=False):
     for section_key in CASE_SECTION_LABEL_KEYS:
         field_name = form_field_name_for_section_label(section_key)
+        default = DEFAULT_CASE_SECTION_LABELS.get(section_key, section_key)
+        if compact:
+            label = f"Ενότητα {case_section_number(section_key)}"
+            if section_key == "7-plots":
+                label = "Ενότητα 7 (οικόπεδα)"
+        else:
+            label = f"Ενότητα {section_key} — τίτλος εμφάνισης"
         form.fields[field_name] = forms.CharField(
-            label=f"Ενότητα {section_key} — τίτλος εμφάνισης",
+            label=label,
             max_length=255,
+            help_text=f"Προεπιλογή: «{default}».",
             widget=forms.TextInput(attrs={"class": "input"}),
         )
     if not form.is_bound:
@@ -82,12 +94,20 @@ def _add_section_label_fields(form):
             form.fields[fname].initial = get_case_section_label(section_key)
 
 
-def _add_subsection_label_fields(form):
+def _add_subsection_label_fields(form, *, compact=False):
     for subsection_key in CASE_SUBSECTION_LABEL_KEYS:
         field_name = form_field_name_for_subsection_label(subsection_key)
+        default = DEFAULT_CASE_SUBSECTION_LABELS.get(subsection_key, subsection_key)
+        number = SUBSECTION_HEADING_NUMBERS.get(subsection_key, subsection_key)
+        label = (
+            f"Υποενότητα {number}"
+            if compact
+            else f"Υποενότητα {subsection_key} — τίτλος εμφάνισης"
+        )
         form.fields[field_name] = forms.CharField(
-            label=f"Υποενότητα {subsection_key} — τίτλος εμφάνισης",
+            label=label,
             max_length=255,
+            help_text=f"Προεπιλογή: «{default}».",
             widget=forms.TextInput(attrs={"class": "input"}),
         )
     if not form.is_bound:
@@ -194,6 +214,29 @@ class SystemSubsectionLabelSettingsForm(forms.Form):
         for subsection_key in CASE_SUBSECTION_LABEL_KEYS:
             fname = form_field_name_for_subsection_label(subsection_key)
             save_case_subsection_label(subsection_key, self.cleaned_data[fname])
+
+
+class SystemCaseLabelSettingsForm(forms.Form):
+    """Section and subsection display titles on one screen (grouped by section)."""
+
+    def __init__(self, *args, include_sections=True, include_subsections=True, **kwargs):
+        super().__init__(*args, **kwargs)
+        if include_sections:
+            _add_section_label_fields(self, compact=True)
+        if include_subsections:
+            _add_subsection_label_fields(self, compact=True)
+
+    def save(self, *, save_sections=True, save_subsections=True):
+        if save_sections:
+            for section_key in CASE_SECTION_LABEL_KEYS:
+                fname = form_field_name_for_section_label(section_key)
+                if fname in self.cleaned_data:
+                    save_case_section_label(section_key, self.cleaned_data[fname])
+        if save_subsections:
+            for subsection_key in CASE_SUBSECTION_LABEL_KEYS:
+                fname = form_field_name_for_subsection_label(subsection_key)
+                if fname in self.cleaned_data:
+                    save_case_subsection_label(subsection_key, self.cleaned_data[fname])
 
 
 class SystemEmailSettingsForm(forms.Form):

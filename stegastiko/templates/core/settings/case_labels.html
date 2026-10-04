@@ -1,0 +1,91 @@
+{% extends "core/settings/_layout.html" %}
+
+{% block title %}{{ page_title }} — Ρυθμίσεις{% endblock %}
+
+{% block settings_breadcrumb %}
+<a href="{% url 'system_configuration' %}">Ρυθμίσεις συστήματος</a>
+<span>/</span>
+<span>{{ page_title }}</span>
+{% endblock %}
+
+{% block settings_main %}
+<div class="page-header">
+    <h1>{{ page_title }}</h1>
+    {% if page_lead %}
+    <p class="page-header__lead">{{ page_lead }}</p>
+    {% endif %}
+</div>
+
+<div class="card settings-case-labels__toc">
+    <p class="settings-toc__label">Μετάβαση σε ενότητα</p>
+    <ul class="settings-toc__list">
+        {% for group in label_groups %}
+        <li>
+            <a href="#{{ group.section_anchor }}">{{ group.toc_label }}</a>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+
+<form method="post" class="app-form settings-case-labels" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+    <div class="alert alert--error">
+        {% for error in form.non_field_errors %}{{ error }}{% endfor %}
+    </div>
+    {% endif %}
+
+    {% for group in label_groups %}
+    <section class="card settings-case-labels__group" id="{{ group.section_anchor }}">
+        <h2 class="settings-case-labels__group-title">
+            Ενότητα {{ group.section_number }}{% if group.section_key == "7-plots" %} — οικόπεδα{% endif %}
+        </h2>
+
+        {% if group.section_field %}
+        <div class="settings-case-labels__row settings-case-labels__row--section">
+            <span class="settings-case-labels__code" aria-hidden="true">{{ group.section_number }}</span>
+            <div class="settings-case-labels__field">
+                <label class="visually-hidden" for="{{ group.section_field.id_for_label }}">{{ group.section_field.label }}</label>
+                {{ group.section_field }}
+                {% if group.section_field.errors %}
+                <ul class="errorlist">
+                    {% for error in group.section_field.errors %}<li>{{ error }}</li>{% endfor %}
+                </ul>
+                {% endif %}
+                {% if group.section_field.help_text %}
+                <p class="helptext">{{ group.section_field.help_text|safe }}</p>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% for item in group.subsections %}
+        <div class="settings-case-labels__row">
+            <span class="settings-case-labels__code" aria-hidden="true">{{ item.number }}</span>
+            <div class="settings-case-labels__field">
+                <label class="visually-hidden" for="{{ item.field.id_for_label }}">{{ item.field.label }}</label>
+                {{ item.field }}
+                {% if item.field.errors %}
+                <ul class="errorlist">
+                    {% for error in item.field.errors %}<li>{{ error }}</li>{% endfor %}
+                </ul>
+                {% endif %}
+                {% if item.field.help_text %}
+                <p class="helptext">{{ item.field.help_text|safe }}</p>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </section>
+    {% endfor %}
+
+    <div class="card settings-form__actions">
+        <div class="form-actions">
+            {% if can_edit %}
+            <button type="submit" class="btn btn-primary">Αποθήκευση</button>
+            {% endif %}
+            <a href="{% url 'system_configuration' %}" class="btn btn-secondary">Ακύρωση</a>
+        </div>
+    </div>
+</form>
+{% endblock %}

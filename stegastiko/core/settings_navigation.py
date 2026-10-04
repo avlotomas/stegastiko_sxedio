@@ -46,16 +46,10 @@ SETTINGS_NAV_SECTIONS = (
         "function": "settings_workflow",
     },
     {
-        "key": "section_labels",
-        "url_name": "system_settings_section_labels",
-        "label": "Τίτλοι ενοτήτων Κ.Σ. / Δ.Δ.",
-        "function": "settings_section_labels",
-    },
-    {
-        "key": "subsection_labels",
-        "url_name": "system_settings_subsection_labels",
-        "label": "Τίτλοι υποενοτήτων",
-        "function": "settings_subsection_labels",
+        "key": "case_labels",
+        "url_name": "system_settings_case_labels",
+        "label": "Τίτλοι αίτησης διαχωρισμού",
+        "functions": ("settings_section_labels", "settings_subsection_labels"),
     },
     {
         "key": "email",
@@ -69,7 +63,11 @@ SETTINGS_NAV_SECTIONS = (
 def settings_nav(user, active_key: str):
     items = []
     for section in SETTINGS_NAV_SECTIONS:
-        if not has_access(user, section["function"]):
+        functions = section.get("functions")
+        if functions:
+            if not any(has_access(user, code) for code in functions):
+                continue
+        elif not has_access(user, section["function"]):
             continue
         items.append(
             {

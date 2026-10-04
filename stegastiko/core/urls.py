@@ -12,6 +12,7 @@ from core.access_views import (
 from core.settings_views import (
     system_configuration,
     system_settings_branding,
+    system_settings_case_labels,
     system_settings_email,
     system_settings_menu_labels,
     system_settings_section_labels,
@@ -45,6 +46,11 @@ urlpatterns = [
     path("settings/branding/", system_settings_branding, name="system_settings_branding"),
     path("settings/menu/", system_settings_menu_labels, name="system_settings_menu_labels"),
     path("settings/workflow/", system_settings_workflow, name="system_settings_workflow"),
+    path(
+        "settings/case-labels/",
+        system_settings_case_labels,
+        name="system_settings_case_labels",
+    ),
     path(
         "settings/section-labels/",
         system_settings_section_labels,

@@ -5,6 +5,7 @@ from cases.section_labels import get_case_section_label, save_case_section_label
 from cases.subsection_labels import get_case_subsection_label, save_case_subsection_label
 from core.configuration_forms import (
     SystemBrandingSettingsForm,
+    SystemCaseLabelSettingsForm,
     SystemConfigurationForm,
     SystemEmailSettingsForm,
     SystemWorkflowSettingsForm,
@@ -155,6 +156,34 @@ def test_section_label_appears_in_page_title_and_sidebar(staff_client):
     assert f'class="case-actions-nav__link is-active"' in html
     assert f"1. {custom}" in html
     assert get_case_section_label("1") == custom
+
+
+@pytest.mark.django_db
+def test_case_labels_settings_screen_groups_sections_and_subsections(admin_client):
+    url = reverse("system_settings_case_labels")
+    html = admin_client.get(url).content.decode()
+    assert "Τίτλοι αίτησης διαχωρισμού" in html
+    assert "Μετάβαση σε ενότητα" in html
+    assert 'id="section-7_plots"' in html
+    assert "3.2" in html
+    assert "settings-case-labels__group" in html
+
+    custom_section = "Ενότητα 2 από ενοποιημένη οθόνη"
+    custom_sub = "3.2 από ενοποιημένη οθόνη"
+    response = admin_client.post(
+        url,
+        _form_post_data(
+            SystemCaseLabelSettingsForm,
+            section_label_2=custom_section,
+            subsection_label_3__2=custom_sub,
+        ),
+    )
+    assert response.status_code == 302
+    assert get_case_section_label("2") == custom_section
+    assert get_case_subsection_label("3.2") == custom_sub
+
+    assert admin_client.get(reverse("system_settings_section_labels")).status_code == 302
+    assert admin_client.get(reverse("system_settings_subsection_labels")).status_code == 302
 
 
 @pytest.mark.django_db
