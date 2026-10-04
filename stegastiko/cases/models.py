@@ -142,34 +142,26 @@ class Case(AuditedModel):
     )
 
     tender_announcement_date = models.DateField(
-        null=True, blank=True, help_text="7.7 Ημερομηνία προκήρυξης διαγωνισμού"
+        null=True, blank=True, help_text="7.5 Ημερομηνία προκήρυξης διαγωνισμού"
     )
     tender_award_date = models.DateField(
-        null=True, blank=True, help_text="7.7 Ημερομηνία κατακύρωσης"
+        null=True, blank=True, help_text="7.5 Ημερομηνία κατακύρωσης"
     )
     contractor_name = models.CharField(
-        max_length=255, blank=True, help_text="7.7 Ανάδοχος / πρόσωπο ανάθεσης"
+        max_length=255, blank=True, help_text="7.5 Ανάδοχος / πρόσωπο ανάθεσης"
     )
-    contractor_phone = models.CharField(max_length=64, blank=True, help_text="7.7 Τηλέφωνο αναδόχου")
-    contractor_email = models.EmailField(blank=True, help_text="7.7 Email αναδόχου")
+    contractor_phone = models.CharField(max_length=64, blank=True, help_text="7.5 Τηλέφωνο αναδόχου")
+    contractor_email = models.EmailField(blank=True, help_text="7.5 Email αναδόχου")
     contract_duration_value = models.PositiveIntegerField(
-        null=True, blank=True, help_text="7.7 Διάρκεια σύμβασης (αριθμός)"
+        null=True, blank=True, help_text="7.5 Διάρκεια σύμβασης (μήνες)"
     )
     contract_duration_unit = models.CharField(
         max_length=16,
         choices=ContractDurationUnit.choices,
         blank=True,
-        help_text="7.7 Διάρκεια σύμβασης (μονάδα)",
+        help_text="7.5 Διάρκεια σύμβασης (μονάδα - πάντα μήνες)",
     )
-    tender_comments = models.TextField(blank=True, help_text="7.7 Σχόλια")
-
-    works_progress_stage = models.CharField(
-        max_length=255, blank=True, help_text="7.7 Τρέχον στάδιο / πορεία εργασιών"
-    )
-    works_progress_updated_on = models.DateField(
-        null=True, blank=True, help_text="7.7 Ημερομηνία ενημέρωσης πορείας"
-    )
-    works_progress_comments = models.TextField(blank=True, help_text="7.7 Σχόλια γενικής πορείας")
+    tender_comments = models.TextField(blank=True, help_text="7.5 Σχόλια")
 
     dls_application_date = models.DateField(
         null=True, blank=True, help_text="8.7 Ημερομηνία υποβολής αίτησης στο ΤΚΧ"
@@ -181,7 +173,7 @@ class Case(AuditedModel):
     dls_comments = models.TextField(blank=True, help_text="8.7 Σχόλια")
 
     section8_comments = models.TextField(
-        blank=True, help_text="7.7 Σχόλια / Παρατηρήσεις Ενότητας 7"
+        blank=True, help_text="7 Σχόλια / Παρατηρήσεις Ενότητας 7"
     )
 
     class Meta:
@@ -576,38 +568,48 @@ class Consultation(AuditedModel):
 
 
 class InfrastructureCheck(AuditedModel):
-    """8.6 Each on-site check is a separate dated event."""
+    """7.6 Παρακολούθηση κατασκευαστικών εργασιών: each on-site check is a separate dated row."""
+
+    WORK_FIELDS = (
+        "curbs_ready",
+        "pavements_ready",
+        "asphalt_ready",
+        "pavement_fill_ready",
+        "water_ready",
+        "telecom_ready",
+        "electricity_ready",
+        "street_light_ready",
+    )
 
     case = models.ForeignKey(Case, on_delete=models.CASCADE, related_name="infrastructure_checks")
-    check_date = models.DateField(help_text="8.6 Ημερομηνία ελέγχου")
-    curbs_ready = models.BooleanField(default=False, help_text="8.6 Ρείθρα")
-    curbs_comments = models.CharField(max_length=255, blank=True, help_text="8.6 Σχόλια ρείθρων")
-    pavements_ready = models.BooleanField(default=False, help_text="8.6 Κράσπεδα")
-    pavements_comments = models.CharField(max_length=255, blank=True, help_text="8.6 Σχόλια κρασπέδων")
-    asphalt_ready = models.BooleanField(default=False, help_text="8.6 Ασφαλτοστρωμένο οδόστρωμα")
-    asphalt_comments = models.CharField(max_length=255, blank=True, help_text="8.6 Σχόλια οδοστρώματος")
-    pavement_fill_ready = models.BooleanField(default=False, help_text="8.6 Επιχωμάτωση πεζοδρομίων")
-    pavement_fill_comments = models.CharField(
-        max_length=255, blank=True, help_text="8.6 Σχόλια επιχωμάτωσης"
+    stage = models.CharField(max_length=255, blank=True, help_text="7.6 Στάδιο")
+    check_date = models.DateField(help_text="7.6 Ημερομηνία ελέγχου")
+    curbs_ready = models.BooleanField(default=False, help_text="7.6 Ρείθρα")
+    pavements_ready = models.BooleanField(default=False, help_text="7.6 Κράσπεδα")
+    asphalt_ready = models.BooleanField(
+        default=False, help_text="7.6 Οδόστρωμα με ασφαλτικό σκυρόδεμα"
     )
-    water_ready = models.BooleanField(default=False, help_text="8.6 Υδατοπρομήθεια")
-    water_comments = models.CharField(max_length=255, blank=True, help_text="8.6 Σχόλια υδατοπρομήθειας")
-    telecom_ready = models.BooleanField(default=False, help_text="8.6 Τηλεπικοινωνίες")
-    telecom_comments = models.CharField(
-        max_length=255, blank=True, help_text="8.6 Σχόλια τηλεπικοινωνιών"
-    )
-    electricity_ready = models.BooleanField(default=False, help_text="8.6 Παροχή ηλεκτρικού ρεύματος")
-    electricity_comments = models.CharField(max_length=255, blank=True, help_text="8.6 Σχόλια ηλεκτρισμού")
-    street_light_ready = models.BooleanField(default=False, help_text="8.6 Οδικός φωτισμός")
-    street_light_comments = models.CharField(max_length=255, blank=True, help_text="8.6 Σχόλια φωτισμού")
+    pavement_fill_ready = models.BooleanField(default=False, help_text="7.6 Επιχωμάτωση πεζοδρομίων")
+    water_ready = models.BooleanField(default=False, help_text="7.6 Υδατοπρομήθεια")
+    telecom_ready = models.BooleanField(default=False, help_text="7.6 Τηλεπικοινωνίες")
+    electricity_ready = models.BooleanField(default=False, help_text="7.6 Παροχή ηλεκτρικού ρεύματος")
+    street_light_ready = models.BooleanField(default=False, help_text="7.6 Οδικός φωτισμός")
     is_ready_for_submission_cycle = models.BooleanField(
         default=False,
-        help_text="8.6 Συνολικό ΝΑΙ/ΟΧΙ ετοιμότητας για άνοιγμα κύκλου υποβολής (αυτόματο)",
+        help_text="7.6 Συνολικό ΝΑΙ/ΟΧΙ ετοιμότητας για άνοιγμα κύκλου υποβολής (αυτόματο)",
     )
-    comments = models.TextField(blank=True, help_text="8.6 Σχόλια ελέγχου")
+    comments = models.TextField(blank=True, help_text="7.6 Σχόλια")
 
     class Meta:
         ordering = ("-check_date", "-id")
+
+    @property
+    def row_label(self):
+        parts = (str(self.check_date or ""), self.stage)
+        return " · ".join(part for part in parts if part) or "Νέος έλεγχος"
+
+    def _audit_context(self):
+        return self.case_id, None, getattr(self, "_section_ref", "7.6")
 
     def save(self, *args, **kwargs):
         # Μέρος Β §2: readiness requires at least gutters/kerbs and asphalt road surface.

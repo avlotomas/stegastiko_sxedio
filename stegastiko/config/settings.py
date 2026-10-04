@@ -13,12 +13,22 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 env = environ.Env(
     DJANGO_DEBUG=(bool, True),
     DJANGO_ALLOWED_HOSTS=(list, ["127.0.0.1", "localhost"]),
+    DJANGO_CSRF_TRUSTED_ORIGINS=(list, []),
 )
 environ.Env.read_env(BASE_DIR / ".env")
 
 SECRET_KEY = env("DJANGO_SECRET_KEY", default="unsafe-dev-key-change-me")
 DEBUG = env("DJANGO_DEBUG")
-ALLOWED_HOSTS = env("DJANGO_ALLOWED_HOSTS")
+ALLOWED_HOSTS = list(env("DJANGO_ALLOWED_HOSTS"))
+if DEBUG:
+    # Temporary localhost.run demos use a new *.lhr.life host each session.
+    for _tunnel_host in (".lhr.life",):
+        if _tunnel_host not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(_tunnel_host)
+CSRF_TRUSTED_ORIGINS = env("DJANGO_CSRF_TRUSTED_ORIGINS")
+if DEBUG or CSRF_TRUSTED_ORIGINS:
+    # HTTPS tunnels forward HTTP locally; trust X-Forwarded-Proto for CSRF Origin checks.
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 
 # Application definition
@@ -41,7 +51,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
+    'core.middleware.DevTunnelCsrfMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django_htmx.middleware.HtmxMiddleware',
     'core.middleware.CurrentUserMiddleware',

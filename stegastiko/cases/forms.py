@@ -425,7 +425,7 @@ class MinistryDecisionRoundForm(
 
 
 class Section8Form(AttachmentSlotsMixin, StyledFormMixin, forms.ModelForm):
-    """7.1-7.4 and 7.7 single-row blocks of the division workflow; 7.2 and 7.3 keep their own files."""
+    """7.1-7.5 and 7.7 single-row blocks of the division workflow; 7.2 and 7.3 keep their own files."""
 
     ATTACHMENT_SLOTS = {
         Case.ATTACHMENT_SECTION_DIVISION_DESIGN: (
@@ -465,11 +465,7 @@ class Section8Form(AttachmentSlotsMixin, StyledFormMixin, forms.ModelForm):
             "contractor_phone",
             "contractor_email",
             "contract_duration_value",
-            "contract_duration_unit",
             "tender_comments",
-            "works_progress_stage",
-            "works_progress_updated_on",
-            "works_progress_comments",
             "section8_comments",
         ]
         widgets = {
@@ -479,15 +475,19 @@ class Section8Form(AttachmentSlotsMixin, StyledFormMixin, forms.ModelForm):
             "tpo_response_date": IsoDateInput(),
             "tender_announcement_date": IsoDateInput(),
             "tender_award_date": IsoDateInput(),
-            "works_progress_updated_on": IsoDateInput(),
             "survey_assignment_comments": forms.Textarea(attrs={"rows": 2}),
             "division_design_comments": forms.Textarea(attrs={"rows": 2}),
             "tpo_comments": forms.Textarea(attrs={"rows": 2}),
             "construction_plans_stage": forms.Textarea(attrs={"rows": 3}),
             "tender_comments": forms.Textarea(attrs={"rows": 2}),
-            "works_progress_comments": forms.Textarea(attrs={"rows": 2}),
             "section8_comments": forms.Textarea(attrs={"rows": 3}),
         }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        # 7.5 uses a single duration field and the unit is fixed to months.
+        self.instance.contract_duration_unit = Case.ContractDurationUnit.MONTHS
+        return cleaned_data
 
 
 class ApprovedDesignPlotForm(OtherChoiceFieldsMixin, StyledFormMixin, forms.ModelForm):
@@ -788,32 +788,22 @@ class ConsultationForm(
         }
 
 
+YES_NO_BOOLEAN_CHOICES = ((True, "ΝΑΙ"), (False, "ΟΧΙ"))
+
+
 class InfrastructureCheckForm(StyledFormMixin, forms.ModelForm):
+    """7.6 One row of «Παρακολούθηση κατασκευαστικών εργασιών» in the grid modal."""
+
     class Meta:
         model = InfrastructureCheck
-        fields = [
-            "check_date",
-            "curbs_ready",
-            "curbs_comments",
-            "pavements_ready",
-            "pavements_comments",
-            "asphalt_ready",
-            "asphalt_comments",
-            "pavement_fill_ready",
-            "pavement_fill_comments",
-            "water_ready",
-            "water_comments",
-            "telecom_ready",
-            "telecom_comments",
-            "electricity_ready",
-            "electricity_comments",
-            "street_light_ready",
-            "street_light_comments",
-            "comments",
-        ]
+        fields = ["stage", "check_date", *InfrastructureCheck.WORK_FIELDS, "comments"]
         widgets = {
             "check_date": IsoDateInput(),
-            "comments": forms.Textarea(attrs={"rows": 2}),
+            "comments": forms.Textarea(attrs={"rows": 3}),
+            **{
+                name: forms.Select(choices=YES_NO_BOOLEAN_CHOICES)
+                for name in InfrastructureCheck.WORK_FIELDS
+            },
         }
 
 
@@ -959,9 +949,6 @@ SubmissionCyclePublicationFormSet = forms.inlineformset_factory(
 )
 LandPlotDecisionFormSet = forms.inlineformset_factory(
     Case, LandPlot, form=LandPlotDecisionForm, extra=0, can_delete=False
-)
-InfrastructureCheckFormSet = forms.inlineformset_factory(
-    Case, InfrastructureCheck, form=InfrastructureCheckForm, extra=1, can_delete=True
 )
 FieldFormSet = forms.inlineformset_factory(Case, Field, form=FieldForm, extra=1, can_delete=True)
 ValuationReferralFormSet = forms.inlineformset_factory(

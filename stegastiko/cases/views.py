@@ -19,7 +19,7 @@ from cases.forms import (
     ConsultationForm,
     DeficiencyEmailForm,
     FieldFormSet,
-    InfrastructureCheckFormSet,
+    InfrastructureCheckForm,
     LandPlotDecisionFormSet,
     LandPlotEvaluationForm,
     LandPlotForm,
@@ -42,6 +42,7 @@ from cases.models import (
     Case,
     CompletenessCheck,
     Consultation,
+    InfrastructureCheck,
     LandPlot,
     MinistryDecisionRound,
     SubmissionCycle,
@@ -133,14 +134,12 @@ SECTIONS = {
         ),
     },
     "7": {
-        "title": "Ενότητα 7 — Σχεδιασμός και υλοποίηση διαχωρισμού (7.1–7.7)",
+        "title": "Ενότητα 7 — Σχεδιασμός και υλοποίηση διαχωρισμού (7.1–7.6)",
         "action": "Σχεδιασμός και υλοποίηση διαχωρισμού",
-        "summary": "Ανάθεση μελέτης, ΤΠΟ, κατασκευαστικά σχέδια και διαβουλεύσεις, έλεγχοι υποδομών και διαγωνισμός.",
+        "summary": "Ανάθεση μελέτης, ΤΠΟ, κατασκευαστικά σχέδια και διαβουλεύσεις, διαγωνισμός και έλεγχοι κατασκευαστικών εργασιών.",
         "form": Section8Form,
-        # 7.4 consultation rows are edited from the grid modal (consultation_form).
-        "formsets": (
-            ("infrastructure_checks", InfrastructureCheckFormSet, "7.6"),
-        ),
+        # 7.3, 7.4 and 7.6 rows are edited from their grid modals.
+        "formsets": (),
     },
     "7-plots": {
         "title": "Ενότητα 7 — Οικόπεδα, εμβαδά και αξία (7.8–7.9)",
@@ -416,6 +415,7 @@ def case_section_edit(request, pk, section):
         )
     if section == "7":
         context["approved_design_plots"] = case.approved_design_plots.all()
+        context["infrastructure_checks"] = case.infrastructure_checks.all()
         context["consultation_grid"] = _consultation_grid(
             request.user, case, Consultation.Stage.DIVISION
         )
@@ -1138,6 +1138,77 @@ def approved_design_plot_delete(request, pk, plot_id):
             "ok": True,
             "message": f"Διαγράφηκε η εγγραφή {label}.",
             "grid_html": _approved_design_plot_grid_html(request, case),
+        }
+    )
+
+
+def _infrastructure_check_grid_html(request, case):
+    return render_to_string(
+        "cases/_infrastructure_check_grid.html",
+        {"case": case, "infrastructure_checks": case.infrastructure_checks.all()},
+        request=request,
+    )
+
+
+def _infrastructure_check_form_html(request, case, form):
+    return render_to_string(
+        "cases/_infrastructure_check_form.html",
+        {"case": case, "check_form": form},
+        request=request,
+    )
+
+
+@login_required
+def infrastructure_check_form(request, pk, check_id=None):
+    """7.6 Add or edit one construction works check from the grid modal."""
+    case = _case_for_section(request, pk, "7", EDIT)
+    if not _wants_json(request):
+        raise Http404()
+    if check_id is None:
+        check = InfrastructureCheck(case=case)
+    else:
+        check = get_object_or_404(InfrastructureCheck, pk=check_id, case=case)
+
+    if request.method == "POST":
+        form = InfrastructureCheckForm(request.POST, instance=check)
+        if not form.is_valid():
+            return JsonResponse(
+                {"ok": False, "html": _infrastructure_check_form_html(request, case, form)},
+                status=400,
+            )
+        is_new = check.pk is None
+        check._section_ref = "7.6"
+        with transaction.atomic():
+            check = form.save()
+        verb = "Προστέθηκε" if is_new else "Ενημερώθηκε"
+        return JsonResponse(
+            {
+                "ok": True,
+                "message": f"{verb} ο έλεγχος ({check.row_label}).",
+                "grid_html": _infrastructure_check_grid_html(request, case),
+            }
+        )
+    if request.method != "GET":
+        raise Http404()
+    form = InfrastructureCheckForm(instance=check)
+    return JsonResponse({"ok": True, "html": _infrastructure_check_form_html(request, case, form)})
+
+
+@login_required
+def infrastructure_check_delete(request, pk, check_id):
+    """7.6 Delete one construction works check from the grid."""
+    case = _case_for_section(request, pk, "7", EDIT)
+    if request.method != "POST" or not _wants_json(request):
+        raise Http404("Επιτρέπεται μόνο POST.")
+    check = get_object_or_404(InfrastructureCheck, pk=check_id, case=case)
+    label = check.row_label
+    check._section_ref = "7.6"
+    check.delete()
+    return JsonResponse(
+        {
+            "ok": True,
+            "message": f"Διαγράφηκε ο έλεγχος {label}.",
+            "grid_html": _infrastructure_check_grid_html(request, case),
         }
     )
 

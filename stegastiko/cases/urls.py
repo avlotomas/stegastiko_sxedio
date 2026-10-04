@@ -152,6 +152,21 @@ urlpatterns = [
         name="approved_design_plot_delete",
     ),
     path(
+        "<int:pk>/infrastructure-checks/new/",
+        views.infrastructure_check_form,
+        name="infrastructure_check_create",
+    ),
+    path(
+        "<int:pk>/infrastructure-checks/<int:check_id>/edit/",
+        views.infrastructure_check_form,
+        name="infrastructure_check_edit",
+    ),
+    path(
+        "<int:pk>/infrastructure-checks/<int:check_id>/delete/",
+        views.infrastructure_check_delete,
+        name="infrastructure_check_delete",
+    ),
+    path(
         "<int:pk>/attachments/<int:attachment_id>/",
         views.case_attachment_download,
         name="attachment_download",

@@ -2351,6 +2351,177 @@ bindFilePickers(document);
     });
 })();
 
+// Construction works checks grid (7.6): sortable columns; add / edit / delete in a modal.
+(function () {
+    const collator = new Intl.Collator("el", { numeric: true, sensitivity: "base" });
+
+    const sortGrid = function (button) {
+        const table = button.closest("[data-infrastructure-check-table]");
+        const tbody = table ? table.querySelector("tbody") : null;
+        if (!tbody) {
+            return;
+        }
+        const key = button.dataset.infrastructureCheckSort;
+        const nextDir = table.dataset.sortKey === key && table.dataset.sortDir === "asc" ? "desc" : "asc";
+        table.dataset.sortKey = key;
+        table.dataset.sortDir = nextDir;
+        table.querySelectorAll("th").forEach(function (th) {
+            th.removeAttribute("aria-sort");
+        });
+        button.closest("th").setAttribute("aria-sort", nextDir === "asc" ? "ascending" : "descending");
+        const read = function (row) {
+            const cell = row.querySelector("[data-sort-" + key + "]");
+            return cell ? cell.getAttribute("data-sort-" + key) || "" : "";
+        };
+        const rows = Array.from(tbody.querySelectorAll("tr[data-infrastructure-check-row]"));
+        rows.sort(function (a, b) {
+            const order = collator.compare(read(a), read(b));
+            return nextDir === "asc" ? order : -order;
+        });
+        rows.forEach(function (row) {
+            tbody.appendChild(row);
+        });
+    };
+
+    const dialog = document.querySelector("[data-infrastructure-check-dialog]");
+    const body = dialog ? dialog.querySelector("[data-infrastructure-check-dialog-body]") : null;
+    const errors = dialog ? dialog.querySelector("[data-infrastructure-check-errors]") : null;
+
+    const showDialogError = function (message) {
+        if (!errors) {
+            return;
+        }
+        errors.textContent = message;
+        errors.hidden = !message;
+    };
+
+    const showStatus = function (message, kind) {
+        const status = document.querySelector("[data-infrastructure-check-status]");
+        if (!status) {
+            return;
+        }
+        status.textContent = "";
+        const alert = document.createElement("div");
+        alert.className = "alert alert--" + (kind || "success");
+        alert.setAttribute("role", "status");
+        alert.textContent = message;
+        status.appendChild(alert);
+    };
+
+    const replaceGrid = function (html) {
+        const grid = document.querySelector("[data-infrastructure-check-container]");
+        if (grid) {
+            grid.outerHTML = html;
+        }
+    };
+
+    const requestJson = function (url, options) {
+        return fetch(url, Object.assign({
+            headers: { Accept: "application/json" },
+            credentials: "same-origin",
+        }, options)).then(function (response) {
+            return response.json();
+        });
+    };
+
+    const mountForm = function (html) {
+        body.innerHTML = html;
+        const form = body.querySelector("[data-infrastructure-check-form]");
+        form.addEventListener("submit", onSubmit);
+        const first = form.querySelector("select, input:not([type=hidden]), textarea");
+        if (first) {
+            first.focus();
+        }
+    };
+
+    const onSubmit = function (event) {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const submit = form.querySelector('button[type="submit"]');
+        submit.disabled = true;
+        showDialogError("");
+        requestJson(form.action, { method: "POST", body: new FormData(form) })
+            .then(function (data) {
+                if (!data.ok) {
+                    mountForm(data.html);
+                    return;
+                }
+                replaceGrid(data.grid_html);
+                showStatus(data.message);
+                dialog.close();
+            })
+            .catch(function () {
+                showDialogError("Αποτυχία επικοινωνίας με τον διακομιστή.");
+            })
+            .finally(function () {
+                submit.disabled = false;
+            });
+    };
+
+    const openForm = function (url) {
+        showDialogError("");
+        body.innerHTML = '<p class="text-muted">Φόρτωση…</p>';
+        dialog.showModal();
+        requestJson(url)
+            .then(function (data) {
+                if (!data.ok) {
+                    throw new Error("bad response");
+                }
+                mountForm(data.html);
+            })
+            .catch(function () {
+                body.textContent = "";
+                showDialogError("Αποτυχία φόρτωσης της φόρμας.");
+            });
+    };
+
+    const deleteCheck = function (button) {
+        const label = button.dataset.infrastructureCheckLabel || "";
+        if (!window.confirm("Διαγραφή του ελέγχου " + label + ";")) {
+            return;
+        }
+        button.disabled = true;
+        const token = document.querySelector('input[name="csrfmiddlewaretoken"]');
+        const data = new FormData();
+        data.append("csrfmiddlewaretoken", token ? token.value : "");
+        requestJson(button.dataset.infrastructureCheckDelete, { method: "POST", body: data })
+            .then(function (result) {
+                if (!result.ok) {
+                    throw new Error("bad response");
+                }
+                replaceGrid(result.grid_html);
+                showStatus(result.message);
+            })
+            .catch(function () {
+                button.disabled = false;
+                showStatus("Αποτυχία διαγραφής του ελέγχου.", "error");
+            });
+    };
+
+    document.addEventListener("click", function (event) {
+        const sort = event.target.closest("[data-infrastructure-check-sort]");
+        if (sort) {
+            event.preventDefault();
+            sortGrid(sort);
+            return;
+        }
+        if (!dialog) {
+            return;
+        }
+        const open = event.target.closest("[data-infrastructure-check-open]");
+        if (open) {
+            event.preventDefault();
+            openForm(open.dataset.infrastructureCheckOpen);
+            return;
+        }
+        const remove = event.target.closest("[data-infrastructure-check-delete]");
+        if (remove) {
+            event.preventDefault();
+            deleteCheck(remove);
+        }
+    });
+})();
+
 // Role permission matrix: «Όλα» per row; any access implies «Προβολή» on the row and on the
 // parent function, and removing «Προβολή» clears the row (and the sub-functions of a function).
 (function () {

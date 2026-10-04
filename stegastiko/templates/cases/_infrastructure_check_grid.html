@@ -1,0 +1,81 @@
+{% comment %}
+7.6 Παρακολουθηση κατασκευαστικων εργασιων: one row per dated check. Columns sort on click;
+re-rendered after every modal add/edit/delete. `readonly` hides the actions (προβολή φακέλου).
+{% endcomment %}
+<div{% if not readonly %} data-infrastructure-check-container{% endif %}>
+{% if not readonly and access.case_section_7.edit %}
+<div class="form-actions form-span-all">
+    <button type="button"
+            class="btn btn-secondary"
+            data-infrastructure-check-open="{% url 'cases:infrastructure_check_create' case.pk %}">
+        Προσθήκη ελέγχου
+    </button>
+</div>
+{% endif %}
+<div class="table-wrap">
+    <table class="data-table" data-infrastructure-check-table>
+        <thead>
+        <tr>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-infrastructure-check-sort="stage">
+                    Στάδιο
+                </button>
+            </th>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-infrastructure-check-sort="date">
+                    Ημερομηνία ελέγχου
+                </button>
+            </th>
+            <th>Ρείθρα</th>
+            <th>Κράσπεδα</th>
+            <th>Οδόστρωμα με ασφαλτικό σκυρόδεμα</th>
+            <th>Επιχωμάτωση πεζοδρομίων</th>
+            <th>Υδατοπρομήθεια</th>
+            <th>Τηλεπικοινωνίες</th>
+            <th>Παροχή ηλεκτρικού ρεύματος</th>
+            <th>Οδικός φωτισμός</th>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-infrastructure-check-sort="comments">
+                    Σχόλια
+                </button>
+            </th>
+            {% if not readonly %}<th><span class="visually-hidden">Ενέργειες</span></th>{% endif %}
+        </tr>
+        </thead>
+        <tbody>
+        {% for check in infrastructure_checks %}
+            <tr data-infrastructure-check-row>
+                <td data-sort-stage="{{ check.stage }}">{{ check.stage|default:"—" }}</td>
+                <td data-sort-date="{{ check.check_date|date:'Y-m-d' }}">{{ check.check_date }}</td>
+                <td>{{ check.curbs_ready|yesno:"ΝΑΙ,ΟΧΙ" }}</td>
+                <td>{{ check.pavements_ready|yesno:"ΝΑΙ,ΟΧΙ" }}</td>
+                <td>{{ check.asphalt_ready|yesno:"ΝΑΙ,ΟΧΙ" }}</td>
+                <td>{{ check.pavement_fill_ready|yesno:"ΝΑΙ,ΟΧΙ" }}</td>
+                <td>{{ check.water_ready|yesno:"ΝΑΙ,ΟΧΙ" }}</td>
+                <td>{{ check.telecom_ready|yesno:"ΝΑΙ,ΟΧΙ" }}</td>
+                <td>{{ check.electricity_ready|yesno:"ΝΑΙ,ΟΧΙ" }}</td>
+                <td>{{ check.street_light_ready|yesno:"ΝΑΙ,ΟΧΙ" }}</td>
+                <td data-sort-comments="{{ check.comments }}">{{ check.comments|default:"—"|linebreaksbr }}</td>
+                {% if not readonly %}
+                <td class="data-table__actions">
+                    {% if access.case_section_7.edit %}
+                    <button type="button" class="btn btn-secondary btn-sm"
+                            data-infrastructure-check-open="{% url 'cases:infrastructure_check_edit' case.pk check.pk %}">
+                        Επεξεργασία
+                    </button>
+                    <button type="button" class="btn btn-danger btn-sm"
+                            data-infrastructure-check-delete="{% url 'cases:infrastructure_check_delete' case.pk check.pk %}"
+                            data-infrastructure-check-label="{{ check.row_label }}">
+                        Διαγραφή
+                    </button>
+                    {% endif %}
+                </td>
+                {% endif %}
+            </tr>
+        {% empty %}
+            <tr><td colspan="{% if readonly %}11{% else %}12{% endif %}">Δεν έχουν καταχωριστεί έλεγχοι.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+</div>

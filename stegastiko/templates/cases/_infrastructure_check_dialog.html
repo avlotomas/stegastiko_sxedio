@@ -1,0 +1,8 @@
+{% comment %}
+Modal of the 7.6 construction works checks grid. Rendered outside the section form because forms
+cannot nest; the form itself is loaded from the server when the modal opens.
+{% endcomment %}
+<dialog id="infrastructure-check-dialog" class="modal" aria-labelledby="infrastructure-check-dialog-title" data-infrastructure-check-dialog>
+    <div class="alert alert--error" data-infrastructure-check-errors hidden></div>
+    <div data-infrastructure-check-dialog-body></div>
+</dialog>

@@ -186,8 +186,6 @@
 
     {% if section == '6' %}
         {% include "cases/_section_6_7_form.html" %}
-    {% elif section == '7' and form %}
-        {% include "cases/_section_7_7_form.html" %}
     {% endif %}
 
     {% if section != '5' %}
@@ -222,6 +220,7 @@
 {% elif section == '7' %}
     {% include "cases/_approved_design_plot_dialog.html" %}
     {% include "cases/_consultation_dialog.html" %}
+    {% include "cases/_infrastructure_check_dialog.html" %}
 {% elif section == '6' %}
     {% include "cases/_ministry_decision_round_dialog.html" %}
     {% if access.case_section_6.export %}

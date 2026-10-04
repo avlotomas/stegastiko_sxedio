@@ -21,6 +21,10 @@ media/
 .env
 .env.*
 !.env.example
+stegastiko/.ssh/
+
+# Local tunnel logs
+stegastiko/.cloudflared-tunnel.log
 
 # Office lock/temp files
 ~$*

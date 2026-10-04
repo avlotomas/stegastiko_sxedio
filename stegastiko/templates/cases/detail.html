@@ -355,41 +355,11 @@
     <h4 class="form-section-subtitle">Διαβουλεύσεις Κατασκευαστικών Σχεδίων</h4>
     {% include "cases/_consultation_grid.html" with readonly=True consultation_grid=division_consultation_grid %}
     {% case_detail_fields case "construction_plans_stage" "land_expropriation_required" %}
+    <h3 class="form-section-title">{% case_subsection_heading "7.5" %}</h3>
+    {% case_detail_fields case "tender_announcement_date" "tender_award_date" "contractor_name" "contractor_phone" "contractor_email" "contract_duration_value" "tender_comments" %}
     <h3 class="form-section-title">{% case_subsection_heading "7.6" %}</h3>
-    <div class="table-wrap">
-        <table class="data-table">
-            <thead>
-            <tr>
-                <th>Ημερομηνία</th>
-                <th>Ρείθρα</th>
-                <th>Κράσπεδα</th>
-                <th>Οδόστρωμα</th>
-                <th>Συνολικό αποτέλεσμα</th>
-            </tr>
-            </thead>
-            <tbody>
-            {% for check in infrastructure_checks %}
-                <tr>
-                    <td>{{ check.check_date }}</td>
-                    <td>{{ check.curbs_ready|yesno:"ΝΑΙ,ΟΧΙ" }}</td>
-                    <td>{{ check.pavements_ready|yesno:"ΝΑΙ,ΟΧΙ" }}</td>
-                    <td>{{ check.asphalt_ready|yesno:"ΝΑΙ,ΟΧΙ" }}</td>
-                    <td>
-                        {% if check.is_ready_for_submission_cycle %}
-                        <span class="badge badge--pass">ΝΑΙ</span>
-                        {% else %}
-                        <span class="badge badge--fail">ΟΧΙ</span>
-                        {% endif %}
-                    </td>
-                </tr>
-            {% empty %}
-                <tr><td colspan="5">Δεν έχει καταχωριστεί έλεγχος υποδομών.</td></tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    <h3 class="form-section-title">{% case_subsection_heading "7.7" %}</h3>
-    {% case_detail_fields case "tender_announcement_date" "tender_award_date" "contractor_name" "contractor_phone" "contractor_email" "contract_duration_value" "contract_duration_unit" "tender_comments" "works_progress_stage" "works_progress_updated_on" "works_progress_comments" "section8_comments" %}
+    {% include "cases/_infrastructure_check_grid.html" with readonly=True %}
+    {% case_detail_fields case "section8_comments" %}
 </section>
 {% endif %}
 {% endif %}

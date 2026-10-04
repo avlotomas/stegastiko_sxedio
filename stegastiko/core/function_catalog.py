@@ -107,7 +107,7 @@ FUNCTIONS = (
         (VIEW, EDIT, EXPORT),
         "6.1–6.5 σύνοψη, 6.6 απόφαση ανά τεμάχιο, 6.7 λήψη απόφασης από υπουργό, PDF πινάκων αξιολόγησης (επιλογή υποενοτήτων 6.1–6.6).",
     ),
-    _case_section("case_section_7", "7", "Ενότητα 7", (VIEW, EDIT), "7.1–7.7."),
+    _case_section("case_section_7", "7", "Ενότητα 7", (VIEW, EDIT), "7.1–7.6."),
     _case_section(
         "case_section_7_plots",
         "7-plots",

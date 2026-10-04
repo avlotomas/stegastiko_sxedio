@@ -1,0 +1,12 @@
+{% comment %}
+7.6 Παρακολουθηση κατασκευαστικων εργασιων — πίνακας ελέγχων (προσθήκη/επεξεργασία/διαγραφή σε
+modal) και τα Σχόλια / Παρατηρήσεις Ενότητας 7 στο τέλος της οθόνης.
+{% endcomment %}
+{% load case_detail %}
+
+<h3 class="form-section-title">{% case_subsection_heading "7.6" %}</h3>
+<div class="form-span-all" data-infrastructure-check-status></div>
+{% include "cases/_infrastructure_check_grid.html" %}
+<div class="form-grid form-span-all">
+    {% include "includes/form_field.html" with field=form.section8_comments wide=True %}
+</div>

@@ -3,8 +3,8 @@
 έγκριση σχεδιασμού (7.2 και 7.3 με δικά τους αρχεία· στην 7.3 και ο πίνακας «Στοιχεία
 Εγκεκριμένου Σχεδιασμού Οικοπέδων» με προσθήκη/επεξεργασία/διαγραφή σε modal) και 7.4
 κατασκευαστικά σχέδια και διαβουλεύσεις (δικές της γραμμές, ίδιες στήλες με την Ενότητα 5, σε modal).
-Ο πίνακας 7.6 αποδίδεται ως formset από το section_form.html και ακολουθεί η 7.7
-(_section_7_7_form.html).
+Ακολουθούν η 7.5 (_section_7_5_form.html) και η 7.6 με τον πίνακα ελέγχων κατασκευαστικών
+εργασιών σε modal (_section_7_6_form.html).
 {% endcomment %}
 {% load case_detail %}
 
@@ -48,3 +48,6 @@
     {% include "includes/form_field.html" with field=form.construction_plans_stage wide=True %}
     {% include "includes/form_field.html" with field=form.land_expropriation_required %}
 </div>
+
+{% include "cases/_section_7_5_form.html" %}
+{% include "cases/_section_7_6_form.html" %}

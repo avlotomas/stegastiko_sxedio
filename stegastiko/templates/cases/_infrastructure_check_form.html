@@ -1,0 +1,36 @@
+{% comment %}7.6 Modal form for one check of «Παρακολουθηση κατασκευαστικων εργασιων».{% endcomment %}
+<form method="post"
+      action="{% if check_form.instance.pk %}{% url 'cases:infrastructure_check_edit' case.pk check_form.instance.pk %}{% else %}{% url 'cases:infrastructure_check_create' case.pk %}{% endif %}"
+      class="app-form"
+      data-infrastructure-check-form
+      novalidate>
+    {% csrf_token %}
+    <h2 class="card__title" id="infrastructure-check-dialog-title">
+        {% if check_form.instance.pk %}Επεξεργασία ελέγχου{% else %}Νέος έλεγχος{% endif %}
+    </h2>
+
+    {% if check_form.non_field_errors %}
+    <div class="alert alert--error">
+        {% for error in check_form.non_field_errors %}{{ error }}{% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="form-grid">
+        {% include "includes/form_field.html" with field=check_form.stage %}
+        {% include "includes/form_field.html" with field=check_form.check_date %}
+        {% include "includes/form_field.html" with field=check_form.curbs_ready %}
+        {% include "includes/form_field.html" with field=check_form.pavements_ready %}
+        {% include "includes/form_field.html" with field=check_form.asphalt_ready %}
+        {% include "includes/form_field.html" with field=check_form.pavement_fill_ready %}
+        {% include "includes/form_field.html" with field=check_form.water_ready %}
+        {% include "includes/form_field.html" with field=check_form.telecom_ready %}
+        {% include "includes/form_field.html" with field=check_form.electricity_ready %}
+        {% include "includes/form_field.html" with field=check_form.street_light_ready %}
+        {% include "includes/form_field.html" with field=check_form.comments wide=True %}
+    </div>
+
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Αποθήκευση</button>
+        <button type="button" class="btn btn-secondary" data-dialog-close>Άκυρο</button>
+    </div>
+</form>

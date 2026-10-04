@@ -671,6 +671,24 @@ def test_stored_section_7_titles_follow_the_7_7_to_7_9_renumbering():
 
 
 @pytest.mark.django_db
+def test_stored_section_7_titles_move_tender_heading_to_7_5():
+    from importlib import import_module
+
+    from django.apps import apps
+
+    from core.models import SystemSetting
+
+    migration = import_module("core.migrations.0018_rename_subsection_labels_7_5_7_7")
+    set_setting("caseSubsectionLabel.7.7", "Παλιός τίτλος διαγωνισμού")
+
+    migration.rename_subsection_labels_7_5_7_7(apps, None)
+
+    values = dict(SystemSetting.objects.values_list("key", "value"))
+    assert values["caseSubsectionLabel.7.5"] == "Προκυρηξη και κατακυρωσης συμβασης"
+    assert values["caseSubsectionLabel.7.7"] == "Τρέχον στάδιο / πορεία εργασιών και σχόλια"
+
+
+@pytest.mark.django_db
 def test_case_detail_unallocated_shows_only_applicable_sections(community, staff_client):
     case = _make_case(community, case_type=Case.CaseType.UNALLOCATED_PLOTS)
     main = _detail_main_html(staff_client, case)
@@ -1322,12 +1340,7 @@ def test_section_4_saves_43_44_45_with_case_files(community, staff_client):
 
 
 def _section7_post(**overrides):
-    data = {
-        "infrastructure_checks-TOTAL_FORMS": "0",
-        "infrastructure_checks-INITIAL_FORMS": "0",
-    }
-    data.update(overrides)
-    return data
+    return dict(overrides)
 
 
 @pytest.mark.django_db
@@ -1935,7 +1948,7 @@ def test_section_7_4_has_consultations_grid_then_construction_plans_fields(commu
         html.index("data-consultation-table"),
         html.index('name="construction_plans_stage"'),
         html.index('name="land_expropriation_required"'),
-        html.index("7.6 Έλεγχος υποδομών"),
+        html.index("7.5 Προκυρηξη και κατακυρωσης συμβασης"),
     ]
     assert positions == sorted(positions)
     assert "Στάδιο κατασκευαστικών σχεδίων" in html
@@ -1968,7 +1981,7 @@ def test_section_7_4_construction_plans_fields_are_saved_and_shown_in_folder(com
 
     detail = staff_client.get(reverse("cases:detail", args=[case.pk])).content.decode()
     block = detail[
-        detail.index("7.4 Κατασκευαστικά Σχέδια και Διαβουλεύσεις"):detail.index("7.6 Έλεγχος υποδομών")
+        detail.index("7.4 Κατασκευαστικά Σχέδια και Διαβουλεύσεις"):detail.index("7.5 Προκυρηξη και κατακυρωσης συμβασης")
     ]
     assert "Διαβουλεύσεις Κατασκευαστικών Σχεδίων" in block
     assert "data-consultation-table" in block
@@ -2200,28 +2213,38 @@ def test_section_7_3_approved_design_plots_grid_sits_after_7_3_comments(communit
 
 
 @pytest.mark.django_db
-def test_section_7_7_tender_and_progress_fields_close_the_section_7_screen(community, staff_client):
+def test_section_7_5_and_7_6_close_the_section_7_screen(community, staff_client):
     case = _make_case(community)
     html = staff_client.get(reverse("cases:section_edit", args=[case.pk, "7"])).content.decode()
-    heading_7_7 = "7.7 Διαγωνισμός, ανάθεση και πορεία εργασιών"
-    positions = [
-        html.index("data-approved-design-plot-table"),
-        html.index("7.4 Κατασκευαστικά Σχέδια και Διαβουλεύσεις"),
-        html.index("7.6 Έλεγχος υποδομών"),
-        html.index(heading_7_7),
-        html.index('name="tender_announcement_date"'),
-        html.index('name="works_progress_comments"'),
-        html.index('name="section8_comments"'),
-        html.rindex('class="form-actions form-span-all"'),
-    ]
-    assert positions == sorted(positions)
-    assert "7.5 Διαγωνισμός" not in html
+    heading_7_5 = "7.5 Προκυρηξη και κατακυρωσης συμβασης"
+    heading_7_6 = "7.6 Παρακολουθηση κατασκευαστικων εργασιων"
+    assert html.index("7.4 Κατασκευαστικά Σχέδια και Διαβουλεύσεις") < html.index(heading_7_5)
+    assert html.index(heading_7_5) < html.index('name="tender_announcement_date"')
+    assert html.index('name="tender_announcement_date"') < html.index(heading_7_6)
+    assert html.index(heading_7_6) < html.index("data-infrastructure-check-table")
+    assert html.index("data-infrastructure-check-table") < html.index('name="section8_comments"')
+    assert html.index('name="section8_comments"') < html.rindex('class="form-actions form-span-all"')
+    for removed in (
+        "7.7 Έλεγχος υποδομών",
+        "infrastructure_checks-TOTAL_FORMS",
+        'name="works_progress_stage"',
+        'name="works_progress_updated_on"',
+        'name="works_progress_comments"',
+        "Σχόλια / Παρατηρήσεις Ενότητας 8",
+    ):
+        assert removed not in html
     assert "Σχόλια / Παρατηρήσεις Ενότητας 7" in html
-    assert "Σχόλια / Παρατηρήσεις Ενότητας 8" not in html
 
     detail = staff_client.get(reverse("cases:detail", args=[case.pk])).content.decode()
-    assert detail.index("7.6 Έλεγχος υποδομών") < detail.index(heading_7_7)
-    assert detail.index(heading_7_7) < detail.index("7.8 Αίτηση στο ΤΚΧ")
+    assert detail.index("7.4 Κατασκευαστικά Σχέδια και Διαβουλεύσεις") < detail.index(heading_7_5)
+    assert detail.index(heading_7_5) < detail.index(heading_7_6)
+    assert detail.index(heading_7_6) < detail.index("data-infrastructure-check-table")
+    assert detail.index("data-infrastructure-check-table") < detail.index("7.8 Αίτηση στο ΤΚΧ")
+    assert "7.7 Έλεγχος υποδομών" not in detail
+    assert 'name="contract_duration_unit"' not in html
+    tender_block = detail[detail.index(heading_7_5):detail.index(heading_7_6)]
+    assert "Διάρκεια σύμβασης (μήνες)" in tender_block
+    assert "Διάρκεια σύμβασης (μονάδα" not in tender_block
     for heading in (
         "7.8 Χωράφια",
         "7.9.1 Παραπομπές προς ΤΚΧ",
@@ -2462,3 +2485,211 @@ def test_approved_design_plot_bulk_add_rejects_invalid_input(community, staff_cl
     assert duplicate.count('name="manual_numbers"') == 3
     assert 'value="Π-3"' in duplicate
     assert not case.approved_design_plots.exists()
+
+
+INFRASTRUCTURE_CHECK_LABELS = (
+    "Στάδιο",
+    "Ημερομηνία ελέγχου",
+    "Ρείθρα",
+    "Κράσπεδα",
+    "Οδόστρωμα με ασφαλτικό σκυρόδεμα",
+    "Επιχωμάτωση πεζοδρομίων",
+    "Υδατοπρομήθεια",
+    "Τηλεπικοινωνίες",
+    "Παροχή ηλεκτρικού ρεύματος",
+    "Οδικός φωτισμός",
+    "Σχόλια",
+)
+
+
+def _infrastructure_check_values(**overrides):
+    values = {
+        "stage": "Ολοκλήρωση υποδομών οδοποιίας",
+        "check_date": "2027-05-15",
+        "comments": "",
+        **{name: "False" for name in InfrastructureCheck.WORK_FIELDS},
+    }
+    values.update(overrides)
+    return values
+
+
+@pytest.mark.django_db
+def test_section_7_6_checks_grid_adds_edits_and_deletes_rows(community, staff_client):
+    case = _make_case(community)
+    html = staff_client.get(reverse("cases:section_edit", args=[case.pk, "7"])).content.decode()
+    assert 'id="infrastructure-check-dialog"' in html
+    assert reverse("cases:infrastructure_check_create", args=[case.pk]) in html
+    grid = html[html.index("data-infrastructure-check-table"):]
+    for label in INFRASTRUCTURE_CHECK_LABELS:
+        assert label in grid
+
+    url = reverse("cases:infrastructure_check_create", args=[case.pk])
+    assert staff_client.get(url).status_code == 404
+    form = staff_client.get(url, **JSON).json()
+    assert form["ok"] is True
+    for label in INFRASTRUCTURE_CHECK_LABELS:
+        assert label in form["html"]
+    assert form["html"].count(">ΝΑΙ</option>") == len(InfrastructureCheck.WORK_FIELDS)
+    assert form["html"].count(">ΟΧΙ</option>") == len(InfrastructureCheck.WORK_FIELDS)
+
+    missing_date = staff_client.post(url, _infrastructure_check_values(check_date=""), **JSON)
+    assert missing_date.status_code == 400
+    assert not case.infrastructure_checks.exists()
+
+    payload = staff_client.post(
+        url,
+        _infrastructure_check_values(
+            curbs_ready="True", water_ready="True", comments="Εκκρεμεί ο φωτισμός."
+        ),
+        **JSON,
+    ).json()
+    assert payload["ok"] is True
+    assert "Ολοκλήρωση υποδομών οδοποιίας" in payload["grid_html"]
+    assert "Εκκρεμεί ο φωτισμός." in payload["grid_html"]
+    check = case.infrastructure_checks.get()
+    assert check.stage == "Ολοκλήρωση υποδομών οδοποιίας"
+    assert check.check_date == date(2027, 5, 15)
+    assert check.curbs_ready and check.water_ready
+    assert not (check.pavements_ready or check.asphalt_ready or check.street_light_ready)
+    assert ActionHistory.objects.filter(
+        entity_type="InfrastructureCheck", action="CREATE", case_id=case.pk, section_ref="7.6"
+    ).exists()
+
+    edit_url = reverse("cases:infrastructure_check_edit", args=[case.pk, check.pk])
+    assert 'value="Ολοκλήρωση υποδομών οδοποιίας"' in staff_client.get(edit_url, **JSON).json()["html"]
+    staff_client.post(
+        edit_url, _infrastructure_check_values(stage="Ασφαλτόστρωση", asphalt_ready="True"), **JSON
+    )
+    check.refresh_from_db()
+    assert check.stage == "Ασφαλτόστρωση"
+    assert check.asphalt_ready and not check.curbs_ready
+    assert ActionHistory.objects.filter(
+        entity_type="InfrastructureCheck",
+        action="UPDATE",
+        case_id=case.pk,
+        section_ref="7.6",
+        field_name="stage",
+    ).exists()
+
+    detail = staff_client.get(reverse("cases:detail", args=[case.pk])).content.decode()
+    assert "Ασφαλτόστρωση" in detail
+    assert "data-infrastructure-check-open" not in detail
+    assert "data-infrastructure-check-delete" not in detail
+
+    delete_url = reverse("cases:infrastructure_check_delete", args=[case.pk, check.pk])
+    assert staff_client.get(delete_url, **JSON).status_code == 404
+    payload = staff_client.post(delete_url, **JSON).json()
+    assert payload["ok"] is True
+    assert not case.infrastructure_checks.exists()
+    assert ActionHistory.objects.filter(
+        entity_type="InfrastructureCheck", action="DELETE", case_id=case.pk, section_ref="7.6"
+    ).exists()
+
+
+@pytest.mark.django_db
+def test_section_7_6_checks_need_edit_access_and_stay_on_their_case(
+    community, client, staff_client, make_user
+):
+    case = _make_case(community)
+    other_case = _make_case(community, number="CASE-ABG-02")
+    foreign = InfrastructureCheck.objects.create(case=other_case, check_date=date(2027, 1, 1))
+    edit_url = reverse("cases:infrastructure_check_edit", args=[case.pk, foreign.pk])
+    assert staff_client.get(edit_url, **JSON).status_code == 404
+    delete_url = reverse("cases:infrastructure_check_delete", args=[case.pk, foreign.pk])
+    assert staff_client.post(delete_url, **JSON).status_code == 404
+    assert other_case.infrastructure_checks.count() == 1
+
+    InfrastructureCheck.objects.create(case=case, check_date=date(2027, 2, 1), stage="Θεμέλια")
+    client.force_login(make_user("reader", "Μόνο ανάγνωση"))
+    html = client.get(reverse("cases:section_edit", args=[case.pk, "7"])).content.decode()
+    assert "Θεμέλια" in html
+    assert "data-infrastructure-check-open" not in html
+    create_url = reverse("cases:infrastructure_check_create", args=[case.pk])
+    assert client.get(create_url, **JSON).status_code == 403
+    assert client.post(create_url, _infrastructure_check_values(), **JSON).status_code == 403
+    assert case.infrastructure_checks.count() == 1
+
+
+@pytest.mark.django_db
+def test_section_7_6_latest_check_drives_the_8_4_readiness(community, staff_client):
+    case = _make_case(community)
+    case.dls_response_date = date(2027, 6, 1)
+    case.save()
+    _ready_parcel(case)
+    url = reverse("cases:infrastructure_check_create", args=[case.pk])
+    ready = {"curbs_ready": "True", "pavements_ready": "True", "asphalt_ready": "True"}
+
+    staff_client.post(url, _infrastructure_check_values(check_date="2027-03-01", **ready), **JSON)
+    assert announcement_readiness(case)["can_start"]
+
+    staff_client.post(url, _infrastructure_check_values(check_date="2027-04-01"), **JSON)
+    assert not announcement_readiness(case)["can_start"]
+
+
+def test_section_7_6_migration_keeps_old_comments_and_flat_fields():
+    from importlib import import_module
+    from types import SimpleNamespace
+
+    migration = import_module("cases.migrations.0023_section_7_6_works_checks")
+
+    def row(**values):
+        item = SimpleNamespace(**values)
+        item.save = lambda update_fields: setattr(item, "saved", update_fields)
+        return item
+
+    blank_items = {name: "" for name, _ in migration.ITEM_COMMENT_FIELDS}
+    check = row(**{**blank_items, "comments": "Γενικό σχόλιο", "curbs_comments": " Λείπουν 10 μ. "})
+    untouched_check = row(**blank_items, comments="")
+    case = row(
+        works_progress_stage="Υπό κατασκευή",
+        works_progress_updated_on=date(2027, 3, 4),
+        works_progress_comments="",
+        section8_comments="",
+    )
+    empty_case = row(
+        works_progress_stage="",
+        works_progress_updated_on=None,
+        works_progress_comments="",
+        section8_comments="Υφιστάμενο",
+    )
+    models = {
+        "InfrastructureCheck": [check, untouched_check],
+        "Case": [case, empty_case],
+    }
+    apps = SimpleNamespace(
+        get_model=lambda app, name: SimpleNamespace(
+            objects=SimpleNamespace(all=lambda: models[name])
+        )
+    )
+
+    migration.merge_old_7_6_values(apps, None)
+
+    assert check.comments == "Γενικό σχόλιο\nΡείθρα: Λείπουν 10 μ."
+    assert not hasattr(untouched_check, "saved")
+    assert case.section8_comments == (
+        "Τρέχον στάδιο / γενική πορεία εργασιών: Υπό κατασκευή\n"
+        "Ημερομηνία ενημέρωσης πορείας: 04/03/2027"
+    )
+    assert empty_case.section8_comments == "Υφιστάμενο"
+    assert not hasattr(empty_case, "saved")
+
+
+@pytest.mark.django_db
+def test_stored_7_7_title_is_removed_with_the_infrastructure_table():
+    from importlib import import_module
+
+    from django.apps import apps
+
+    from core.models import Role, SystemSetting
+
+    migration = import_module("core.migrations.0020_remove_subsection_label_7_7")
+    set_setting("caseSubsectionLabel.7.7", "Έλεγχος υποδομών")
+    role = Role.objects.get(name="Τεχνικός λειτουργός")
+    role.description = role.description.replace("(7.1–7.6)", "(7.1–7.7)")
+    role.save()
+
+    migration.remove_subsection_label_7_7(apps, None)
+
+    assert not SystemSetting.objects.filter(key="caseSubsectionLabel.7.7").exists()
+    role.refresh_from_db()
+    assert "υποδομές διαχωρισμού (7.1–7.6)" in role.description

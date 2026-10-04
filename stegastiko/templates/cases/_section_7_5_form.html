@@ -1,0 +1,13 @@
+{% comment %}7.5 Προκυρηξη και κατακυρωσης συμβασης — εμφανίζεται αμέσως μετά την 7.4.{% endcomment %}
+{% load case_detail %}
+
+<h3 class="form-section-title">{% case_subsection_heading "7.5" %}</h3>
+<div class="form-grid form-span-all">
+    {% include "includes/form_field.html" with field=form.tender_announcement_date %}
+    {% include "includes/form_field.html" with field=form.tender_award_date %}
+    {% include "includes/form_field.html" with field=form.contractor_name %}
+    {% include "includes/form_field.html" with field=form.contractor_phone %}
+    {% include "includes/form_field.html" with field=form.contractor_email %}
+    {% include "includes/form_field.html" with field=form.contract_duration_value %}
+    {% include "includes/form_field.html" with field=form.tender_comments %}
+</div>
