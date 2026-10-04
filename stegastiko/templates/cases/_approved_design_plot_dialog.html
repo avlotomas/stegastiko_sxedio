@@ -1,0 +1,8 @@
+{% comment %}
+Modal of the 7.3 approved design plots grid. Rendered outside the section form because forms
+cannot nest; the form itself is loaded from the server when the modal opens.
+{% endcomment %}
+<dialog id="approved-design-plot-dialog" class="modal" aria-labelledby="approved-design-plot-dialog-title" data-approved-design-plot-dialog>
+    <div class="alert alert--error" data-approved-design-plot-errors hidden></div>
+    <div data-approved-design-plot-dialog-body></div>
+</dialog>

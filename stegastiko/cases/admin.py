@@ -1,6 +1,7 @@
 from django.contrib import admin
 
 from cases.models import (
+    ApprovedDesignPlot,
     Case,
     CompletenessCheck,
     Consultation,
@@ -22,6 +23,7 @@ admin.site.register(UtilityService)
 admin.site.register(UtilityServiceType)
 admin.site.register(Consultation)
 admin.site.register(InfrastructureCheck)
+admin.site.register(ApprovedDesignPlot)
 admin.site.register(Field)
 admin.site.register(Parcel)
 admin.site.register(ValuationReferral)

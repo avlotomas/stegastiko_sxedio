@@ -8,9 +8,8 @@ CASE_SECTIONS = (
     "case_section_5",
     "case_section_6",
     "case_section_7",
+    "case_section_7_plots",
     "case_section_8",
-    "case_section_8_plots",
-    "case_section_9",
 )
 
 # Every access type of each case section (mirrors core.function_catalog at v2.0.41).
@@ -22,9 +21,8 @@ CASE_SECTION_ACTIONS = {
     "case_section_5": ("view", "create", "edit", "delete"),
     "case_section_6": ("view", "edit", "export"),
     "case_section_7": ("view", "edit"),
-    "case_section_8": ("view", "edit"),
-    "case_section_8_plots": ("view", "edit"),
-    "case_section_9": ("view", "create", "edit", "publish"),
+    "case_section_7_plots": ("view", "edit"),
+    "case_section_8": ("view", "create", "edit", "publish"),
 }
 
 SETTINGS_PAGES = (
@@ -75,7 +73,7 @@ DEFAULT_ROLES = (
     (
         "Προϊστάμενος ελέγχου",
         "Πλήρης πρόσβαση στις υποθέσεις Κ.Σ. / Δ.Δ. και στις αιτήσεις πολιτών, "
-        "περιλαμβανομένης της οριστικοποίησης και έκδοσης ανακοίνωσης (9.3).",
+        "περιλαμβανομένης της οριστικοποίησης και έκδοσης ανακοίνωσης (8.3).",
         _merge(
             {"reminders": ("view",)},
             CASES_FULL,
@@ -85,17 +83,17 @@ DEFAULT_ROLES = (
     (
         "Λειτουργός καταχώρισης",
         "Καταχώριση και επεξεργασία σε όλες τις Ενότητες και στις αιτήσεις πολιτών· "
-        "χωρίς οριστικοποίηση / έκδοση ανακοίνωσης (9.3).",
+        "χωρίς οριστικοποίηση / έκδοση ανακοίνωσης (8.3).",
         _merge(
             {"reminders": ("view",)},
-            {code: actions for code, actions in CASES_FULL.items() if code != "case_section_9"},
-            {"case_section_9": ("view", "create", "edit")},
+            {code: actions for code, actions in CASES_FULL.items() if code != "case_section_8"},
+            {"case_section_8": ("view", "create", "edit")},
             {"applications": ("view", "create", "edit"), "application_import": ("import",)},
         ),
     ),
     (
         "Τεχνικός λειτουργός",
-        "Τεχνική αξιολόγηση (Ενότητα 4) και υποδομές διαχωρισμού (8.1–8.6)· "
+        "Τεχνική αξιολόγηση (Ενότητα 4) και υποδομές διαχωρισμού (7.1–7.6)· "
         "προβολή των υπόλοιπων Ενοτήτων. Χωρίς πρόσβαση σε αιτήσεις πολιτών.",
         _merge(
             {"reminders": ("view",)},
@@ -103,7 +101,7 @@ DEFAULT_ROLES = (
             CASE_EXPORTS,
             {
                 "case_section_4": CASE_SECTION_ACTIONS["case_section_4"],
-                "case_section_8": ("view", "edit"),
+                "case_section_7": ("view", "edit"),
             },
         ),
     ),
@@ -115,13 +113,13 @@ DEFAULT_ROLES = (
     ),
     (
         "Έπαρχος",
-        "Προβολή όλων, Σύσταση προς τον Υπουργό (Ενότητα 7) και οριστικοποίηση / "
-        "έκδοση ανακοίνωσης (9.3).",
+        "Προβολή όλων, διαχωρισμός/οικόπεδα (Ενότητα 7) και οριστικοποίηση / "
+        "έκδοση ανακοίνωσης (8.3).",
         _merge(
             {"reminders": ("view",)},
             CASES_READ,
             CASE_EXPORTS,
-            {"case_section_7": ("view", "edit"), "case_section_9": ("view", "publish")},
+            {"case_section_7": ("view", "edit"), "case_section_8": ("view", "publish")},
             {"applications": ("view",)},
         ),
     ),

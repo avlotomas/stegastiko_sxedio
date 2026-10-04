@@ -4,7 +4,7 @@
         <h2 class="card__title case-actions-sidebar__title">Ενέργειες υπόθεσης</h2>
         <p class="text-muted case-actions-sidebar__hint">
             {% if case.is_new_division %}
-            Νέο αίτημα διαχωρισμού: ισχύουν οι Ενότητες 1–9.
+            Νέο αίτημα διαχωρισμού: ισχύουν οι Ενότητες 1–8.
             {% else %}
             Αδιάθετα οικόπεδα: διαθέσιμες οι σχετικές ενότητες.
             {% endif %}
@@ -12,7 +12,7 @@
         <nav class="case-actions-nav">
             {% for item in case_nav %}
             <a
-                href="{% if item.key == '9' %}{% url 'cases:announcement_create' case.pk %}{% else %}{% url 'cases:section_edit' case.pk item.key %}{% endif %}"
+                href="{% if item.key == '8' %}{% url 'cases:announcement_create' case.pk %}{% else %}{% url 'cases:section_edit' case.pk item.key %}{% endif %}"
                 class="case-actions-nav__link{% if item.is_active %} is-active{% endif %}"
                 title="{{ item.title }}"
                 {% if item.is_active %}aria-current="page"{% endif %}

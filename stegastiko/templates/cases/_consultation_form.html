@@ -1,12 +1,12 @@
-{% comment %}Ενότητα 5 — modal form for one suitability consultation row.{% endcomment %}
+{% comment %}Ενότητα 5 / 7.4 — modal form for one consultation row.{% endcomment %}
 <form method="post"
       enctype="multipart/form-data"
-      action="{% if consultation_form.instance.pk %}{% url 'cases:suitability_consultation_edit' case.pk consultation_form.instance.pk %}{% else %}{% url 'cases:suitability_consultation_create' case.pk %}{% endif %}"
+      action="{% if consultation_form.instance.pk %}{% url consultation_urls.edit_url_name case.pk consultation_form.instance.pk %}{% else %}{% url consultation_urls.create_url_name case.pk %}{% endif %}"
       class="app-form"
-      data-suitability-consultation-form
+      data-consultation-form
       novalidate>
     {% csrf_token %}
-    <h2 class="card__title" id="suitability-consultation-dialog-title">
+    <h2 class="card__title" id="consultation-dialog-title">
         {% if consultation_form.instance.pk %}Επεξεργασία διαβούλευσης{% else %}Νέα διαβούλευση{% endif %}
     </h2>
 

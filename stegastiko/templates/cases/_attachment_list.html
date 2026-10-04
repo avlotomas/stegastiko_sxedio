@@ -1,0 +1,11 @@
+{% comment %}Read-only «Επισυναπτόμενα έγγραφα» of one attachment slot in the case folder.{% endcomment %}
+<h4 class="form-section-subtitle">Επισυναπτόμενα έγγραφα</h4>
+{% if attachments %}
+<ul class="attachment-list">
+    {% for attachment in attachments %}
+    <li><a href="{% url 'cases:attachment_download' case.pk attachment.pk %}">{{ attachment.filename }}</a></li>
+    {% endfor %}
+</ul>
+{% else %}
+<p class="form-readonly">Δεν έχουν επισυναφθεί αρχεία.</p>
+{% endif %}

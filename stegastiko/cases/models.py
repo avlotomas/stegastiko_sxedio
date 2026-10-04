@@ -12,23 +12,15 @@ class YesNo(models.TextChoices):
 
 
 # §Α.3.3 A new-division case runs every section; an unallocated-plots case has no
-# Αίτηση Α, so its plots are registered straight into 8.8 and announced in 9.
-SECTION_KEYS_NEW_DIVISION = ("1", "2", "3", "4", "5", "6", "7", "8", "8-plots", "9")
-SECTION_KEYS_UNALLOCATED = ("1", "8-plots", "9")
+# Αίτηση Α, so its plots are registered straight into 7.9 and announced in 8.
+SECTION_KEYS_NEW_DIVISION = ("1", "2", "3", "4", "5", "6", "7", "7-plots", "8")
+SECTION_KEYS_UNALLOCATED = ("1", "7-plots", "8")
 
 
 class Case(AuditedModel):
     class CaseType(models.TextChoices):
         NEW_DIVISION = "new_division", "Νέο αίτημα διαχωρισμού"
         UNALLOCATED_PLOTS = "unallocated_plots", "Αδιάθετα οικόπεδα"
-
-    class Recommendation(models.TextChoices):
-        POSITIVE = "positive", "Θετική"
-        NEGATIVE = "negative", "Αρνητική"
-
-    class MinistryDecision(models.TextChoices):
-        APPROVED = "approved", "Έγκριση"
-        REJECTED = "rejected", "Απόρριψη"
 
     class DesignStatus(models.TextChoices):
         PENDING = "pending", "Εκκρεμεί"
@@ -101,90 +93,83 @@ class Case(AuditedModel):
     technical_visit_date = models.DateField(
         null=True, blank=True, help_text="4.6 Ημερομηνία επισκεψης"
     )
-    # 4.4 files of the technical evaluation as a whole are kept on the case (section_ref "4.4").
+    # Case-level files are told apart by section_ref: 4.4 technical evaluation as a whole,
+    # 7.2 division design, 7.3 ΤΠΟ application.
     attachments = GenericRelation(Attachment)
-
-    recommendation_letter_date = models.DateField(
-        null=True, blank=True, help_text="7 Ημερομηνία αποστολής επιστολής σύστασης"
-    )
-    recommendation = models.CharField(
-        max_length=16,
-        choices=Recommendation.choices,
-        blank=True,
-        help_text="7 Σύσταση Επαρχιακής Διοίκησης",
-    )
-    ministry_response_date = models.DateField(
-        null=True, blank=True, help_text="7 Ημερομηνία λήψης απάντησης ΥΠΕΣ"
-    )
-    ministry_decision = models.CharField(
-        max_length=16, choices=MinistryDecision.choices, blank=True, help_text="7 Απόφαση ΥΠΕΣ"
-    )
-    section7_comments = models.TextField(blank=True, help_text="7 Σχόλια / Παρατηρήσεις Ενότητας 7")
+    ATTACHMENT_SECTION_DIVISION_DESIGN = "7.2"
+    ATTACHMENT_SECTION_TPO_APPLICATION = "7.3"
 
     survey_assignment_date = models.DateField(
-        null=True, blank=True, help_text="8.1 Ημερομηνία ανάθεσης μελέτης"
+        null=True, blank=True, help_text="7.1 Ημερομηνία ανάθεσης μελέτης"
     )
     surveyor_name = models.CharField(
-        max_length=255, blank=True, help_text="8.1 Ονοματεπώνυμο ιδιώτη αρμόδιου χωρομέτρη"
+        max_length=255, blank=True, help_text="7.1 Ονοματεπώνυμο ιδιώτη αρμόδιου χωρομέτρη"
     )
-    surveyor_phone = models.CharField(max_length=64, blank=True, help_text="8.1 Τηλέφωνο χωρομέτρη")
-    surveyor_email = models.EmailField(blank=True, help_text="8.1 Email χωρομέτρη")
-    survey_assignment_comments = models.TextField(blank=True, help_text="8.1 Σχόλια")
+    surveyor_phone = models.CharField(max_length=64, blank=True, help_text="7.1 Τηλέφωνο")
+    surveyor_email = models.EmailField(blank=True, help_text="7.1 Email")
+    survey_assignment_comments = models.TextField(blank=True, help_text="7.1 Σχόλια")
 
     division_design_status = models.CharField(
-        max_length=16, choices=DesignStatus.choices, blank=True, help_text="8.2 Κατάσταση σχεδιασμού"
+        max_length=16, choices=DesignStatus.choices, blank=True, help_text="7.2 Κατάσταση σχεδιασμού"
     )
     division_design_completed_on = models.DateField(
-        null=True, blank=True, help_text="8.2 Ημερομηνία ολοκλήρωσης σχεδιασμού"
+        null=True, blank=True, help_text="7.2 Ημερομηνία ολοκλήρωσης σχεδιασμού"
     )
     division_design_plots_count = models.PositiveIntegerField(
-        null=True, blank=True, help_text="8.2 Αριθμός οικοπέδων στον ολοκληρωμένο σχεδιασμό"
+        null=True, blank=True, help_text="7.2 Αριθμός οικοπέδων"
     )
-    division_design_comments = models.TextField(blank=True, help_text="8.2 Σχόλια")
+    division_design_comments = models.TextField(blank=True, help_text="7.2 Σχόλια")
 
     tpo_application_date = models.DateField(
-        null=True, blank=True, help_text="8.3 Ημερομηνία υποβολής αίτησης στο ΤΠΟ"
+        null=True, blank=True, help_text="7.3 Ημερομηνία υποβολής αίτησης στο ΤΠΟ"
     )
     tpo_application_number = models.CharField(
-        max_length=64, blank=True, help_text="8.3 Αριθμός αίτησης ΤΠΟ"
+        max_length=64, blank=True, help_text="7.3 Αριθμός αίτησης ΤΠΟ"
     )
     tpo_response = models.CharField(
-        max_length=16, choices=TpoResponse.choices, blank=True, help_text="8.3 Απάντηση Διευθυντή ΤΠΟ"
+        max_length=16, choices=TpoResponse.choices, blank=True, help_text="7.3 Απάντηση Διευθυντή ΤΠΟ"
     )
     tpo_response_date = models.DateField(
-        null=True, blank=True, help_text="8.3 Ημερομηνία απάντησης ΤΠΟ"
+        null=True, blank=True, help_text="7.3 Ημερομηνία απάντησης ΤΠΟ"
     )
-    tpo_comments = models.TextField(blank=True, help_text="8.3 Σχόλια")
+    tpo_comments = models.TextField(blank=True, help_text="7.3 Σχόλια")
+
+    construction_plans_stage = models.TextField(
+        blank=True, help_text="7.4 Στάδιο κατασκευαστικών σχεδίων"
+    )
+    land_expropriation_required = models.CharField(
+        max_length=8, choices=YesNo.choices, blank=True, help_text="7.4 Απαιτείται απαλλοτρίωση γης"
+    )
 
     tender_announcement_date = models.DateField(
-        null=True, blank=True, help_text="8.5 Ημερομηνία προκήρυξης διαγωνισμού"
+        null=True, blank=True, help_text="7.7 Ημερομηνία προκήρυξης διαγωνισμού"
     )
     tender_award_date = models.DateField(
-        null=True, blank=True, help_text="8.5 Ημερομηνία κατακύρωσης"
+        null=True, blank=True, help_text="7.7 Ημερομηνία κατακύρωσης"
     )
     contractor_name = models.CharField(
-        max_length=255, blank=True, help_text="8.5 Ανάδοχος / πρόσωπο ανάθεσης"
+        max_length=255, blank=True, help_text="7.7 Ανάδοχος / πρόσωπο ανάθεσης"
     )
-    contractor_phone = models.CharField(max_length=64, blank=True, help_text="8.5 Τηλέφωνο αναδόχου")
-    contractor_email = models.EmailField(blank=True, help_text="8.5 Email αναδόχου")
+    contractor_phone = models.CharField(max_length=64, blank=True, help_text="7.7 Τηλέφωνο αναδόχου")
+    contractor_email = models.EmailField(blank=True, help_text="7.7 Email αναδόχου")
     contract_duration_value = models.PositiveIntegerField(
-        null=True, blank=True, help_text="8.5 Διάρκεια σύμβασης (αριθμός)"
+        null=True, blank=True, help_text="7.7 Διάρκεια σύμβασης (αριθμός)"
     )
     contract_duration_unit = models.CharField(
         max_length=16,
         choices=ContractDurationUnit.choices,
         blank=True,
-        help_text="8.5 Διάρκεια σύμβασης (μονάδα)",
+        help_text="7.7 Διάρκεια σύμβασης (μονάδα)",
     )
-    tender_comments = models.TextField(blank=True, help_text="8.5 Σχόλια")
+    tender_comments = models.TextField(blank=True, help_text="7.7 Σχόλια")
 
     works_progress_stage = models.CharField(
-        max_length=255, blank=True, help_text="8.6 Τρέχον στάδιο / πορεία εργασιών"
+        max_length=255, blank=True, help_text="7.7 Τρέχον στάδιο / πορεία εργασιών"
     )
     works_progress_updated_on = models.DateField(
-        null=True, blank=True, help_text="8.6 Ημερομηνία ενημέρωσης πορείας"
+        null=True, blank=True, help_text="7.7 Ημερομηνία ενημέρωσης πορείας"
     )
-    works_progress_comments = models.TextField(blank=True, help_text="8.6 Σχόλια γενικής πορείας")
+    works_progress_comments = models.TextField(blank=True, help_text="7.7 Σχόλια γενικής πορείας")
 
     dls_application_date = models.DateField(
         null=True, blank=True, help_text="8.7 Ημερομηνία υποβολής αίτησης στο ΤΚΧ"
@@ -195,7 +180,9 @@ class Case(AuditedModel):
     )
     dls_comments = models.TextField(blank=True, help_text="8.7 Σχόλια")
 
-    section8_comments = models.TextField(blank=True, help_text="8 Σχόλια / Παρατηρήσεις Ενότητας 8")
+    section8_comments = models.TextField(
+        blank=True, help_text="7.7 Σχόλια / Παρατηρήσεις Ενότητας 7"
+    )
 
     class Meta:
         ordering = ("-start_date", "-id")
@@ -223,6 +210,12 @@ class Case(AuditedModel):
             labels.append(self.priority_other)
         return labels
 
+    def division_design_attachments(self):
+        return self.attachments.filter(section_ref=self.ATTACHMENT_SECTION_DIVISION_DESIGN)
+
+    def tpo_application_attachments(self):
+        return self.attachments.filter(section_ref=self.ATTACHMENT_SECTION_TPO_APPLICATION)
+
     @property
     def latest_infrastructure_check(self):
         return self.infrastructure_checks.first()
@@ -240,6 +233,14 @@ class Case(AuditedModel):
     def completeness_result(self):
         check = self.latest_completeness_check
         return check.result if check else ""
+
+    @property
+    def latest_ministry_decision_display(self):
+        """Latest ΥΠΕΣ decision for case lists (source: 6.7 rows)."""
+        latest = self.ministry_decision_rounds.order_by("-id").first()
+        if not latest or not latest.ministry_decision:
+            return ""
+        return latest.ministry_decision_display
 
     @property
     def completeness_result_display(self):
@@ -506,7 +507,7 @@ class UtilityService(AuditedModel):
 class Consultation(AuditedModel):
     class Stage(models.TextChoices):
         SUITABILITY = "suitability", "Καταλληλότητα"
-        DIVISION = "division", "Διαχωρισμός"
+        DIVISION = "division", "Κατασκευαστικά σχέδια"
 
     class Department(models.TextChoices):
         TKX = "tkx", "Τ.Κ.Χ"
@@ -518,6 +519,9 @@ class Consultation(AuditedModel):
         PENDING = "pending", "Εκκρεμεί"
         RECEIVED = "received", "Λήφθηκε"
         CLOSED = "closed", "Κλείστηκε"
+
+    # Section 5 and subsection 7.4 keep separate rows (and files) on the same entity.
+    SECTION_REF_BY_STAGE = {Stage.SUITABILITY: "5", Stage.DIVISION: "7.4"}
 
     case = models.ForeignKey(Case, on_delete=models.CASCADE, related_name="consultations")
     stage = models.CharField(max_length=16, choices=Stage.choices, help_text="5 / 8.4 Στάδιο")
@@ -547,6 +551,10 @@ class Consultation(AuditedModel):
 
     class Meta:
         ordering = ("id",)
+
+    @property
+    def section_ref(self):
+        return self.SECTION_REF_BY_STAGE[self.stage]
 
     @property
     def department_display(self):
@@ -607,6 +615,152 @@ class InfrastructureCheck(AuditedModel):
             self.curbs_ready and self.pavements_ready and self.asphalt_ready
         )
         return super().save(*args, **kwargs)
+
+
+class MinistryDecisionRound(AuditedModel):
+    """6.7 One row per recommendation / ministry decision cycle."""
+
+    ATTACHMENT_SECTION_RECOMMENDATION = "6.7-rec"
+    ATTACHMENT_SECTION_RESPONSE = "6.7-res"
+
+    class Recommendation(models.TextChoices):
+        POSITIVE = "positive", "Θετική"
+        NEGATIVE = "negative", "Αρνητική"
+        OTHER = "other", "Άλλο"
+
+    class MinistryDecision(models.TextChoices):
+        APPROVED = "approved", "Έγκριση"
+        REJECTED = "rejected", "Απόρριψη"
+        OTHER = "other", "Άλλο"
+
+    case = models.ForeignKey(
+        Case, on_delete=models.CASCADE, related_name="ministry_decision_rounds"
+    )
+    letter_sent_date = models.DateField(
+        null=True, blank=True, help_text="6.7 Ημερομηνία αποστολής"
+    )
+    recommendation = models.CharField(
+        max_length=16,
+        choices=Recommendation.choices,
+        blank=True,
+        help_text="6.7 Σύσταση Επαρχιακής Διοίκησης",
+    )
+    recommendation_other = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="6.7 Σύσταση Επαρχιακής Διοίκησης — Άλλο",
+    )
+    ministry_response_date = models.DateField(
+        null=True, blank=True, help_text="6.7 Ημερομηνία λήψης απάντησης"
+    )
+    ministry_decision = models.CharField(
+        max_length=16,
+        choices=MinistryDecision.choices,
+        blank=True,
+        help_text="6.7 Απόφαση ΥΠΕΣ",
+    )
+    ministry_decision_other = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="6.7 Απόφαση ΥΠΕΣ — Άλλο",
+    )
+    comments = models.TextField(blank=True, help_text="6.7 Σχόλια / Παρατηρήσεις")
+    attachments = GenericRelation(Attachment)
+
+    class Meta:
+        ordering = ("id",)
+
+    def recommendation_attachments(self):
+        return self.attachments.filter(section_ref=self.ATTACHMENT_SECTION_RECOMMENDATION)
+
+    def response_attachments(self):
+        return self.attachments.filter(section_ref=self.ATTACHMENT_SECTION_RESPONSE)
+
+    @property
+    def recommendation_display(self):
+        if self.recommendation == self.Recommendation.OTHER and self.recommendation_other:
+            return f"{self.get_recommendation_display()}: {self.recommendation_other}"
+        return self.get_recommendation_display() or ""
+
+    @property
+    def ministry_decision_display(self):
+        if self.ministry_decision == self.MinistryDecision.OTHER and self.ministry_decision_other:
+            return f"{self.get_ministry_decision_display()}: {self.ministry_decision_other}"
+        return self.get_ministry_decision_display() or ""
+
+    @property
+    def row_label(self):
+        parts = []
+        if self.letter_sent_date:
+            parts.append(str(self.letter_sent_date))
+        if self.recommendation:
+            parts.append(self.recommendation_display)
+        if self.ministry_decision:
+            parts.append(self.ministry_decision_display)
+        return " · ".join(parts) if parts else "Νέα γραμμή"
+
+    def _audit_context(self):
+        return self.case_id, None, getattr(self, "_section_ref", "6.7")
+
+
+class ApprovedDesignPlot(AuditedModel):
+    """7.3 Στοιχεία Εγκεκριμένου Σχεδιασμού Οικοπέδων: one row per plot or space of the design."""
+
+    class PlotType(models.TextChoices):
+        DIVISION_PLOT = "division_plot", "Υπό διαχωρισμό οικόπεδο"
+        GREEN_SPACE = "green_space", "Χώρος πρασίνου"
+        EAC_SUBSTATION = "eac_substation", "Υποσταθμός ΑΗΚ"
+        COMMUNITY_FACILITY = "community_facility", "Χώρος κοινοτικού εξοπλισμού"
+        OTHER = "other", "Άλλο"
+
+    class NumberingStatus(models.TextChoices):
+        DESIGN = "design", "Αρίθμηση σχεδιασμού"
+        TKX = "tkx", "Αρίθμηση ΤΚΧ"
+        TITLE_DEED = "title_deed", "Αρίθμηση βάσει τίτλου ιδιοκτησίας"
+
+    case = models.ForeignKey(
+        Case, on_delete=models.CASCADE, related_name="approved_design_plots"
+    )
+    plot_type = models.CharField(max_length=32, choices=PlotType.choices, help_text="7.3 Τύπος")
+    plot_type_other = models.CharField(
+        max_length=255, blank=True, help_text="7.3 Τύπος — Άλλο"
+    )
+    design_number = models.CharField(max_length=64, blank=True, help_text="7.3 Αρίθμηση")
+    tkx_number = models.CharField(max_length=64, blank=True, help_text="7.3 Αρίθμηση ΤΚΧ")
+    title_deed_number = models.CharField(
+        max_length=64, blank=True, help_text="7.3 Αριθμός τίτλου ιδιοκτησίας"
+    )
+    parcel_number = models.CharField(max_length=64, blank=True, help_text="7.3 Αριθμός τεμαχίου")
+    sheet_plan = models.CharField(max_length=64, blank=True, help_text="7.3 Φύλλο/Σχέδιο")
+    final_area_sqm = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True, help_text="7.3 Τελικό εμβαδόν (τ.μ.)"
+    )
+    numbering_status = models.CharField(
+        max_length=16,
+        choices=NumberingStatus.choices,
+        default=NumberingStatus.DESIGN,
+        help_text="7.3 Κατάσταση αρίθμησης",
+    )
+
+    class Meta:
+        ordering = ("id",)
+
+    def __str__(self):
+        return self.row_label
+
+    @property
+    def plot_type_display(self):
+        if self.plot_type == self.PlotType.OTHER and self.plot_type_other:
+            return f"{self.get_plot_type_display()}: {self.plot_type_other}"
+        return self.get_plot_type_display() or ""
+
+    @property
+    def row_label(self):
+        number = self.design_number or self.tkx_number or self.title_deed_number
+        return " ".join(part for part in (self.plot_type_display, number) if part) or "Νέα γραμμή"
+
+    def _audit_context(self):
+        return self.case_id, None, getattr(self, "_section_ref", "7.3")
 
 
 class Field(AuditedModel):

@@ -1,58 +1,59 @@
 {% comment %}
-Ενότητα 5 — grid διαβουλεύσεων καταλληλότητας. Columns sort on click; re-rendered after modal
-add/edit/delete. `readonly` hides actions (case folder).
+Ενότητα 5 / 7.4 — grid διαβουλεύσεων (`consultation_grid` από το view: γραμμές, URLs και δικαιώματα
+ανά στάδιο). Columns sort on click; re-rendered after modal add/edit/delete. `readonly` hides
+actions (case folder).
 {% endcomment %}
-<div{% if not readonly %} data-suitability-consultation-container{% endif %}>
-{% if not readonly and access.case_section_5.create %}
+<div{% if not readonly %} data-consultation-container{% endif %}>
+{% if not readonly and consultation_grid.can_create %}
 <div class="form-actions form-span-all">
     <button type="button"
             class="btn btn-secondary"
-            data-suitability-consultation-open="{% url 'cases:suitability_consultation_create' case.pk %}">
+            data-consultation-open="{% url consultation_grid.create_url_name case.pk %}">
         Προσθήκη διαβούλευσης
     </button>
 </div>
 {% endif %}
 <div class="table-wrap">
-    <table class="data-table" data-suitability-consultation-table>
+    <table class="data-table" data-consultation-table>
         <thead>
         <tr>
             <th>
-                <button type="button" class="btn-link btn-link--table" data-suitability-consultation-sort="department">
+                <button type="button" class="btn-link btn-link--table" data-consultation-sort="department">
                     Τμήμα / Υπηρεσία
                 </button>
             </th>
             <th>
-                <button type="button" class="btn-link btn-link--table" data-suitability-consultation-sort="topic">
+                <button type="button" class="btn-link btn-link--table" data-consultation-sort="topic">
                     Θέμα διαβούλευσης
                 </button>
             </th>
             <th>
-                <button type="button" class="btn-link btn-link--table" data-suitability-consultation-sort="sent">
+                <button type="button" class="btn-link btn-link--table" data-consultation-sort="sent">
                     Ημ. αποστολής
                 </button>
             </th>
             <th>
-                <button type="button" class="btn-link btn-link--table" data-suitability-consultation-sort="due">
+                <button type="button" class="btn-link btn-link--table" data-consultation-sort="due">
                     Προθεσμία απάντησης
                 </button>
             </th>
             <th>
-                <button type="button" class="btn-link btn-link--table" data-suitability-consultation-sort="response">
+                <button type="button" class="btn-link btn-link--table" data-consultation-sort="response">
                     Ημ. λήψης απάντησης
                 </button>
             </th>
             <th>
-                <button type="button" class="btn-link btn-link--table" data-suitability-consultation-sort="opinion">
+                <button type="button" class="btn-link btn-link--table" data-consultation-sort="opinion">
                     Άποψη / Απάντηση
                 </button>
             </th>
             <th>
-                <button type="button" class="btn-link btn-link--table" data-suitability-consultation-sort="status">
+                <button type="button" class="btn-link btn-link--table" data-consultation-sort="status">
                     Κατάσταση
                 </button>
             </th>
             <th>
-                <button type="button" class="btn-link btn-link--table" data-suitability-consultation-sort="comments">
+                <button type="button" class="btn-link btn-link--table" data-consultation-sort="comments">
                     Σχόλια
                 </button>
             </th>
@@ -61,8 +62,8 @@ add/edit/delete. `readonly` hides actions (case folder).
         </tr>
         </thead>
         <tbody>
-        {% for consultation in suitability_consultations %}
-            <tr data-suitability-consultation-row>
+        {% for consultation in consultation_grid.consultations %}
+            <tr data-consultation-row>
                 <td data-sort-department="{{ consultation.department_display }}">{{ consultation.department_display }}</td>
                 <td data-sort-topic="{{ consultation.topic }}">{{ consultation.topic|default:"—"|linebreaksbr }}</td>
                 <td data-sort-sent="{{ consultation.sent_date|date:'Y-m-d' }}">{{ consultation.sent_date|default:"—" }}</td>
@@ -78,16 +79,16 @@ add/edit/delete. `readonly` hides actions (case folder).
                 </td>
                 {% if not readonly %}
                 <td class="data-table__actions">
-                    {% if access.case_section_5.edit %}
+                    {% if consultation_grid.can_edit %}
                     <button type="button" class="btn btn-secondary btn-sm"
-                            data-suitability-consultation-open="{% url 'cases:suitability_consultation_edit' case.pk consultation.pk %}">
+                            data-consultation-open="{% url consultation_grid.edit_url_name case.pk consultation.pk %}">
                         Επεξεργασία
                     </button>
                     {% endif %}
-                    {% if access.case_section_5.delete %}
+                    {% if consultation_grid.can_delete %}
                     <button type="button" class="btn btn-danger btn-sm"
-                            data-suitability-consultation-delete="{% url 'cases:suitability_consultation_delete' case.pk consultation.pk %}"
-                            data-suitability-consultation-label="{{ consultation.row_label }}">
+                            data-consultation-delete="{% url consultation_grid.delete_url_name case.pk consultation.pk %}"
+                            data-consultation-label="{{ consultation.row_label }}">
                         Διαγραφή
                     </button>
                     {% endif %}

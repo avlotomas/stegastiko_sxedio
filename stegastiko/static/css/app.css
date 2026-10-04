@@ -1030,6 +1030,12 @@ input.checkbox-list {
     box-shadow: var(--shadow-sm);
 }
 
+.table-wrap--scroll {
+    margin-top: 1rem;
+    max-height: 18rem;
+    overflow-y: auto;
+}
+
 .data-table {
     width: 100%;
     border-collapse: collapse;

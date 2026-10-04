@@ -1,6 +1,10 @@
 from django.urls import path
 
 from cases import views
+from cases.models import Consultation
+
+SUITABILITY = Consultation.Stage.SUITABILITY
+DIVISION = Consultation.Stage.DIVISION
 
 app_name = "cases"
 
@@ -78,18 +82,74 @@ urlpatterns = [
     ),
     path(
         "<int:pk>/suitability-consultations/new/",
-        views.suitability_consultation_form,
+        views.consultation_form,
+        {"stage": SUITABILITY},
         name="suitability_consultation_create",
     ),
     path(
         "<int:pk>/suitability-consultations/<int:consultation_id>/edit/",
-        views.suitability_consultation_form,
+        views.consultation_form,
+        {"stage": SUITABILITY},
         name="suitability_consultation_edit",
     ),
     path(
         "<int:pk>/suitability-consultations/<int:consultation_id>/delete/",
-        views.suitability_consultation_delete,
+        views.consultation_delete,
+        {"stage": SUITABILITY},
         name="suitability_consultation_delete",
+    ),
+    path(
+        "<int:pk>/division-consultations/new/",
+        views.consultation_form,
+        {"stage": DIVISION},
+        name="division_consultation_create",
+    ),
+    path(
+        "<int:pk>/division-consultations/<int:consultation_id>/edit/",
+        views.consultation_form,
+        {"stage": DIVISION},
+        name="division_consultation_edit",
+    ),
+    path(
+        "<int:pk>/division-consultations/<int:consultation_id>/delete/",
+        views.consultation_delete,
+        {"stage": DIVISION},
+        name="division_consultation_delete",
+    ),
+    path(
+        "<int:pk>/ministry-decision-rounds/new/",
+        views.ministry_decision_round_form,
+        name="ministry_decision_round_create",
+    ),
+    path(
+        "<int:pk>/ministry-decision-rounds/<int:round_id>/edit/",
+        views.ministry_decision_round_form,
+        name="ministry_decision_round_edit",
+    ),
+    path(
+        "<int:pk>/ministry-decision-rounds/<int:round_id>/delete/",
+        views.ministry_decision_round_delete,
+        name="ministry_decision_round_delete",
+    ),
+    path(
+        "<int:pk>/approved-design-plots/new/",
+        views.approved_design_plot_form,
+        name="approved_design_plot_create",
+    ),
+    path(
+        "<int:pk>/approved-design-plots/bulk/",
+        views.approved_design_plot_bulk_create,
+        name="approved_design_plot_bulk_create",
+    ),
+    path(
+        "<int:pk>/approved-design-plots/<int:plot_id>/edit/",
+        views.approved_design_plot_form,
+        name="approved_design_plot_edit",
+    ),
+    path(
+        "<int:pk>/approved-design-plots/<int:plot_id>/delete/",
+        views.approved_design_plot_delete,
+        name="approved_design_plot_delete",
     ),
     path(
         "<int:pk>/attachments/<int:attachment_id>/",

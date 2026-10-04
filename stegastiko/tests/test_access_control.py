@@ -68,8 +68,8 @@ def test_default_roles_are_seeded_with_valid_grants():
 
     officer = set(roles["Λειτουργός καταχώρισης"].grants)
     supervisor = set(roles["Προϊστάμενος ελέγχου"].grants)
-    assert "case_section_9:publish" in supervisor
-    assert "case_section_9:publish" not in officer
+    assert "case_section_8:publish" in supervisor
+    assert "case_section_8:publish" not in officer
     assert not any(key.startswith("settings") for key in officer)
     admin = set(roles["Διαχειριστής συστήματος"].grants)
     assert {"settings_roles:edit", "settings_users:create"} <= admin

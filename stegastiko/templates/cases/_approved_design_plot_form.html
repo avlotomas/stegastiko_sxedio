@@ -1,0 +1,33 @@
+{% comment %}7.3 Modal form for one row of «Στοιχεία Εγκεκριμένου Σχεδιασμού Οικοπέδων».{% endcomment %}
+<form method="post"
+      action="{% if plot_form.instance.pk %}{% url 'cases:approved_design_plot_edit' case.pk plot_form.instance.pk %}{% else %}{% url 'cases:approved_design_plot_create' case.pk %}{% endif %}"
+      class="app-form"
+      data-approved-design-plot-form
+      novalidate>
+    {% csrf_token %}
+    <h2 class="card__title" id="approved-design-plot-dialog-title">
+        {% if plot_form.instance.pk %}Επεξεργασία εγγραφής{% else %}Νέα εγγραφή{% endif %}
+    </h2>
+
+    {% if plot_form.non_field_errors %}
+    <div class="alert alert--error">
+        {% for error in plot_form.non_field_errors %}{{ error }}{% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="form-grid">
+        {% include "includes/choice_with_other_field.html" with field=plot_form.plot_type other=plot_form.plot_type_other wide=True %}
+        {% include "includes/form_field.html" with field=plot_form.design_number %}
+        {% include "includes/form_field.html" with field=plot_form.tkx_number %}
+        {% include "includes/form_field.html" with field=plot_form.title_deed_number %}
+        {% include "includes/form_field.html" with field=plot_form.parcel_number %}
+        {% include "includes/form_field.html" with field=plot_form.sheet_plan %}
+        {% include "includes/form_field.html" with field=plot_form.final_area_sqm %}
+        {% include "includes/form_field.html" with field=plot_form.numbering_status %}
+    </div>
+
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Αποθήκευση</button>
+        <button type="button" class="btn btn-secondary" data-dialog-close>Άκυρο</button>
+    </div>
+</form>

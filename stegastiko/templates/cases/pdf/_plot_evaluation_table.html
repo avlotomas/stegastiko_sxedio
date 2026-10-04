@@ -1,0 +1,33 @@
+{% comment %}
+4.1 technical evaluation columns (read-only). Used under Ενότητα 6.2 in the suitability report PDF.
+{% endcomment %}
+<table class="plots" repeat="1">
+    <tr>
+        <th width="7%">Τεμάχιο</th>
+        <th width="8%">Εμβαδόν (τ.μ.)</th>
+        <th width="11%">Πολεοδομική Ζώνη</th>
+        <th width="9%">Εντός Ορίου Ανάπτυξης</th>
+        <th width="11%">Μορφολογία</th>
+        <th width="10%">Σχόλια Μορφολογίας</th>
+        <th width="11%">Αξιοποιήσιμο εμβαδόν γης (τ.μ.)</th>
+        <th width="10%">Εκτιμώμενο κόστος</th>
+        <th width="11%">Εκτιμώμενος αριθμός οικοπέδων</th>
+        <th width="12%">Τεχνική Καταλληλότητα</th>
+    </tr>
+    {% for plot in land_plots %}
+    <tr>
+        <td>{{ plot.parcel_number }}{% if plot.sheet_plan %}<br>Φ/Σχ {{ plot.sheet_plan }}{% endif %}</td>
+        <td class="num">{% if plot.area_sqm is not None %}{{ plot.area_sqm|floatformat:"-2g" }}{% else %}—{% endif %}</td>
+        <td>{{ plot.zone|default:"—" }}</td>
+        <td>{{ plot.get_inside_development_zone_display|default:"—" }}</td>
+        <td>{{ plot.morphology_display|default:"—" }}</td>
+        <td>{{ plot.morphology_comments|default:"—"|linebreaksbr }}</td>
+        <td class="num">{% if plot.usable_area_sqm is not None %}{{ plot.usable_area_sqm|floatformat:"-2g" }}{% else %}—{% endif %}</td>
+        <td class="num">{% if plot.estimated_cost is not None %}{{ plot.estimated_cost|floatformat:"-2g" }}{% else %}—{% endif %}</td>
+        <td class="num">{% if plot.estimated_plots_count is not None %}{{ plot.estimated_plots_count }}{% else %}—{% endif %}</td>
+        <td>{{ plot.get_technical_suitability_display|default:"—" }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="10" class="empty">Δεν έχουν καταχωριστεί τεμάχια στην Ενότητα 3.1.</td></tr>
+    {% endfor %}
+</table>

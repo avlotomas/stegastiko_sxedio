@@ -10,10 +10,9 @@ def seed_case_section_labels(apps, schema_editor):
         "caseSectionLabel.4": "Τεχνική αξιολόγηση",
         "caseSectionLabel.5": "Διαβουλεύσεις καταλληλότητας",
         "caseSectionLabel.6": "Απόφαση καταλληλότητας",
-        "caseSectionLabel.7": "Σύσταση προς Υπουργό",
-        "caseSectionLabel.8": "Διαχωρισμός (8.1–8.6)",
-        "caseSectionLabel.8-plots": "Οικόπεδα, αξία και τιμή (8.7–8.8)",
-        "caseSectionLabel.9": "Γνωστοποίηση έναρξης αιτήσεων",
+        "caseSectionLabel.7": "Σχεδιασμός και υλοποίηση διαχωρισμού",
+        "caseSectionLabel.7-plots": "Οικόπεδα, αξία και τιμή (7.7–7.8)",
+        "caseSectionLabel.8": "Γνωστοποίηση έναρξης αιτήσεων",
     }
     for key, value in labels.items():
         section_key = key.removeprefix("caseSectionLabel.")

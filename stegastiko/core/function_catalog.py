@@ -35,7 +35,7 @@ class AppFunction:
     label: str
     actions: tuple
     parent: str | None = None
-    # Case section key (e.g. "8-plots") whose configurable title is shown instead of `label`.
+    # Case section key (e.g. "7-plots") whose configurable title is shown instead of `label`.
     case_section: str | None = None
     description: str = ""
 
@@ -105,23 +105,22 @@ FUNCTIONS = (
         "6",
         "Ενότητα 6",
         (VIEW, EDIT, EXPORT),
-        "6.1–6.5 σύνοψη, 6.6 απόφαση ανά τεμάχιο, PDF πινάκων αξιολόγησης.",
+        "6.1–6.5 σύνοψη, 6.6 απόφαση ανά τεμάχιο, 6.7 λήψη απόφασης από υπουργό, PDF πινάκων αξιολόγησης (επιλογή υποενοτήτων 6.1–6.6).",
     ),
-    _case_section("case_section_7", "7", "Ενότητα 7", (VIEW, EDIT), "Σύσταση και απόφαση ΥΠΕΣ."),
-    _case_section("case_section_8", "8", "Ενότητα 8", (VIEW, EDIT), "8.1–8.6."),
+    _case_section("case_section_7", "7", "Ενότητα 7", (VIEW, EDIT), "7.1–7.7."),
     _case_section(
-        "case_section_8_plots",
-        "8-plots",
-        "Ενότητα 8",
+        "case_section_7_plots",
+        "7-plots",
+        "Ενότητα 7",
         (VIEW, EDIT),
-        "8.7–8.8 χωράφια, οικόπεδα, αξία και τιμή.",
+        "7.8–7.9 χωράφια, οικόπεδα, αξία και τιμή.",
     ),
     _case_section(
-        "case_section_9",
-        "9",
-        "Ενότητα 9",
+        "case_section_8",
+        "8",
+        "Ενότητα 8",
         (VIEW, CREATE, EDIT, PUBLISH),
-        "9.1 νέα γνωστοποίηση, 9.2–9.3 επεξεργασία, οριστικοποίηση και έκδοση ανακοίνωσης.",
+        "8.1 νέα γνωστοποίηση, 8.2–8.3 επεξεργασία, οριστικοποίηση και έκδοση ανακοίνωσης.",
     ),
     AppFunction(
         "applications",

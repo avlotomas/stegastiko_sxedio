@@ -1,0 +1,62 @@
+{% comment %}
+7.3 «Μαζική προσθήκη» of «Στοιχεία Εγκεκριμένου Σχεδιασμού Οικοπέδων»: one type for all rows,
+the number of rows and serial (1…N) or hand-typed numbering. The manual table is kept in step
+with «Αριθμός εγγραφών» by app.js; rows posted back after an error are rendered here.
+{% endcomment %}
+<form method="post"
+      action="{% url 'cases:approved_design_plot_bulk_create' case.pk %}"
+      class="app-form"
+      data-approved-design-plot-form
+      data-approved-design-plot-bulk
+      novalidate>
+    {% csrf_token %}
+    <h2 class="card__title" id="approved-design-plot-dialog-title">Μαζική προσθήκη εγγραφών</h2>
+
+    {% if bulk_form.non_field_errors %}
+    <div class="alert alert--error">
+        {% for error in bulk_form.non_field_errors %}{{ error }}{% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="form-grid">
+        {% include "includes/choice_with_other_field.html" with field=bulk_form.plot_type other=bulk_form.plot_type_other wide=True %}
+        {% include "includes/form_field.html" with field=bulk_form.count %}
+        <div class="form-field form-field--choices">
+            {{ bulk_form.numbering_mode.label_tag }}
+            {{ bulk_form.numbering_mode }}
+            {% if bulk_form.numbering_mode.errors %}
+            <ul class="errorlist">
+                {% for error in bulk_form.numbering_mode.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="table-wrap table-wrap--scroll" data-bulk-manual{% if not bulk_form.is_manual %} hidden{% endif %}>
+        <table class="data-table">
+            <thead>
+            <tr>
+                <th>Α/Α</th>
+                <th>Αρίθμηση</th>
+            </tr>
+            </thead>
+            <tbody data-bulk-manual-rows>
+            {% for number in bulk_form.manual_numbers %}
+                <tr>
+                    <td>{{ forloop.counter }}</td>
+                    <td>
+                        <input type="text" name="manual_numbers" class="input" maxlength="64"
+                               value="{{ number }}" aria-label="Αρίθμηση εγγραφής {{ forloop.counter }}"
+                               {% if not bulk_form.is_manual %}disabled{% endif %}>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Αποθήκευση</button>
+        <button type="button" class="btn btn-secondary" data-dialog-close>Άκυρο</button>
+    </div>
+</form>

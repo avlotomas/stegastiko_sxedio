@@ -318,6 +318,76 @@ bindFilePickers(document);
 
 
 
+// Ενότητα 6 — PDF export with selectable subsections 6.1–6.6.
+
+(function () {
+
+    document.addEventListener("click", function (event) {
+
+        const exportBtn = event.target.closest("[data-section-6-report-pdf-export]");
+
+        if (!exportBtn) {
+
+            return;
+
+        }
+
+        const dialog = exportBtn.closest("dialog");
+
+        if (!dialog) {
+
+            return;
+
+        }
+
+        const baseUrl = dialog.dataset.pdfBaseUrl;
+
+        const error = dialog.querySelector("[data-section-6-report-pdf-error]");
+
+        const checked = dialog.querySelectorAll('input[name="subsection"]:checked');
+
+        if (!baseUrl) {
+
+            return;
+
+        }
+
+        if (checked.length === 0) {
+
+            if (error) {
+
+                error.hidden = false;
+
+            }
+
+            return;
+
+        }
+
+        if (error) {
+
+            error.hidden = true;
+
+        }
+
+        const params = new URLSearchParams();
+
+        checked.forEach(function (box) {
+
+            params.append("include", box.value);
+
+        });
+
+        window.location.href = baseUrl + "?" + params.toString();
+
+        dialog.close();
+
+    });
+
+})();
+
+
+
 // 2.2 deficiencies email dialog, sent without reloading so unsaved section edits survive.
 
 (function () {
@@ -339,6 +409,16 @@ bindFilePickers(document);
             return;
 
         }
+
+        const error = dialog.querySelector("[data-section-6-report-pdf-error]");
+
+        if (error) {
+
+            error.hidden = true;
+
+        }
+
+        dialog.showModal();
 
         const form = dialog.querySelector("[data-email-form]");
 
@@ -381,8 +461,6 @@ bindFilePickers(document);
             errors.textContent = "";
 
         }
-
-        dialog.showModal();
 
     });
 
@@ -1693,17 +1771,17 @@ bindFilePickers(document);
 })();
 
 
-// Suitability consultations grid (Ενότητα 5): sortable columns; add / edit / delete in a modal.
+// Consultations grid (Ενότητα 5 and 7.4): sortable columns; add / edit / delete in a modal.
 (function () {
     const collator = new Intl.Collator("el", { numeric: true, sensitivity: "base" });
 
     const sortGrid = function (button) {
-        const table = button.closest("[data-suitability-consultation-table]");
+        const table = button.closest("[data-consultation-table]");
         const tbody = table ? table.querySelector("tbody") : null;
         if (!tbody) {
             return;
         }
-        const key = button.dataset.suitabilityConsultationSort;
+        const key = button.dataset.consultationSort;
         const nextDir = table.dataset.sortKey === key && table.dataset.sortDir === "asc" ? "desc" : "asc";
         table.dataset.sortKey = key;
         table.dataset.sortDir = nextDir;
@@ -1715,7 +1793,7 @@ bindFilePickers(document);
             const cell = row.querySelector("[data-sort-" + key + "]");
             return cell ? cell.getAttribute("data-sort-" + key) || "" : "";
         };
-        const rows = Array.from(tbody.querySelectorAll("tr[data-suitability-consultation-row]"));
+        const rows = Array.from(tbody.querySelectorAll("tr[data-consultation-row]"));
         rows.sort(function (a, b) {
             const order = collator.compare(read(a), read(b));
             return nextDir === "asc" ? order : -order;
@@ -1725,9 +1803,9 @@ bindFilePickers(document);
         });
     };
 
-    const dialog = document.querySelector("[data-suitability-consultation-dialog]");
-    const body = dialog ? dialog.querySelector("[data-suitability-consultation-dialog-body]") : null;
-    const errors = dialog ? dialog.querySelector("[data-suitability-consultation-errors]") : null;
+    const dialog = document.querySelector("[data-consultation-dialog]");
+    const body = dialog ? dialog.querySelector("[data-consultation-dialog-body]") : null;
+    const errors = dialog ? dialog.querySelector("[data-consultation-errors]") : null;
 
     const showDialogError = function (message) {
         errors.textContent = message;
@@ -1735,7 +1813,7 @@ bindFilePickers(document);
     };
 
     const showStatus = function (message, kind) {
-        const status = document.querySelector("[data-suitability-consultation-status]");
+        const status = document.querySelector("[data-consultation-status]");
         if (!status) {
             return;
         }
@@ -1748,7 +1826,7 @@ bindFilePickers(document);
     };
 
     const replaceGrid = function (html) {
-        const grid = document.querySelector("[data-suitability-consultation-container]");
+        const grid = document.querySelector("[data-consultation-container]");
         if (grid) {
             grid.outerHTML = html;
         }
@@ -1767,7 +1845,7 @@ bindFilePickers(document);
         body.innerHTML = html;
         bindOtherGroups(body);
         bindFilePickers(body, pendingFiles);
-        const form = body.querySelector("[data-suitability-consultation-form]");
+        const form = body.querySelector("[data-consultation-form]");
         form.addEventListener("submit", onSubmit);
         const first = form.querySelector("select, input:not([type=hidden]), textarea");
         if (first) {
@@ -1818,7 +1896,7 @@ bindFilePickers(document);
     };
 
     const deleteConsultation = function (button) {
-        const label = button.dataset.suitabilityConsultationLabel || "";
+        const label = button.dataset.consultationLabel || "";
         if (!window.confirm("Διαγραφή της διαβούλευσης " + label + ";")) {
             return;
         }
@@ -1826,7 +1904,7 @@ bindFilePickers(document);
         const token = document.querySelector('input[name="csrfmiddlewaretoken"]');
         const data = new FormData();
         data.append("csrfmiddlewaretoken", token ? token.value : "");
-        requestJson(button.dataset.suitabilityConsultationDelete, { method: "POST", body: data })
+        requestJson(button.dataset.consultationDelete, { method: "POST", body: data })
             .then(function (result) {
                 if (!result.ok) {
                     throw new Error("bad response");
@@ -1841,7 +1919,7 @@ bindFilePickers(document);
     };
 
     document.addEventListener("click", function (event) {
-        const sort = event.target.closest("[data-suitability-consultation-sort]");
+        const sort = event.target.closest("[data-consultation-sort]");
         if (sort) {
             event.preventDefault();
             sortGrid(sort);
@@ -1850,13 +1928,13 @@ bindFilePickers(document);
         if (!dialog) {
             return;
         }
-        const open = event.target.closest("[data-suitability-consultation-open]");
+        const open = event.target.closest("[data-consultation-open]");
         if (open) {
             event.preventDefault();
-            openForm(open.dataset.suitabilityConsultationOpen);
+            openForm(open.dataset.consultationOpen);
             return;
         }
-        const remove = event.target.closest("[data-suitability-consultation-delete]");
+        const remove = event.target.closest("[data-consultation-delete]");
         if (remove) {
             event.preventDefault();
             deleteConsultation(remove);
@@ -1866,6 +1944,412 @@ bindFilePickers(document);
 
 
 
+
+// Ministry decision rounds grid (6.7): sortable columns; add / edit / delete in a modal.
+(function () {
+    const collator = new Intl.Collator("el", { numeric: true, sensitivity: "base" });
+
+    const sortGrid = function (button) {
+        const table = button.closest("[data-ministry-decision-round-table]");
+        const tbody = table ? table.querySelector("tbody") : null;
+        if (!tbody) {
+            return;
+        }
+        const key = button.dataset.ministryDecisionRoundSort;
+        const nextDir = table.dataset.sortKey === key && table.dataset.sortDir === "asc" ? "desc" : "asc";
+        table.dataset.sortKey = key;
+        table.dataset.sortDir = nextDir;
+        table.querySelectorAll("th").forEach(function (th) {
+            th.removeAttribute("aria-sort");
+        });
+        button.closest("th").setAttribute("aria-sort", nextDir === "asc" ? "ascending" : "descending");
+        const read = function (row) {
+            const cell = row.querySelector("[data-sort-" + key + "]");
+            return cell ? cell.getAttribute("data-sort-" + key) || "" : "";
+        };
+        const rows = Array.from(tbody.querySelectorAll("tr[data-ministry-decision-round-row]"));
+        rows.sort(function (a, b) {
+            const order = collator.compare(read(a), read(b));
+            return nextDir === "asc" ? order : -order;
+        });
+        rows.forEach(function (row) {
+            tbody.appendChild(row);
+        });
+    };
+
+    const dialog = document.querySelector("[data-ministry-decision-round-dialog]");
+    const body = dialog ? dialog.querySelector("[data-ministry-decision-round-dialog-body]") : null;
+    const errors = dialog ? dialog.querySelector("[data-ministry-decision-round-errors]") : null;
+
+    const showDialogError = function (message) {
+        if (!errors) {
+            return;
+        }
+        errors.textContent = message;
+        errors.hidden = !message;
+    };
+
+    const showStatus = function (message, kind) {
+        const status = document.querySelector("[data-ministry-decision-round-status]");
+        if (!status) {
+            return;
+        }
+        status.textContent = "";
+        const alert = document.createElement("div");
+        alert.className = "alert alert--" + (kind || "success");
+        alert.setAttribute("role", "status");
+        alert.textContent = message;
+        status.appendChild(alert);
+    };
+
+    const replaceGrid = function (html) {
+        const grid = document.querySelector("[data-ministry-decision-round-container]");
+        if (grid) {
+            grid.outerHTML = html;
+        }
+    };
+
+    const requestJson = function (url, options) {
+        return fetch(url, Object.assign({
+            headers: { Accept: "application/json" },
+            credentials: "same-origin",
+        }, options)).then(function (response) {
+            return response.json();
+        });
+    };
+
+    const mountForm = function (html, pendingFiles) {
+        body.innerHTML = html;
+        bindOtherGroups(body);
+        bindFilePickers(body, pendingFiles);
+        const form = body.querySelector("[data-ministry-decision-round-form]");
+        form.addEventListener("submit", onSubmit);
+        const first = form.querySelector("select, input:not([type=hidden]), textarea");
+        if (first) {
+            first.focus();
+        }
+    };
+
+    const onSubmit = function (event) {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const submit = form.querySelector('button[type="submit"]');
+        submit.disabled = true;
+        showDialogError("");
+        requestJson(form.action, { method: "POST", body: new FormData(form) })
+            .then(function (data) {
+                if (!data.ok) {
+                    const fileInput = form.querySelector('[data-file-picker] input[type="file"]');
+                    mountForm(data.html, fileInput ? Array.from(fileInput.files) : []);
+                    return;
+                }
+                replaceGrid(data.grid_html);
+                showStatus(data.message);
+                dialog.close();
+            })
+            .catch(function () {
+                showDialogError("Αποτυχία επικοινωνίας με τον διακομιστή.");
+            })
+            .finally(function () {
+                submit.disabled = false;
+            });
+    };
+
+    const openForm = function (url) {
+        if (!dialog) {
+            return;
+        }
+        showDialogError("");
+        body.innerHTML = '<p class="text-muted">Φόρτωση…</p>';
+        dialog.showModal();
+        requestJson(url)
+            .then(function (data) {
+                if (!data.ok) {
+                    throw new Error("bad response");
+                }
+                mountForm(data.html);
+            })
+            .catch(function () {
+                body.textContent = "";
+                showDialogError("Αποτυχία φόρτωσης της φόρμας.");
+            });
+    };
+
+    const deleteRound = function (button) {
+        const label = button.dataset.ministryDecisionRoundLabel || "";
+        if (!window.confirm("Διαγραφή της εγγραφής " + label + ";")) {
+            return;
+        }
+        button.disabled = true;
+        const token = document.querySelector('input[name="csrfmiddlewaretoken"]');
+        const data = new FormData();
+        data.append("csrfmiddlewaretoken", token ? token.value : "");
+        requestJson(button.dataset.ministryDecisionRoundDelete, { method: "POST", body: data })
+            .then(function (result) {
+                if (!result.ok) {
+                    throw new Error("bad response");
+                }
+                replaceGrid(result.grid_html);
+                showStatus(result.message);
+            })
+            .catch(function () {
+                button.disabled = false;
+                showStatus("Αποτυχία διαγραφής της εγγραφής.", "error");
+            });
+    };
+
+    document.addEventListener("click", function (event) {
+        const sort = event.target.closest("[data-ministry-decision-round-sort]");
+        if (sort) {
+            event.preventDefault();
+            sortGrid(sort);
+            return;
+        }
+        if (!dialog) {
+            return;
+        }
+        const open = event.target.closest("[data-ministry-decision-round-open]");
+        if (open) {
+            event.preventDefault();
+            openForm(open.dataset.ministryDecisionRoundOpen);
+            return;
+        }
+        const remove = event.target.closest("[data-ministry-decision-round-delete]");
+        if (remove) {
+            event.preventDefault();
+            deleteRound(remove);
+        }
+    });
+})();
+
+// Approved design plots grid (7.3): sortable columns; add / edit / delete in a modal.
+(function () {
+    const collator = new Intl.Collator("el", { numeric: true, sensitivity: "base" });
+
+    const sortGrid = function (button) {
+        const table = button.closest("[data-approved-design-plot-table]");
+        const tbody = table ? table.querySelector("tbody") : null;
+        if (!tbody) {
+            return;
+        }
+        const key = button.dataset.approvedDesignPlotSort;
+        const nextDir = table.dataset.sortKey === key && table.dataset.sortDir === "asc" ? "desc" : "asc";
+        table.dataset.sortKey = key;
+        table.dataset.sortDir = nextDir;
+        table.querySelectorAll("th").forEach(function (th) {
+            th.removeAttribute("aria-sort");
+        });
+        button.closest("th").setAttribute("aria-sort", nextDir === "asc" ? "ascending" : "descending");
+        const read = function (row) {
+            const cell = row.querySelector("[data-sort-" + key + "]");
+            return cell ? cell.getAttribute("data-sort-" + key) || "" : "";
+        };
+        const rows = Array.from(tbody.querySelectorAll("tr[data-approved-design-plot-row]"));
+        rows.sort(function (a, b) {
+            const order = collator.compare(read(a), read(b));
+            return nextDir === "asc" ? order : -order;
+        });
+        rows.forEach(function (row) {
+            tbody.appendChild(row);
+        });
+    };
+
+    const dialog = document.querySelector("[data-approved-design-plot-dialog]");
+    const body = dialog ? dialog.querySelector("[data-approved-design-plot-dialog-body]") : null;
+    const errors = dialog ? dialog.querySelector("[data-approved-design-plot-errors]") : null;
+
+    const showDialogError = function (message) {
+        if (!errors) {
+            return;
+        }
+        errors.textContent = message;
+        errors.hidden = !message;
+    };
+
+    const showStatus = function (message, kind) {
+        const status = document.querySelector("[data-approved-design-plot-status]");
+        if (!status) {
+            return;
+        }
+        status.textContent = "";
+        const alert = document.createElement("div");
+        alert.className = "alert alert--" + (kind || "success");
+        alert.setAttribute("role", "status");
+        alert.textContent = message;
+        status.appendChild(alert);
+    };
+
+    const replaceGrid = function (html) {
+        const grid = document.querySelector("[data-approved-design-plot-container]");
+        if (grid) {
+            grid.outerHTML = html;
+        }
+    };
+
+    const requestJson = function (url, options) {
+        return fetch(url, Object.assign({
+            headers: { Accept: "application/json" },
+            credentials: "same-origin",
+        }, options)).then(function (response) {
+            return response.json();
+        });
+    };
+
+    const MAX_BULK_ROWS = 500;
+
+    // «Μαζική προσθήκη»: one numbering textbox per row while «Χειροκίνητη» is selected.
+    const bindBulkNumbering = function (form) {
+        const countInput = form.querySelector("[data-bulk-count]");
+        const manual = form.querySelector("[data-bulk-manual]");
+        const rows = manual ? manual.querySelector("[data-bulk-manual-rows]") : null;
+        if (!countInput || !rows) {
+            return;
+        }
+        const isManual = function () {
+            const checked = form.querySelector("[data-bulk-numbering-mode]:checked");
+            return Boolean(checked) && checked.value === "manual";
+        };
+        const addRow = function (index) {
+            const row = document.createElement("tr");
+            const position = document.createElement("td");
+            position.textContent = String(index);
+            const cell = document.createElement("td");
+            const input = document.createElement("input");
+            input.type = "text";
+            input.name = "manual_numbers";
+            input.className = "input";
+            input.maxLength = 64;
+            input.setAttribute("aria-label", "Αρίθμηση εγγραφής " + index);
+            cell.appendChild(input);
+            row.appendChild(position);
+            row.appendChild(cell);
+            rows.appendChild(row);
+        };
+        const sync = function () {
+            const manualMode = isManual();
+            const parsed = parseInt(countInput.value, 10);
+            const count = Number.isFinite(parsed) ? Math.min(Math.max(parsed, 0), MAX_BULK_ROWS) : 0;
+            if (manualMode) {
+                while (rows.children.length > count) {
+                    rows.lastElementChild.remove();
+                }
+                while (rows.children.length < count) {
+                    addRow(rows.children.length + 1);
+                }
+            }
+            manual.hidden = !manualMode || count === 0;
+            rows.querySelectorAll("input").forEach(function (input) {
+                input.disabled = !manualMode;
+            });
+        };
+        countInput.addEventListener("input", sync);
+        form.querySelectorAll("[data-bulk-numbering-mode]").forEach(function (radio) {
+            radio.addEventListener("change", sync);
+        });
+        sync();
+    };
+
+    const mountForm = function (html) {
+        body.innerHTML = html;
+        bindOtherGroups(body);
+        const form = body.querySelector("[data-approved-design-plot-form]");
+        form.addEventListener("submit", onSubmit);
+        if (form.hasAttribute("data-approved-design-plot-bulk")) {
+            bindBulkNumbering(form);
+        }
+        const first = form.querySelector("select, input:not([type=hidden]), textarea");
+        if (first) {
+            first.focus();
+        }
+    };
+
+    const onSubmit = function (event) {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const submit = form.querySelector('button[type="submit"]');
+        submit.disabled = true;
+        showDialogError("");
+        requestJson(form.action, { method: "POST", body: new FormData(form) })
+            .then(function (data) {
+                if (!data.ok) {
+                    mountForm(data.html);
+                    return;
+                }
+                replaceGrid(data.grid_html);
+                showStatus(data.message);
+                dialog.close();
+            })
+            .catch(function () {
+                showDialogError("Αποτυχία επικοινωνίας με τον διακομιστή.");
+            })
+            .finally(function () {
+                submit.disabled = false;
+            });
+    };
+
+    const openForm = function (url) {
+        showDialogError("");
+        body.innerHTML = '<p class="text-muted">Φόρτωση…</p>';
+        dialog.showModal();
+        requestJson(url)
+            .then(function (data) {
+                if (!data.ok) {
+                    throw new Error("bad response");
+                }
+                mountForm(data.html);
+            })
+            .catch(function () {
+                body.textContent = "";
+                showDialogError("Αποτυχία φόρτωσης της φόρμας.");
+            });
+    };
+
+    const deletePlot = function (button) {
+        const label = button.dataset.approvedDesignPlotLabel || "";
+        if (!window.confirm("Διαγραφή της εγγραφής " + label + ";")) {
+            return;
+        }
+        button.disabled = true;
+        const token = document.querySelector('input[name="csrfmiddlewaretoken"]');
+        const data = new FormData();
+        data.append("csrfmiddlewaretoken", token ? token.value : "");
+        requestJson(button.dataset.approvedDesignPlotDelete, { method: "POST", body: data })
+            .then(function (result) {
+                if (!result.ok) {
+                    throw new Error("bad response");
+                }
+                replaceGrid(result.grid_html);
+                showStatus(result.message);
+            })
+            .catch(function () {
+                button.disabled = false;
+                showStatus("Αποτυχία διαγραφής της εγγραφής.", "error");
+            });
+    };
+
+    document.addEventListener("click", function (event) {
+        const sort = event.target.closest("[data-approved-design-plot-sort]");
+        if (sort) {
+            event.preventDefault();
+            sortGrid(sort);
+            return;
+        }
+        if (!dialog) {
+            return;
+        }
+        const open = event.target.closest("[data-approved-design-plot-open]");
+        if (open) {
+            event.preventDefault();
+            openForm(open.dataset.approvedDesignPlotOpen);
+            return;
+        }
+        const remove = event.target.closest("[data-approved-design-plot-delete]");
+        if (remove) {
+            event.preventDefault();
+            deletePlot(remove);
+        }
+    });
+})();
 
 // Role permission matrix: «Όλα» per row; any access implies «Προβολή» on the row and on the
 // parent function, and removing «Προβολή» clears the row (and the sub-functions of a function).

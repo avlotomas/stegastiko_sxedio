@@ -1,0 +1,4 @@
+{% load case_detail %}
+<h3 class="form-section-title">{% case_subsection_heading "6.7" %}</h3>
+<div class="form-span-all" data-ministry-decision-round-status></div>
+{% include "cases/_ministry_decision_round_grid.html" with ministry_decision_rounds=ministry_decision_rounds %}

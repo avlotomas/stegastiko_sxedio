@@ -85,7 +85,7 @@
                     <span class="badge badge--pending">ΕΚΚΡΕΜΕΙ</span>
                     {% endif %}
                 </td>
-                <td>{{ item.get_ministry_decision_display|default:"—" }}</td>
+                <td>{{ item.latest_ministry_decision_display|default:"—" }}</td>
                 <td>{{ item.land_plots.count }}</td>
                 <td>{{ item.parcels.count }}</td>
                 <td><a href="{% url 'cases:detail' item.pk %}" class="btn btn-ghost btn-sm">Άνοιγμα</a></td>

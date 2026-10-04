@@ -93,9 +93,9 @@
 </div>
 {% endif %}
 
-{% if section == '8-plots' and completion %}
+{% if section == '7-plots' and completion %}
 <div class="card">
-    <h2 class="card__title">{% case_subsection_heading "8.8.2" %}</h2>
+    <h2 class="card__title">{% case_subsection_heading "7.9.2" %}</h2>
     <dl class="detail-grid">
         <div>
             <dt>Οικόπεδα</dt>
@@ -110,7 +110,7 @@
             <dd>{% if completion.all_priced %}<span class="badge badge--pass">ΝΑΙ</span>{% else %}<span class="badge badge--fail">ΟΧΙ</span>{% endif %}</dd>
         </div>
         <div>
-            <dt>Ολοκλήρωση Ενότητας 8</dt>
+            <dt>Ολοκλήρωση Ενότητας 7</dt>
             <dd>{% if completion.is_complete %}<span class="badge badge--pass">ΝΑΙ</span>{% else %}<span class="badge badge--fail">ΟΧΙ</span>{% endif %}</dd>
         </div>
     </dl>
@@ -118,7 +118,7 @@
 {% endif %}
 
 <div class="card">
-<form method="post"{% if section == '4' %} enctype="multipart/form-data"{% endif %} class="app-form" novalidate>
+<form method="post"{% if section == '4' or section == '7' %} enctype="multipart/form-data"{% endif %} class="app-form" novalidate>
     {% csrf_token %}
 
     {% if form %}
@@ -135,6 +135,8 @@
             {% include "cases/_section_3_form.html" %}
         {% elif section == '4' %}
             {% include "cases/_section_4_form.html" %}
+        {% elif section == '7' %}
+            {% include "cases/_section_7_form.html" %}
         {% else %}
         <div class="form-grid">
             {% for field in form %}
@@ -182,6 +184,12 @@
     {% endif %}
     {% endfor %}
 
+    {% if section == '6' %}
+        {% include "cases/_section_6_7_form.html" %}
+    {% elif section == '7' and form %}
+        {% include "cases/_section_7_7_form.html" %}
+    {% endif %}
+
     {% if section != '5' %}
     <div class="form-actions form-span-all">
         {% if can_edit %}
@@ -190,7 +198,7 @@
         {% if section == '4' and access.case_section_4.export %}
         <a href="{% url 'cases:section_4_blank_pdf' case.pk %}" class="btn btn-secondary">Εξαγωγή PDF φόρμας</a>
         {% elif section == '6' and access.case_section_6.export %}
-        <a href="{% url 'cases:section_6_report_pdf' case.pk %}" class="btn btn-secondary">Εξαγωγή PDF πινάκων αξιολόγησης</a>
+        <button type="button" class="btn btn-secondary" data-dialog-open="section-6-report-pdf-dialog">Εξαγωγή PDF πινάκων αξιολόγησης</button>
         {% endif %}
         <a href="{% url 'cases:detail' case.pk %}" class="btn btn-secondary">{% if can_edit %}Ακύρωση{% else %}Επιστροφή στον φάκελο{% endif %}</a>
     </div>
@@ -210,7 +218,15 @@
     {% include "cases/_land_plot_dialog.html" %}
     {% include "cases/_utility_service_dialog.html" %}
 {% elif section == '5' %}
-    {% include "cases/_suitability_consultation_dialog.html" %}
+    {% include "cases/_consultation_dialog.html" %}
+{% elif section == '7' %}
+    {% include "cases/_approved_design_plot_dialog.html" %}
+    {% include "cases/_consultation_dialog.html" %}
+{% elif section == '6' %}
+    {% include "cases/_ministry_decision_round_dialog.html" %}
+    {% if access.case_section_6.export %}
+    {% include "cases/_section_6_report_pdf_dialog.html" %}
+    {% endif %}
 {% endif %}
 
 </div>

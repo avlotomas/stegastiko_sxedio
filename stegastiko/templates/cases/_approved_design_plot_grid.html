@@ -1,0 +1,101 @@
+{% comment %}
+7.3 Στοιχεία Εγκεκριμένου Σχεδιασμού Οικοπέδων: one row per plot or space of the approved
+design. Columns sort on click; re-rendered after every modal add/edit/delete. `readonly` hides
+the actions (προβολή φακέλου).
+{% endcomment %}
+<div{% if not readonly %} data-approved-design-plot-container{% endif %}>
+{% if not readonly and access.case_section_7.edit %}
+<div class="form-actions form-span-all">
+    <button type="button"
+            class="btn btn-secondary"
+            data-approved-design-plot-open="{% url 'cases:approved_design_plot_create' case.pk %}">
+        Προσθήκη εγγραφής
+    </button>
+    <button type="button"
+            class="btn btn-secondary"
+            data-approved-design-plot-open="{% url 'cases:approved_design_plot_bulk_create' case.pk %}">
+        Μαζική προσθήκη
+    </button>
+</div>
+{% endif %}
+<div class="table-wrap">
+    <table class="data-table" data-approved-design-plot-table>
+        <thead>
+        <tr>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-approved-design-plot-sort="type">
+                    Τύπος
+                </button>
+            </th>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-approved-design-plot-sort="number">
+                    Αρίθμηση
+                </button>
+            </th>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-approved-design-plot-sort="tkx">
+                    Αρίθμηση ΤΚΧ
+                </button>
+            </th>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-approved-design-plot-sort="title">
+                    Αριθμός τίτλου ιδιοκτησίας
+                </button>
+            </th>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-approved-design-plot-sort="parcel">
+                    Αριθμός τεμαχίου
+                </button>
+            </th>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-approved-design-plot-sort="sheet">
+                    Φύλλο/Σχέδιο
+                </button>
+            </th>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-approved-design-plot-sort="area">
+                    Τελικό εμβαδόν (τ.μ.)
+                </button>
+            </th>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-approved-design-plot-sort="status">
+                    Κατάσταση αρίθμησης
+                </button>
+            </th>
+            {% if not readonly %}<th><span class="visually-hidden">Ενέργειες</span></th>{% endif %}
+        </tr>
+        </thead>
+        <tbody>
+        {% for plot in approved_design_plots %}
+            <tr data-approved-design-plot-row>
+                <td data-sort-type="{{ plot.plot_type_display }}">{{ plot.plot_type_display|default:"—" }}</td>
+                <td data-sort-number="{{ plot.design_number }}">{{ plot.design_number|default:"—" }}</td>
+                <td data-sort-tkx="{{ plot.tkx_number }}">{{ plot.tkx_number|default:"—" }}</td>
+                <td data-sort-title="{{ plot.title_deed_number }}">{{ plot.title_deed_number|default:"—" }}</td>
+                <td data-sort-parcel="{{ plot.parcel_number }}">{{ plot.parcel_number|default:"—" }}</td>
+                <td data-sort-sheet="{{ plot.sheet_plan }}">{{ plot.sheet_plan|default:"—" }}</td>
+                <td data-sort-area="{{ plot.final_area_sqm|default_if_none:'' }}">{{ plot.final_area_sqm|default_if_none:"—" }}</td>
+                <td data-sort-status="{{ plot.get_numbering_status_display }}">{{ plot.get_numbering_status_display }}</td>
+                {% if not readonly %}
+                <td class="data-table__actions">
+                    {% if access.case_section_7.edit %}
+                    <button type="button" class="btn btn-secondary btn-sm"
+                            data-approved-design-plot-open="{% url 'cases:approved_design_plot_edit' case.pk plot.pk %}">
+                        Επεξεργασία
+                    </button>
+                    <button type="button" class="btn btn-danger btn-sm"
+                            data-approved-design-plot-delete="{% url 'cases:approved_design_plot_delete' case.pk plot.pk %}"
+                            data-approved-design-plot-label="{{ plot.row_label }}">
+                        Διαγραφή
+                    </button>
+                    {% endif %}
+                </td>
+                {% endif %}
+            </tr>
+        {% empty %}
+            <tr><td colspan="{% if readonly %}8{% else %}9{% endif %}">Δεν έχουν καταχωριστεί εγγραφές.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+</div>

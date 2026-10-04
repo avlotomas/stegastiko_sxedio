@@ -86,7 +86,7 @@ def consultation_due_reminders(user, include_read=False):
                         consultation.case_id,
                         "5"
                         if consultation.stage == Consultation.Stage.SUITABILITY
-                        else "8",
+                        else "7",
                     ],
                 ),
                 is_read=read_at is not None,

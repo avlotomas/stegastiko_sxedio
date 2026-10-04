@@ -1,0 +1,21 @@
+{% comment %}One attachment slot of a form: existing files with «Αφαίρεση» and the picker for new files.{% endcomment %}
+<div class="form-field form-field--wide" data-file-picker>
+    <label for="{{ new_field.id_for_label }}">{{ new_field.label }}</label>
+    {% if remove_field %}
+    <ul class="attachment-list">
+        {% for option in remove_field %}
+        <li>
+            <a href="{% url 'cases:attachment_download' case.pk option.data.value.value %}">{{ option.choice_label }}</a>
+            <label class="attachment-list__remove">{{ option.tag }} Αφαίρεση</label>
+        </li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+    {{ new_field }}
+    <ul class="attachment-list file-picker-list" data-file-picker-list hidden></ul>
+    {% if new_field.errors %}
+    <ul class="errorlist">
+        {% for error in new_field.errors %}<li>{{ error }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+</div>

@@ -89,6 +89,8 @@ def test_dashboard_includes_division_consultations_with_near_due_date(officer_cl
 
     dashboard_html = officer_client.get(reverse("home")).content.decode()
     assert "Διαβούλευση διαχωρισμού" in dashboard_html
+    reminders_html = officer_client.get(reverse("reminders")).content.decode()
+    assert reverse("cases:section_edit", args=[case.pk, "7"]) in reminders_html
 
 
 @pytest.mark.django_db

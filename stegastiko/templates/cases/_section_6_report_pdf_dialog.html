@@ -1,0 +1,43 @@
+{% comment %}Ενότητα 6 — επιλογή υποενοτήτων 6.1–6.6 για εξαγωγή PDF (όχι 6.7).{% endcomment %}
+{% load case_detail %}
+<dialog id="section-6-report-pdf-dialog" class="modal" aria-labelledby="section-6-report-pdf-dialog-title"
+        data-pdf-base-url="{% url 'cases:section_6_report_pdf' case.pk %}">
+    <h2 class="card__title" id="section-6-report-pdf-dialog-title">Εξαγωγή PDF πινάκων αξιολόγησης</h2>
+    <p class="helptext">Επιλέξτε ποιες υποενότητες θα συμπεριληφθούν στο PDF.</p>
+
+    <div class="alert alert--error" data-section-6-report-pdf-error hidden>
+        Πρέπει να επιλεγεί τουλάχιστον μία υποενότητα.
+    </div>
+
+    <div class="form-grid">
+        <label class="form-field form-field--wide">
+            <input type="checkbox" name="subsection" value="6.1" checked>
+            {% case_subsection_heading "6.1" %}
+        </label>
+        <label class="form-field form-field--wide">
+            <input type="checkbox" name="subsection" value="6.2" checked>
+            {% case_subsection_heading "6.2" %}
+        </label>
+        <label class="form-field form-field--wide">
+            <input type="checkbox" name="subsection" value="6.3" checked>
+            {% case_subsection_heading "6.3" %}
+        </label>
+        <label class="form-field form-field--wide">
+            <input type="checkbox" name="subsection" value="6.4" checked>
+            {% case_subsection_heading "6.4" %}
+        </label>
+        <label class="form-field form-field--wide">
+            <input type="checkbox" name="subsection" value="6.5" checked>
+            {% case_subsection_heading "6.5" %}
+        </label>
+        <label class="form-field form-field--wide">
+            <input type="checkbox" name="subsection" value="6.6" checked>
+            {% case_subsection_heading "6.6" %}
+        </label>
+    </div>
+
+    <div class="form-actions">
+        <button type="button" class="btn btn-primary" data-section-6-report-pdf-export>Εξαγωγή PDF</button>
+        <button type="button" class="btn btn-secondary" data-dialog-close>Άκυρο</button>
+    </div>
+</dialog>

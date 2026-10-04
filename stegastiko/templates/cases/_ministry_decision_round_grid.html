@@ -1,0 +1,88 @@
+{% comment %}
+6.7 — grid λήψης απόφασης από υπουργό. `readonly` hides add/edit actions (προβολή φακέλου).
+{% endcomment %}
+<div{% if not readonly %} data-ministry-decision-round-container{% endif %}>
+{% if not readonly and access.case_section_6.edit %}
+<div class="form-actions form-span-all">
+    <button type="button"
+            class="btn btn-secondary"
+            data-ministry-decision-round-open="{% url 'cases:ministry_decision_round_create' case.pk %}">
+        Προσθήκη εγγραφής
+    </button>
+</div>
+{% endif %}
+<div class="table-wrap">
+    <table class="data-table" data-ministry-decision-round-table>
+        <thead>
+        <tr>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-ministry-decision-round-sort="sent">
+                    Ημερομηνία αποστολής
+                </button>
+            </th>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-ministry-decision-round-sort="recommendation">
+                    Σύσταση Επαρχιακής Διοίκησης
+                </button>
+            </th>
+            <th>Επισυναπτόμενο έγγραφο σύστασης</th>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-ministry-decision-round-sort="comments">
+                    Σχόλια / Παρατηρήσεις
+                </button>
+            </th>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-ministry-decision-round-sort="response">
+                    Ημερομηνία λήψης απάντησης
+                </button>
+            </th>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-ministry-decision-round-sort="decision">
+                    Απόφαση ΥΠΕΣ
+                </button>
+            </th>
+            <th>Επισυναπτόμενο έγγραφο απάντησης</th>
+            {% if not readonly %}<th><span class="visually-hidden">Ενέργειες</span></th>{% endif %}
+        </tr>
+        </thead>
+        <tbody>
+        {% for row in ministry_decision_rounds %}
+            <tr data-ministry-decision-round-row>
+                <td data-sort-sent="{{ row.letter_sent_date|date:'Y-m-d' }}">{{ row.letter_sent_date|default:"—" }}</td>
+                <td data-sort-recommendation="{{ row.recommendation_display }}">{{ row.recommendation_display|default:"—" }}</td>
+                <td>
+                    {% for attachment in row.recommendation_attachments %}
+                    <a href="{% url 'cases:attachment_download' case.pk attachment.pk %}">{{ attachment.filename }}</a>{% if not forloop.last %}<br>{% endif %}
+                    {% empty %}—{% endfor %}
+                </td>
+                <td data-sort-comments="{{ row.comments }}">{{ row.comments|default:"—"|linebreaksbr }}</td>
+                <td data-sort-response="{{ row.ministry_response_date|date:'Y-m-d' }}">{{ row.ministry_response_date|default:"—" }}</td>
+                <td data-sort-decision="{{ row.ministry_decision_display }}">{{ row.ministry_decision_display|default:"—" }}</td>
+                <td>
+                    {% for attachment in row.response_attachments %}
+                    <a href="{% url 'cases:attachment_download' case.pk attachment.pk %}">{{ attachment.filename }}</a>{% if not forloop.last %}<br>{% endif %}
+                    {% empty %}—{% endfor %}
+                </td>
+                {% if not readonly %}
+                <td class="data-table__actions">
+                    {% if access.case_section_6.edit %}
+                    <button type="button" class="btn btn-secondary btn-sm"
+                            data-ministry-decision-round-open="{% url 'cases:ministry_decision_round_edit' case.pk row.pk %}">
+                        Επεξεργασία
+                    </button>
+                    <button type="button" class="btn btn-danger btn-sm"
+                            data-ministry-decision-round-delete="{% url 'cases:ministry_decision_round_delete' case.pk row.pk %}"
+                            data-ministry-decision-round-label="{{ row.row_label }}">
+                        Διαγραφή
+                    </button>
+                    {% endif %}
+                </td>
+                {% endif %}
+            </tr>
+        {% empty %}
+            <tr><td colspan="{% if readonly %}7{% else %}8{% endif %}">Δεν έχουν καταχωριστεί εγγραφές.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+</div>

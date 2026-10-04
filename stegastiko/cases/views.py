@@ -12,10 +12,12 @@ from django.utils.http import content_disposition_header
 
 from cases.forms import (
     AnnouncementTextForm,
+    ApprovedDesignPlotBulkForm,
+    ApprovedDesignPlotForm,
     CaseCreateForm,
     CompletenessCheckForm,
+    ConsultationForm,
     DeficiencyEmailForm,
-    DivisionConsultationFormSet,
     FieldFormSet,
     InfrastructureCheckFormSet,
     LandPlotDecisionFormSet,
@@ -26,26 +28,31 @@ from cases.forms import (
     Section2Form,
     Section3Form,
     Section4Form,
+    MinistryDecisionRoundForm,
     Section6Form,
-    Section7Form,
     Section8Form,
     Section8PlotsForm,
     SubmissionCycleForm,
     SubmissionCyclePublicationFormSet,
-    SuitabilityConsultationForm,
     UtilityServiceForm,
     ValuationReferralFormSet,
 )
 from cases.models import (
+    ApprovedDesignPlot,
     Case,
     CompletenessCheck,
     Consultation,
     LandPlot,
+    MinistryDecisionRound,
     SubmissionCycle,
     UtilityService,
 )
 from cases.section4_blank_pdf import render_section4_blank_pdf, section4_blank_pdf_filename
-from cases.section6_report_pdf import render_section6_report_pdf, section6_report_pdf_filename
+from cases.section6_report_pdf import (
+    parse_section6_report_includes,
+    render_section6_report_pdf,
+    section6_report_pdf_filename,
+)
 from cases.services import (
     announcement_readiness,
     build_announcement_text,
@@ -113,53 +120,67 @@ SECTIONS = {
         "action": "Διαβουλεύσεις καταλληλότητας",
         "summary": "Μία γραμμή ανά διαβούλευση· η κατάσταση είναι αυτόματη.",
         "form": None,
-        # 5.x rows are edited one at a time from the grid modal (suitability_consultation_form).
+        # Rows are edited one at a time from the grid modal (consultation_form).
         "formsets": (),
     },
     "6": {
         "title": "Ενότητα 6 — Αξιολόγηση καταλληλότητας",
         "action": "Απόφαση καταλληλότητας",
-        "summary": "6.1–6.5 συνοπτικοί πίνακες, 6.6 απόφαση και αιτιολόγηση ανά τεμάχιο.",
+        "summary": "6.1–6.5 συνοπτικοί πίνακες, 6.6 απόφαση ανά τεμάχιο, 6.7 λήψη απόφασης από υπουργό.",
         "form": Section6Form,
         "formsets": (
             ("plot_decisions", LandPlotDecisionFormSet, "6.6"),
         ),
     },
     "7": {
-        "title": "Ενότητα 7 — Σύσταση προς τον Υπουργό",
-        "action": "Σύσταση προς Υπουργό",
-        "summary": "Σύσταση Επαρχιακής Διοίκησης και απόφαση ΥΠΕΣ.",
-        "form": Section7Form,
-        "formsets": (),
-    },
-    "8": {
-        "title": "Ενότητα 8 — Σχεδιασμός και υλοποίηση διαχωρισμού (8.1–8.6)",
-        "action": "Διαχωρισμός (8.1–8.6)",
-        "summary": "Ανάθεση μελέτης, ΤΠΟ, διαγωνισμός, διαβουλεύσεις και έλεγχοι υποδομών.",
+        "title": "Ενότητα 7 — Σχεδιασμός και υλοποίηση διαχωρισμού (7.1–7.7)",
+        "action": "Σχεδιασμός και υλοποίηση διαχωρισμού",
+        "summary": "Ανάθεση μελέτης, ΤΠΟ, κατασκευαστικά σχέδια και διαβουλεύσεις, έλεγχοι υποδομών και διαγωνισμός.",
         "form": Section8Form,
+        # 7.4 consultation rows are edited from the grid modal (consultation_form).
         "formsets": (
-            ("consultations", DivisionConsultationFormSet, "8.4"),
-            ("infrastructure_checks", InfrastructureCheckFormSet, "8.6"),
+            ("infrastructure_checks", InfrastructureCheckFormSet, "7.6"),
         ),
     },
-    "8-plots": {
-        "title": "Ενότητα 8 — Οικόπεδα, εμβαδά και αξία (8.7–8.8)",
-        "action": "Οικόπεδα, αξία και τιμή (8.7–8.8)",
+    "7-plots": {
+        "title": "Ενότητα 7 — Οικόπεδα, εμβαδά και αξία (7.8–7.9)",
+        "action": "Οικόπεδα, αξία και τιμή (7.8–7.9)",
         "summary": "Χωρομετρική εργασία, χωράφια, οικόπεδα και τιμή διάθεσης 25%.",
         "form": Section8PlotsForm,
         "formsets": (
-            ("fields", FieldFormSet, "8.7-parcels"),
-            ("valuation_referrals", ValuationReferralFormSet, "8.8.1"),
-            ("parcels", ParcelFormSet, "8.7-8.8-mapping"),
+            ("fields", FieldFormSet, "7.8-parcels"),
+            ("valuation_referrals", ValuationReferralFormSet, "7.9.1"),
+            ("parcels", ParcelFormSet, "7.8-7.9-mapping"),
         ),
     },
 }
 
 SECTION_ORDER = list(SECTIONS)
 
-CONSULTATION_STAGE_BY_SECTION = {
-    "5": Consultation.Stage.SUITABILITY,
-    "8": Consultation.Stage.DIVISION,
+SECTION_7_CASE_FILES = (
+    Case.ATTACHMENT_SECTION_DIVISION_DESIGN,
+    Case.ATTACHMENT_SECTION_TPO_APPLICATION,
+)
+
+# Ενότητα 5 and 7.4 share the consultation grid. Ενότητα 7 has no separate create / delete
+# access types, so its rows follow the edit permission (as the 7.3 grid does).
+CONSULTATION_GRIDS = {
+    Consultation.Stage.SUITABILITY: {
+        "section": "5",
+        "create_action": CREATE,
+        "delete_action": DELETE,
+        "create_url_name": "cases:suitability_consultation_create",
+        "edit_url_name": "cases:suitability_consultation_edit",
+        "delete_url_name": "cases:suitability_consultation_delete",
+    },
+    Consultation.Stage.DIVISION: {
+        "section": "7",
+        "create_action": EDIT,
+        "delete_action": EDIT,
+        "create_url_name": "cases:division_consultation_create",
+        "edit_url_name": "cases:division_consultation_edit",
+        "delete_url_name": "cases:division_consultation_delete",
+    },
 }
 
 
@@ -175,10 +196,6 @@ def _build_formsets(section_key, case, data=None, files=None):
     for prefix, formset_class, legend in SECTIONS[section_key]["formsets"]:
         legend = _resolve_formset_legend(legend)
         kwargs = {"instance": case, "prefix": prefix}
-        if prefix == "consultations":
-            kwargs["queryset"] = Consultation.objects.filter(
-                case=case, stage=CONSULTATION_STAGE_BY_SECTION[section_key]
-            )
         formsets.append((legend, formset_class(data, files, **kwargs)))
     return formsets
 
@@ -186,23 +203,23 @@ def _build_formsets(section_key, case, data=None, files=None):
 def section_screens_for(case):
     """Sections of this case that are edited through the generic section screen.
 
-    Ενότητα 9 is applicable too, but it is handled by the dedicated announcement
+    Ενότητα 8 is applicable too, but it is handled by the dedicated announcement
     screens because it lives on SubmissionCycle rather than on the Case.
     """
     applicable = case.applicable_sections
     return [key for key in SECTION_ORDER if key in applicable]
 
 
-SECTION_9_NAV = {
-    "key": "9",
+SECTION_8_NAV = {
+    "key": "8",
     "action": "Γνωστοποίηση έναρξης αιτήσεων",
-    "summary": "Ενότητα 9: περίοδος υποβολής, δημοσίευση και έκδοση ανακοίνωσης.",
-    "title": "Ενότητα 9 — Γνωστοποίηση έναρξης αιτήσεων",
+    "summary": "Ενότητα 8: περίοδος υποβολής, δημοσίευση και έκδοση ανακοίνωσης.",
+    "title": "Ενότητα 8 — Γνωστοποίηση έναρξης αιτήσεων",
 }
 
 
 def case_nav_items(case, user, active_key=None):
-    """Sidebar navigation for case work screens (sections 1–8 and 9) the user may view."""
+    """Sidebar navigation for case work screens (sections 1–7 and 8) the user may view."""
     items = [
         {
             "key": key,
@@ -214,14 +231,14 @@ def case_nav_items(case, user, active_key=None):
         for key in section_screens_for(case)
         if has_access(user, case_section_function(key))
     ]
-    if "9" in case.applicable_sections and has_access(user, case_section_function("9")):
+    if "8" in case.applicable_sections and has_access(user, case_section_function("8")):
         items.append(
             {
-                "key": "9",
-                "action": case_section_heading("9"),
-                "summary": SECTION_9_NAV["summary"],
-                "title": case_section_heading("9"),
-                "is_active": active_key == "9",
+                "key": "8",
+                "action": case_section_heading("8"),
+                "summary": SECTION_8_NAV["summary"],
+                "title": case_section_heading("8"),
+                "is_active": active_key == "8",
             }
         )
     return items
@@ -300,9 +317,14 @@ def case_detail(request, pk):
             "land_plots": case.land_plots.prefetch_related("attachments"),
             "utility_services": _case_utility_services(case),
             "technical_attachments": case.attachments.filter(section_ref="4.4"),
-            "suitability_consultations": _case_suitability_consultations(case),
-            "division_consultations": case.consultations.filter(
-                stage=Consultation.Stage.DIVISION
+            "division_design_attachments": case.division_design_attachments(),
+            "tpo_application_attachments": case.tpo_application_attachments(),
+            "approved_design_plots": case.approved_design_plots.all(),
+            "suitability_consultation_grid": _consultation_grid(
+                request.user, case, Consultation.Stage.SUITABILITY
+            ),
+            "division_consultation_grid": _consultation_grid(
+                request.user, case, Consultation.Stage.DIVISION
             ),
             "infrastructure_checks": case.infrastructure_checks.all(),
             "parcels": case.parcels.select_related("field", "valuation_referral"),
@@ -310,6 +332,9 @@ def case_detail(request, pk):
             "readiness": announcement_readiness(case),
             "communications": case_communications(case),
             "submission_cycles": case.submission_cycles.all(),
+            "ministry_decision_rounds": case.ministry_decision_rounds.prefetch_related(
+                "attachments"
+            ),
         },
     )
 
@@ -373,7 +398,7 @@ def case_section_edit(request, pk, section):
         "formsets": formsets,
         "can_edit": can_edit,
         "summary": suitability_summary(case) if section == "6" else None,
-        "completion": section8_completion(case) if section == "8-plots" else None,
+        "completion": section8_completion(case) if section == "7-plots" else None,
         "case_nav": case_nav_items(case, request.user, active_key=section),
     }
     if section == "3":
@@ -382,7 +407,18 @@ def case_section_edit(request, pk, section):
         context["land_plots"] = case.land_plots.all()
         context["utility_services"] = _case_utility_services(case)
     if section == "5":
-        context["suitability_consultations"] = _case_suitability_consultations(case)
+        context["consultation_grid"] = _consultation_grid(
+            request.user, case, Consultation.Stage.SUITABILITY
+        )
+    if section == "6":
+        context["ministry_decision_rounds"] = case.ministry_decision_rounds.prefetch_related(
+            "attachments"
+        )
+    if section == "7":
+        context["approved_design_plots"] = case.approved_design_plots.all()
+        context["consultation_grid"] = _consultation_grid(
+            request.user, case, Consultation.Stage.DIVISION
+        )
     if section == "2":
         context.update(
             {
@@ -417,7 +453,8 @@ def section_4_blank_pdf(request, pk):
 def section_6_report_pdf(request, pk):
     """Ενότητα 6 report «Πίνακες αξιολόγησης καταλληλότητας κρατικής γης» (PDF)."""
     case = _case_for_section(request, pk, "6", EXPORT)
-    pdf_bytes = render_section6_report_pdf(case)
+    includes = parse_section6_report_includes(request.GET)
+    pdf_bytes = render_section6_report_pdf(case, includes=includes)
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
     response["Content-Disposition"] = content_disposition_header(
         as_attachment=True,
@@ -734,10 +771,16 @@ def land_plot_evaluation_form(request, pk, plot_id):
     return JsonResponse({"ok": True, "html": _plot_evaluation_form_html(request, case, form)})
 
 
-def _case_suitability_consultations(case):
-    return case.consultations.filter(stage=Consultation.Stage.SUITABILITY).prefetch_related(
-        "attachments"
-    )
+def _consultation_grid(user, case, stage):
+    config = CONSULTATION_GRIDS[stage]
+    function = case_section_function(config["section"])
+    return {
+        **config,
+        "consultations": case.consultations.filter(stage=stage).prefetch_related("attachments"),
+        "can_create": has_access(user, function, config["create_action"]),
+        "can_edit": has_access(user, function, EDIT),
+        "can_delete": has_access(user, function, config["delete_action"]),
+    }
 
 
 def _case_utility_services(case):
@@ -812,51 +855,50 @@ def utility_service_delete(request, pk, service_id):
     )
 
 
-def _suitability_consultation_grid_html(request, case):
+def _consultation_grid_html(request, case, stage):
     return render_to_string(
-        "cases/_suitability_consultation_grid.html",
-        {"case": case, "suitability_consultations": _case_suitability_consultations(case)},
+        "cases/_consultation_grid.html",
+        {"case": case, "consultation_grid": _consultation_grid(request.user, case, stage)},
         request=request,
     )
 
 
-def _suitability_consultation_form_html(request, case, form):
+def _consultation_form_html(request, case, form):
     return render_to_string(
-        "cases/_suitability_consultation_form.html",
-        {"case": case, "consultation_form": form},
+        "cases/_consultation_form.html",
+        {
+            "case": case,
+            "consultation_form": form,
+            "consultation_urls": CONSULTATION_GRIDS[form.instance.stage],
+        },
         request=request,
     )
 
 
 @login_required
-def suitability_consultation_form(request, pk, consultation_id=None):
-    """5 Add or edit one suitability consultation from the grid modal."""
-    case = _case_for_section(request, pk, "5", CREATE if consultation_id is None else EDIT)
+def consultation_form(request, pk, stage, consultation_id=None):
+    """5 / 7.4 Add or edit one consultation from the grid modal."""
+    config = CONSULTATION_GRIDS[stage]
+    action = config["create_action"] if consultation_id is None else EDIT
+    case = _case_for_section(request, pk, config["section"], action)
     if not _wants_json(request):
         raise Http404()
     if consultation_id is None:
-        consultation = Consultation(case=case, stage=Consultation.Stage.SUITABILITY)
+        consultation = Consultation(case=case, stage=stage)
     else:
         consultation = get_object_or_404(
-            Consultation,
-            pk=consultation_id,
-            case=case,
-            stage=Consultation.Stage.SUITABILITY,
+            Consultation, pk=consultation_id, case=case, stage=stage
         )
 
     if request.method == "POST":
-        form = SuitabilityConsultationForm(request.POST, request.FILES, instance=consultation)
+        form = ConsultationForm(request.POST, request.FILES, instance=consultation)
         if not form.is_valid():
             return JsonResponse(
-                {
-                    "ok": False,
-                    "html": _suitability_consultation_form_html(request, case, form),
-                },
+                {"ok": False, "html": _consultation_form_html(request, case, form)},
                 status=400,
             )
         is_new = consultation.pk is None
-        consultation._section_ref = "5"
-        consultation.stage = Consultation.Stage.SUITABILITY
+        consultation._section_ref = consultation.section_ref
         with transaction.atomic():
             consultation = form.save()
         verb = "Προστέθηκε" if is_new else "Ενημερώθηκε"
@@ -864,64 +906,271 @@ def suitability_consultation_form(request, pk, consultation_id=None):
             {
                 "ok": True,
                 "message": f"{verb} η διαβούλευση ({consultation.row_label}).",
-                "grid_html": _suitability_consultation_grid_html(request, case),
+                "grid_html": _consultation_grid_html(request, case, stage),
             }
         )
     if request.method != "GET":
         raise Http404()
-    form = SuitabilityConsultationForm(instance=consultation)
-    return JsonResponse(
-        {"ok": True, "html": _suitability_consultation_form_html(request, case, form)}
-    )
+    form = ConsultationForm(instance=consultation)
+    return JsonResponse({"ok": True, "html": _consultation_form_html(request, case, form)})
 
 
 @login_required
-def suitability_consultation_delete(request, pk, consultation_id):
-    """5 Delete one suitability consultation (and its files) from the grid."""
-    case = _case_for_section(request, pk, "5", DELETE)
+def consultation_delete(request, pk, stage, consultation_id):
+    """5 / 7.4 Delete one consultation (and its files) from the grid."""
+    config = CONSULTATION_GRIDS[stage]
+    case = _case_for_section(request, pk, config["section"], config["delete_action"])
     if request.method != "POST" or not _wants_json(request):
         raise Http404("Επιτρέπεται μόνο POST.")
-    consultation = get_object_or_404(
-        Consultation,
-        pk=consultation_id,
-        case=case,
-        stage=Consultation.Stage.SUITABILITY,
-    )
+    consultation = get_object_or_404(Consultation, pk=consultation_id, case=case, stage=stage)
     label = consultation.row_label
-    consultation._section_ref = "5"
+    consultation._section_ref = consultation.section_ref
     with transaction.atomic():
-        for attachment in consultation.attachments.filter(section_ref="5"):
-            attachment._section_ref = "5"
+        for attachment in consultation.attachments.all():
+            attachment._section_ref = consultation.section_ref
             attachment.delete()
         consultation.delete()
     return JsonResponse(
         {
             "ok": True,
             "message": f"Διαγράφηκε η διαβούλευση {label}.",
-            "grid_html": _suitability_consultation_grid_html(request, case),
+            "grid_html": _consultation_grid_html(request, case, stage),
+        }
+    )
+
+
+def _ministry_decision_round_grid_html(request, case, readonly=False):
+    return render_to_string(
+        "cases/_ministry_decision_round_grid.html",
+        {
+            "case": case,
+            "ministry_decision_rounds": case.ministry_decision_rounds.prefetch_related(
+                "attachments"
+            ),
+            "readonly": readonly,
+        },
+        request=request,
+    )
+
+
+def _ministry_decision_round_form_html(request, case, form):
+    return render_to_string(
+        "cases/_ministry_decision_round_form.html",
+        {"case": case, "round_form": form},
+        request=request,
+    )
+
+
+@login_required
+def ministry_decision_round_form(request, pk, round_id=None):
+    """6.7 Add or edit one ministry decision row from the grid modal."""
+    case = _case_for_section(request, pk, "6", EDIT)
+    if not _wants_json(request):
+        raise Http404()
+    if round_id is None:
+        decision_round = MinistryDecisionRound(case=case)
+    else:
+        decision_round = get_object_or_404(MinistryDecisionRound, pk=round_id, case=case)
+
+    if request.method == "POST":
+        form = MinistryDecisionRoundForm(request.POST, request.FILES, instance=decision_round)
+        if not form.is_valid():
+            return JsonResponse(
+                {
+                    "ok": False,
+                    "html": _ministry_decision_round_form_html(request, case, form),
+                },
+                status=400,
+            )
+        is_new = decision_round.pk is None
+        decision_round._section_ref = "6.7"
+        with transaction.atomic():
+            decision_round = form.save()
+        verb = "Προστέθηκε" if is_new else "Ενημερώθηκε"
+        return JsonResponse(
+            {
+                "ok": True,
+                "message": f"{verb} η εγγραφή ({decision_round.row_label}).",
+                "grid_html": _ministry_decision_round_grid_html(request, case),
+            }
+        )
+    if request.method != "GET":
+        raise Http404()
+    form = MinistryDecisionRoundForm(instance=decision_round)
+    return JsonResponse(
+        {"ok": True, "html": _ministry_decision_round_form_html(request, case, form)}
+    )
+
+
+@login_required
+def ministry_decision_round_delete(request, pk, round_id):
+    """6.7 Delete one ministry decision row (and its files) from the grid."""
+    case = _case_for_section(request, pk, "6", EDIT)
+    if request.method != "POST" or not _wants_json(request):
+        raise Http404("Επιτρέπεται μόνο POST.")
+    decision_round = get_object_or_404(MinistryDecisionRound, pk=round_id, case=case)
+    label = decision_round.row_label
+    decision_round._section_ref = "6.7"
+    with transaction.atomic():
+        for section_ref in (
+            MinistryDecisionRound.ATTACHMENT_SECTION_RECOMMENDATION,
+            MinistryDecisionRound.ATTACHMENT_SECTION_RESPONSE,
+            "6.7",
+        ):
+            for attachment in decision_round.attachments.filter(section_ref=section_ref):
+                attachment._section_ref = "6.7"
+                attachment.delete()
+        decision_round.delete()
+    return JsonResponse(
+        {
+            "ok": True,
+            "message": f"Διαγράφηκε η εγγραφή {label}.",
+            "grid_html": _ministry_decision_round_grid_html(request, case),
+        }
+    )
+
+
+def _approved_design_plot_grid_html(request, case):
+    return render_to_string(
+        "cases/_approved_design_plot_grid.html",
+        {"case": case, "approved_design_plots": case.approved_design_plots.all()},
+        request=request,
+    )
+
+
+def _approved_design_plot_form_html(request, case, form):
+    return render_to_string(
+        "cases/_approved_design_plot_form.html",
+        {"case": case, "plot_form": form},
+        request=request,
+    )
+
+
+@login_required
+def approved_design_plot_form(request, pk, plot_id=None):
+    """7.3 Add or edit one approved design plot row from the grid modal."""
+    case = _case_for_section(request, pk, "7", EDIT)
+    if not _wants_json(request):
+        raise Http404()
+    if plot_id is None:
+        plot = ApprovedDesignPlot(case=case)
+    else:
+        plot = get_object_or_404(ApprovedDesignPlot, pk=plot_id, case=case)
+
+    if request.method == "POST":
+        form = ApprovedDesignPlotForm(request.POST, instance=plot)
+        if not form.is_valid():
+            return JsonResponse(
+                {"ok": False, "html": _approved_design_plot_form_html(request, case, form)},
+                status=400,
+            )
+        is_new = plot.pk is None
+        plot._section_ref = "7.3"
+        with transaction.atomic():
+            plot = form.save()
+        verb = "Προστέθηκε" if is_new else "Ενημερώθηκε"
+        return JsonResponse(
+            {
+                "ok": True,
+                "message": f"{verb} η εγγραφή ({plot.row_label}).",
+                "grid_html": _approved_design_plot_grid_html(request, case),
+            }
+        )
+    if request.method != "GET":
+        raise Http404()
+    form = ApprovedDesignPlotForm(instance=plot)
+    return JsonResponse({"ok": True, "html": _approved_design_plot_form_html(request, case, form)})
+
+
+def _approved_design_plot_bulk_form_html(request, case, form):
+    return render_to_string(
+        "cases/_approved_design_plot_bulk_form.html",
+        {"case": case, "bulk_form": form},
+        request=request,
+    )
+
+
+@login_required
+def approved_design_plot_bulk_create(request, pk):
+    """7.3 «Μαζική προσθήκη»: create many rows of one type, numbered serially or by hand."""
+    case = _case_for_section(request, pk, "7", EDIT)
+    if not _wants_json(request):
+        raise Http404()
+    if request.method == "POST":
+        form = ApprovedDesignPlotBulkForm(request.POST)
+        if not form.is_valid():
+            return JsonResponse(
+                {"ok": False, "html": _approved_design_plot_bulk_form_html(request, case, form)},
+                status=400,
+            )
+        plots = form.build_plots(case)
+        with transaction.atomic():
+            for plot in plots:
+                plot._section_ref = "7.3"
+                plot.save()
+        return JsonResponse(
+            {
+                "ok": True,
+                "message": f"Προστέθηκαν {len(plots)} εγγραφές ({plots[0].plot_type_display}).",
+                "grid_html": _approved_design_plot_grid_html(request, case),
+            }
+        )
+    if request.method != "GET":
+        raise Http404()
+    form = ApprovedDesignPlotBulkForm()
+    return JsonResponse(
+        {"ok": True, "html": _approved_design_plot_bulk_form_html(request, case, form)}
+    )
+
+
+@login_required
+def approved_design_plot_delete(request, pk, plot_id):
+    """7.3 Delete one approved design plot row from the grid."""
+    case = _case_for_section(request, pk, "7", EDIT)
+    if request.method != "POST" or not _wants_json(request):
+        raise Http404("Επιτρέπεται μόνο POST.")
+    plot = get_object_or_404(ApprovedDesignPlot, pk=plot_id, case=case)
+    label = plot.row_label
+    plot._section_ref = "7.3"
+    plot.delete()
+    return JsonResponse(
+        {
+            "ok": True,
+            "message": f"Διαγράφηκε η εγγραφή {label}.",
+            "grid_html": _approved_design_plot_grid_html(request, case),
         }
     )
 
 
 @access_required("cases")
 def case_attachment_download(request, pk, attachment_id):
-    """Download a file of the case: 3.1 plot files, 4.4 case files or 5 consultation files."""
+    """Download a case file: 3.1 plot, 4.4 / 7.2 / 7.3 case, 5 / 7.4 consultation or 6.7 files."""
     case = get_object_or_404(Case, pk=pk)
     plot_type = ContentType.objects.get_for_model(LandPlot)
     case_type = ContentType.objects.get_for_model(Case)
     consultation_type = ContentType.objects.get_for_model(Consultation)
+    ministry_round_type = ContentType.objects.get_for_model(MinistryDecisionRound)
     plot_files = Q(content_type=plot_type, object_id__in=case.land_plots.values("pk"))
     case_files = Q(content_type=case_type, object_id=case.pk)
     consultation_files = Q(
         content_type=consultation_type, object_id__in=case.consultations.values("pk")
     )
+    ministry_round_files = Q(
+        content_type=ministry_round_type,
+        object_id__in=case.ministry_decision_rounds.values("pk"),
+    )
     attachment = get_object_or_404(
-        Attachment.objects.filter(plot_files | case_files | consultation_files),
+        Attachment.objects.filter(
+            plot_files | case_files | consultation_files | ministry_round_files
+        ),
         pk=attachment_id,
     )
-    owning_section = {plot_type.pk: "3", case_type.pk: "4", consultation_type.pk: "5"}[
-        attachment.content_type_id
-    ]
+    owning_section = {
+        plot_type.pk: "3",
+        case_type.pk: "7" if attachment.section_ref in SECTION_7_CASE_FILES else "4",
+        consultation_type.pk: "7" if attachment.section_ref == "7.4" else "5",
+        ministry_round_type.pk: "6",
+    }[attachment.content_type_id]
     require_access(request.user, case_section_function(owning_section))
     response = HttpResponse(
         bytes(attachment.data), content_type=attachment.content_type_name
@@ -934,8 +1183,8 @@ def case_attachment_download(request, pk, attachment_id):
 
 @login_required
 def announcement_create(request, pk):
-    """9.1 Create the announcement of a case, gated by the 9.4 readiness check."""
-    require_access(request.user, "case_section_9", CREATE if request.method == "POST" else VIEW)
+    """8.1 Create the announcement of a case, gated by the 8.4 readiness check."""
+    require_access(request.user, "case_section_8", CREATE if request.method == "POST" else VIEW)
     case = get_object_or_404(Case.objects.select_related("community"), pk=pk)
     readiness = announcement_readiness(case)
     if request.method == "POST":
@@ -949,7 +1198,7 @@ def announcement_create(request, pk):
                 cycle.cases.add(case)
                 cycle.announcement_text = build_announcement_text(cycle)
                 cycle.save()
-            messages.success(request, "Δημιουργήθηκε η γνωστοποίηση (9.1) με προσχέδιο (9.3).")
+            messages.success(request, "Δημιουργήθηκε η γνωστοποίηση (8.1) με προσχέδιο (8.3).")
             return redirect("cases:announcement_detail", pk=case.pk, cycle_id=cycle.pk)
     else:
         form = SubmissionCycleForm(community=case.community, initial={"cases": [case]})
@@ -961,16 +1210,16 @@ def announcement_create(request, pk):
             "form": form,
             "readiness": readiness,
             "submission_cycles": case.submission_cycles.all(),
-            "case_nav": case_nav_items(case, request.user, active_key="9"),
-            "section_title": get_case_section_label("9"),
+            "case_nav": case_nav_items(case, request.user, active_key="8"),
+            "section_title": get_case_section_label("8"),
         },
     )
 
 
 @login_required
 def announcement_detail(request, pk, cycle_id):
-    """9.2–9.4 Publication methods, announcement text and readiness."""
-    require_access(request.user, "case_section_9", EDIT if request.method == "POST" else VIEW)
+    """8.2–8.4 Publication methods, announcement text and readiness."""
+    require_access(request.user, "case_section_8", EDIT if request.method == "POST" else VIEW)
     case = get_object_or_404(Case.objects.select_related("community"), pk=pk)
     cycle = get_object_or_404(SubmissionCycle, pk=cycle_id, cases=case)
 
@@ -988,7 +1237,7 @@ def announcement_detail(request, pk, cycle_id):
     else:
         text_form = AnnouncementTextForm(instance=cycle)
         publications = SubmissionCyclePublicationFormSet(instance=cycle, prefix="publications")
-    if not has_access(request.user, "case_section_9", EDIT):
+    if not has_access(request.user, "case_section_8", EDIT):
         _disable_fields(text_form)
         for child in publications:
             _disable_fields(child)
@@ -1004,16 +1253,16 @@ def announcement_detail(request, pk, cycle_id):
             "readiness_by_case": [
                 (linked, announcement_readiness(linked)) for linked in cycle.cases.all()
             ],
-            "case_nav": case_nav_items(case, request.user, active_key="9"),
-            "section_title": get_case_section_label("9"),
+            "case_nav": case_nav_items(case, request.user, active_key="8"),
+            "section_title": get_case_section_label("8"),
         },
     )
 
 
 @login_required
 def announcement_regenerate(request, pk, cycle_id):
-    """9.3 Rebuild the draft from current case data."""
-    require_access(request.user, "case_section_9", EDIT)
+    """8.3 Rebuild the draft from current case data."""
+    require_access(request.user, "case_section_8", EDIT)
     case = get_object_or_404(Case, pk=pk)
     cycle = get_object_or_404(SubmissionCycle, pk=cycle_id, cases=case)
     if request.method != "POST":
@@ -1023,14 +1272,14 @@ def announcement_regenerate(request, pk, cycle_id):
     else:
         cycle.announcement_text = build_announcement_text(cycle)
         cycle.save()
-        messages.success(request, "Το προσχέδιο ανακοίνωσης δημιουργήθηκε ξανά (9.3).")
+        messages.success(request, "Το προσχέδιο ανακοίνωσης δημιουργήθηκε ξανά (8.3).")
     return redirect("cases:announcement_detail", pk=case.pk, cycle_id=cycle.pk)
 
 
 @login_required
 def announcement_publish(request, pk, cycle_id):
-    """9.3 Finalise and issue the announcement."""
-    require_access(request.user, "case_section_9", PUBLISH)
+    """8.3 Finalise and issue the announcement."""
+    require_access(request.user, "case_section_8", PUBLISH)
     case = get_object_or_404(Case, pk=pk)
     cycle = get_object_or_404(SubmissionCycle, pk=cycle_id, cases=case)
     if request.method != "POST":
@@ -1040,5 +1289,5 @@ def announcement_publish(request, pk, cycle_id):
     except ValidationError as exc:
         messages.error(request, exc.messages[0] if exc.messages else str(exc))
     else:
-        messages.success(request, "Η ανακοίνωση οριστικοποιήθηκε και εκδόθηκε (9.3).")
+        messages.success(request, "Η ανακοίνωση οριστικοποιήθηκε και εκδόθηκε (8.3).")
     return redirect("cases:announcement_detail", pk=case.pk, cycle_id=cycle.pk)

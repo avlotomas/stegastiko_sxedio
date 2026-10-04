@@ -3,6 +3,7 @@ from django.db.models import Q
 
 from applications.models import Person
 from cases.models import (
+    ApprovedDesignPlot,
     Case,
     CompletenessCheck,
     Consultation,
@@ -13,6 +14,7 @@ from cases.models import (
     SubmissionCycle,
     SubmissionCyclePublication,
     UtilityService,
+    MinistryDecisionRound,
     UtilityServiceType,
     ValuationReferral,
     YesNo,
@@ -102,6 +104,50 @@ class AttachmentsFormMixin:
             Attachment(
                 content_object=self.instance,
                 section_ref=self.attachment_section_ref,
+                filename=upload.name,
+                content_type_name=upload.content_type or "application/octet-stream",
+                data=upload.read(),
+            ).save()
+
+
+class AttachmentSlotsMixin:
+    """Several separate file slots on the form's instance, told apart by section_ref.
+
+    Placed before StyledFormMixin in the bases, the added file fields stay unstyled.
+    """
+
+    # section_ref -> (new files field, remove field, label of the new files field)
+    ATTACHMENT_SLOTS = {}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for section_ref, (new_field, remove_field, label) in self.ATTACHMENT_SLOTS.items():
+            self.fields[new_field] = MultipleFileField(required=False, label=label)
+            if self.instance.pk:
+                remove = forms.ModelMultipleChoiceField(
+                    queryset=self.instance.attachments.filter(section_ref=section_ref),
+                    required=False,
+                    widget=forms.CheckboxSelectMultiple,
+                    label="Αφαίρεση αρχείων",
+                )
+                remove.label_from_instance = lambda attachment: attachment.filename
+                self.fields[remove_field] = remove
+
+    def save(self, commit=True):
+        instance = super().save(commit=commit)
+        if commit:
+            for section_ref, (new_field, remove_field, _) in self.ATTACHMENT_SLOTS.items():
+                self._save_attachment_slot(section_ref, new_field, remove_field)
+        return instance
+
+    def _save_attachment_slot(self, section_ref, new_field, remove_field):
+        for attachment in self.cleaned_data.get(remove_field) or []:
+            attachment._section_ref = section_ref
+            attachment.delete()
+        for upload in self.cleaned_data.get(new_field) or []:
+            Attachment(
+                content_object=self.instance,
+                section_ref=section_ref,
                 filename=upload.name,
                 content_type_name=upload.content_type or "application/octet-stream",
                 data=upload.read(),
@@ -325,25 +371,74 @@ class Section6Form(StyledFormMixin, forms.ModelForm):
         fields = []
 
 
-class Section7Form(StyledFormMixin, forms.ModelForm):
+class MinistryDecisionRoundForm(
+    OtherChoiceFieldsMixin, AttachmentSlotsMixin, StyledFormMixin, forms.ModelForm
+):
+    """6.7 One ministry decision row in the grid modal."""
+
+    ATTACHMENT_SLOTS = {
+        MinistryDecisionRound.ATTACHMENT_SECTION_RECOMMENDATION: (
+            "new_recommendation_files",
+            "remove_recommendation_attachments",
+            "Επισυναπτόμενο έγγραφο σύστασης",
+        ),
+        MinistryDecisionRound.ATTACHMENT_SECTION_RESPONSE: (
+            "new_response_files",
+            "remove_response_attachments",
+            "Επισυναπτόμενο έγγραφο απάντησης",
+        ),
+    }
+
+    OTHER_TEXT_FIELDS = {
+        "recommendation": (
+            "recommendation_other",
+            "Συμπληρώστε τη σύσταση όταν επιλέγετε «Άλλο» (6.7).",
+        ),
+        "ministry_decision": (
+            "ministry_decision_other",
+            "Συμπληρώστε την απόφαση όταν επιλέγετε «Άλλο» (6.7).",
+        ),
+    }
+
     class Meta:
-        model = Case
+        model = MinistryDecisionRound
         fields = [
-            "recommendation_letter_date",
+            "letter_sent_date",
             "recommendation",
+            "recommendation_other",
             "ministry_response_date",
             "ministry_decision",
-            "section7_comments",
+            "ministry_decision_other",
+            "comments",
         ]
         widgets = {
-            "recommendation_letter_date": IsoDateInput(),
+            "letter_sent_date": IsoDateInput(),
             "ministry_response_date": IsoDateInput(),
-            "section7_comments": forms.Textarea(attrs={"rows": 3}),
+            "comments": forms.Textarea(attrs={"rows": 3}),
+            "recommendation_other": forms.TextInput(
+                attrs={"placeholder": "Περιγραφή σύστασης", "data-other-input": ""}
+            ),
+            "ministry_decision_other": forms.TextInput(
+                attrs={"placeholder": "Περιγραφή απόφασης", "data-other-input": ""}
+            ),
         }
 
 
-class Section8Form(StyledFormMixin, forms.ModelForm):
-    """8.1-8.6 single-row blocks of the division workflow."""
+class Section8Form(AttachmentSlotsMixin, StyledFormMixin, forms.ModelForm):
+    """7.1-7.4 and 7.7 single-row blocks of the division workflow; 7.2 and 7.3 keep their own files."""
+
+    ATTACHMENT_SLOTS = {
+        Case.ATTACHMENT_SECTION_DIVISION_DESIGN: (
+            "new_division_design_files",
+            "remove_division_design_attachments",
+            "Επισυναπτόμενα έγγραφα",
+        ),
+        Case.ATTACHMENT_SECTION_TPO_APPLICATION: (
+            "new_tpo_application_files",
+            "remove_tpo_application_attachments",
+            "Επισυναπτόμενα έγγραφα",
+        ),
+    }
 
     class Meta:
         model = Case
@@ -362,6 +457,8 @@ class Section8Form(StyledFormMixin, forms.ModelForm):
             "tpo_response",
             "tpo_response_date",
             "tpo_comments",
+            "construction_plans_stage",
+            "land_expropriation_required",
             "tender_announcement_date",
             "tender_award_date",
             "contractor_name",
@@ -386,14 +483,137 @@ class Section8Form(StyledFormMixin, forms.ModelForm):
             "survey_assignment_comments": forms.Textarea(attrs={"rows": 2}),
             "division_design_comments": forms.Textarea(attrs={"rows": 2}),
             "tpo_comments": forms.Textarea(attrs={"rows": 2}),
+            "construction_plans_stage": forms.Textarea(attrs={"rows": 3}),
             "tender_comments": forms.Textarea(attrs={"rows": 2}),
             "works_progress_comments": forms.Textarea(attrs={"rows": 2}),
             "section8_comments": forms.Textarea(attrs={"rows": 3}),
         }
 
 
+class ApprovedDesignPlotForm(OtherChoiceFieldsMixin, StyledFormMixin, forms.ModelForm):
+    """7.3 One row of «Στοιχεία Εγκεκριμένου Σχεδιασμού Οικοπέδων» in the grid modal."""
+
+    OTHER_TEXT_FIELDS = {
+        "plot_type": ("plot_type_other", "Συμπληρώστε τον τύπο όταν επιλέγετε «Άλλο» (7.3)."),
+    }
+
+    class Meta:
+        model = ApprovedDesignPlot
+        fields = [
+            "plot_type",
+            "plot_type_other",
+            "design_number",
+            "tkx_number",
+            "title_deed_number",
+            "parcel_number",
+            "sheet_plan",
+            "final_area_sqm",
+            "numbering_status",
+        ]
+        widgets = {
+            "plot_type_other": forms.TextInput(
+                attrs={"placeholder": "Περιγραφή τύπου", "data-other-input": ""}
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["plot_type"].choices = [
+            ("", "— Επιλέξτε τύπο —"),
+            *ApprovedDesignPlot.PlotType.choices,
+        ]
+
+
+class ApprovedDesignPlotBulkForm(OtherChoiceFieldsMixin, StyledFormMixin, forms.Form):
+    """7.3 «Μαζική προσθήκη»: many rows of one type, numbered serially from 1 or by hand.
+
+    The hand-typed numbers arrive as repeated `manual_numbers` inputs (one per row).
+    """
+
+    MAX_COUNT = 500
+    SERIAL = "serial"
+    MANUAL = "manual"
+    NUMBERING_MODE_CHOICES = [
+        (SERIAL, "Σειριακή (1, 2, 3, …)"),
+        (MANUAL, "Χειροκίνητη"),
+    ]
+
+    OTHER_TEXT_FIELDS = {
+        "plot_type": ("plot_type_other", "Συμπληρώστε τον τύπο όταν επιλέγετε «Άλλο» (7.3)."),
+    }
+
+    plot_type = forms.ChoiceField(label="Τύπος")
+    plot_type_other = forms.CharField(
+        label="Τύπος — Άλλο",
+        max_length=255,
+        required=False,
+        widget=forms.TextInput(attrs={"placeholder": "Περιγραφή τύπου", "data-other-input": ""}),
+    )
+    count = forms.IntegerField(
+        label="Αριθμός εγγραφών",
+        min_value=1,
+        max_value=MAX_COUNT,
+        widget=forms.NumberInput(attrs={"data-bulk-count": ""}),
+    )
+    numbering_mode = forms.ChoiceField(
+        label="Αρίθμηση",
+        choices=NUMBERING_MODE_CHOICES,
+        initial=SERIAL,
+        widget=forms.RadioSelect(attrs={"data-bulk-numbering-mode": ""}),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["plot_type"].choices = [
+            ("", "— Επιλέξτε τύπο —"),
+            *ApprovedDesignPlot.PlotType.choices,
+        ]
+        self.manual_numbers = (
+            [value.strip() for value in self.data.getlist("manual_numbers")]
+            if self.is_bound
+            else []
+        )
+
+    @property
+    def is_manual(self):
+        return self.is_bound and self.data.get("numbering_mode") == self.MANUAL
+
+    def clean(self):
+        cleaned_data = super().clean()
+        count = cleaned_data.get("count")
+        if not count or cleaned_data.get("numbering_mode") != self.MANUAL:
+            return cleaned_data
+        numbers = self.manual_numbers
+        max_length = ApprovedDesignPlot._meta.get_field("design_number").max_length
+        if len(numbers) != count or not all(numbers):
+            raise forms.ValidationError("Συμπληρώστε την αρίθμηση σε όλες τις γραμμές (7.3).")
+        if any(len(number) > max_length for number in numbers):
+            raise forms.ValidationError(
+                f"Η αρίθμηση δεν μπορεί να υπερβαίνει τους {max_length} χαρακτήρες (7.3)."
+            )
+        if len(set(numbers)) != len(numbers):
+            raise forms.ValidationError("Η αρίθμηση δεν μπορεί να επαναλαμβάνεται (7.3).")
+        return cleaned_data
+
+    def design_numbers(self):
+        if self.cleaned_data["numbering_mode"] == self.MANUAL:
+            return list(self.manual_numbers)
+        return [str(number) for number in range(1, self.cleaned_data["count"] + 1)]
+
+    def build_plots(self, case):
+        return [
+            ApprovedDesignPlot(
+                case=case,
+                plot_type=self.cleaned_data["plot_type"],
+                plot_type_other=self.cleaned_data["plot_type_other"],
+                design_number=number,
+            )
+            for number in self.design_numbers()
+        ]
+
+
 class Section8PlotsForm(StyledFormMixin, forms.ModelForm):
-    """8.7 header block of the survey request sent to the Land Registry (ΤΚΧ)."""
+    """7.8 header block of the survey request sent to the Land Registry (ΤΚΧ)."""
 
     class Meta:
         model = Case
@@ -527,45 +747,21 @@ UtilityServiceTypeFormSet = forms.modelformset_factory(
 )
 
 
-class ConsultationForm(OtherChoiceFieldsMixin, StyledFormMixin, forms.ModelForm):
-    """Status is derived from the response date, so it is not editable here."""
+class ConsultationForm(
+    OtherChoiceFieldsMixin, StyledFormMixin, AttachmentsFormMixin, forms.ModelForm
+):
+    """Ενότητα 5 / 7.4 — one consultation row in the grid modal.
+
+    Status is derived from the response date, so it is not editable here.
+    """
 
     OTHER_TEXT_FIELDS = {
         "department": ("department_other", "Δώστε περιγραφή για «Άλλο»."),
     }
 
-    class Meta:
-        model = Consultation
-        fields = [
-            "department",
-            "department_other",
-            "topic",
-            "sent_date",
-            "due_date",
-            "response_date",
-            "response_text",
-            "comments",
-        ]
-        widgets = {
-            "sent_date": IsoDateInput(),
-            "due_date": IsoDateInput(),
-            "response_date": IsoDateInput(),
-            "topic": forms.Textarea(attrs={"rows": 2}),
-            "response_text": forms.Textarea(attrs={"rows": 2}),
-            "comments": forms.Textarea(attrs={"rows": 2}),
-            "department_other": forms.TextInput(
-                attrs={"placeholder": "Περιγραφή τμήματος / υπηρεσίας", "data-other-input": ""}
-            ),
-        }
-
-
-class SuitabilityConsultationForm(
-    OtherChoiceFieldsMixin, StyledFormMixin, AttachmentsFormMixin, forms.ModelForm
-):
-    """Ενότητα 5 — one consultation row in the grid modal."""
-
-    OTHER_TEXT_FIELDS = ConsultationForm.OTHER_TEXT_FIELDS
-    attachment_section_ref = "5"
+    @property
+    def attachment_section_ref(self):
+        return self.instance.section_ref
 
     class Meta:
         model = Consultation
@@ -590,20 +786,6 @@ class SuitabilityConsultationForm(
                 attrs={"placeholder": "Περιγραφή τμήματος / υπηρεσίας", "data-other-input": ""}
             ),
         }
-
-
-class BaseStageConsultationFormSet(forms.BaseInlineFormSet):
-    """Keeps sections 5 and 8.4 as separate tables over the same entity."""
-
-    stage = ""
-
-    def save_new(self, form, commit=True):
-        form.instance.stage = self.stage
-        return super().save_new(form, commit=commit)
-
-
-class BaseDivisionConsultationFormSet(BaseStageConsultationFormSet):
-    stage = Consultation.Stage.DIVISION
 
 
 class InfrastructureCheckForm(StyledFormMixin, forms.ModelForm):
@@ -653,12 +835,12 @@ class ValuationReferralForm(StyledFormMixin, forms.ModelForm):
 
 
 class ParcelForm(StyledFormMixin, forms.ModelForm):
-    """8.7 mapping table plus the 8.8 valuation; the disposal price is computed."""
+    """7.8 mapping table plus the 7.9 valuation; the disposal price is computed."""
 
     owner = forms.ModelChoiceField(
         queryset=Person.objects.all(),
         required=False,
-        help_text="8.7 Ιδιοκτήτης οικοπέδου",
+        help_text="7.8 Ιδιοκτήτης οικοπέδου",
     )
 
     class Meta:
@@ -685,7 +867,7 @@ class ParcelForm(StyledFormMixin, forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
-        # 8.8.1 Without a separate title the value has to come from a ΤΚΧ referral.
+        # 7.9.1 Without a separate title the value has to come from a ΤΚΧ referral.
         if (
             cleaned_data.get("has_separate_title") == YesNo.NO
             and cleaned_data.get("valuation_amount") is not None
@@ -693,7 +875,7 @@ class ParcelForm(StyledFormMixin, forms.ModelForm):
         ):
             self.add_error(
                 "valuation_referral",
-                "Χωρίς ξεχωριστό τίτλο, η αξία προκύπτει από παραπομπή προς ΤΚΧ (8.8.1).",
+                "Χωρίς ξεχωριστό τίτλο, η αξία προκύπτει από παραπομπή προς ΤΚΧ (7.9.1).",
             )
         return cleaned_data
 
@@ -715,7 +897,7 @@ class BaseParcelFormSet(forms.BaseInlineFormSet):
 
 
 class SubmissionCycleForm(StyledFormMixin, forms.ModelForm):
-    """9.1 Announcement of the submission period, at community level."""
+    """8.1 Announcement of the submission period, at community level."""
 
     class Meta:
         model = SubmissionCycle
@@ -737,9 +919,9 @@ class SubmissionCycleForm(StyledFormMixin, forms.ModelForm):
     def __init__(self, *args, community=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.community = community or getattr(self.instance, "community", None)
-        # 9.1 An announcement may only group cases of its own community.
+        # 8.1 An announcement may only group cases of its own community.
         self.fields["cases"].queryset = Case.objects.filter(community=self.community)
-        self.fields["cases"].label = "Υποθέσεις της γνωστοποίησης (9.1)"
+        self.fields["cases"].label = "Υποθέσεις της γνωστοποίησης (8.1)"
 
     def clean(self):
         cleaned_data = super().clean()
@@ -753,7 +935,7 @@ class SubmissionCycleForm(StyledFormMixin, forms.ModelForm):
 
 
 class AnnouncementTextForm(StyledFormMixin, forms.ModelForm):
-    """9.3 Preview and edit the generated announcement before finalising it."""
+    """8.3 Preview and edit the generated announcement before finalising it."""
 
     class Meta:
         model = SubmissionCycle
@@ -777,14 +959,6 @@ SubmissionCyclePublicationFormSet = forms.inlineformset_factory(
 )
 LandPlotDecisionFormSet = forms.inlineformset_factory(
     Case, LandPlot, form=LandPlotDecisionForm, extra=0, can_delete=False
-)
-DivisionConsultationFormSet = forms.inlineformset_factory(
-    Case,
-    Consultation,
-    form=ConsultationForm,
-    formset=BaseDivisionConsultationFormSet,
-    extra=1,
-    can_delete=True,
 )
 InfrastructureCheckFormSet = forms.inlineformset_factory(
     Case, InfrastructureCheck, form=InfrastructureCheckForm, extra=1, can_delete=True

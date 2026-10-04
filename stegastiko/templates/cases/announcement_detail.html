@@ -24,7 +24,7 @@
 </div>
 
 <div class="card">
-    <h2 class="card__title">9.1 Στοιχεία γνωστοποίησης</h2>
+    <h2 class="card__title">8.1 Στοιχεία γνωστοποίησης</h2>
     <dl class="detail-grid">
         <div>
             <dt>Κατάσταση</dt>
@@ -42,7 +42,7 @@
         </div>
         <div>
             <dt>Αριθμός διαθέσιμων οικοπέδων</dt>
-            <dd>{{ cycle.available_plots_count }} <span class="text-muted">(αυτόματα από 8.8)</span></dd>
+            <dd>{{ cycle.available_plots_count }} <span class="text-muted">(αυτόματα από 7.9)</span></dd>
         </div>
         <div>
             <dt>Υποθέσεις</dt>
@@ -56,7 +56,7 @@
 </div>
 
 <div class="card">
-    <h2 class="card__title">9.4 Έλεγχος ετοιμότητας ανά υπόθεση</h2>
+    <h2 class="card__title">8.4 Έλεγχος ετοιμότητας ανά υπόθεση</h2>
     <div class="table-wrap">
         <table class="data-table">
             <thead>
@@ -85,7 +85,7 @@
     {% csrf_token %}
 
     <div class="card">
-        <h2 class="card__title">9.2 Τρόποι δημοσίευσης / γνωστοποίησης</h2>
+        <h2 class="card__title">8.2 Τρόποι δημοσίευσης / γνωστοποίησης</h2>
         <fieldset class="child-formset">
             <legend>Πολλαπλή επιλογή, με ημερομηνία ανά τρόπο</legend>
             {{ publications.management_form }}
@@ -108,7 +108,7 @@
     </div>
 
     <div class="card">
-        <h2 class="card__title">9.3 Δημιουργία και έκδοση ανακοίνωσης</h2>
+        <h2 class="card__title">8.3 Δημιουργία και έκδοση ανακοίνωσης</h2>
         <p class="text-muted">
             Το προσχέδιο παράγεται αυτόματα από τα στοιχεία της υπόθεσης και την περίοδο υποβολής.
             Το ακριβές εγκεκριμένο πρότυπο κείμενο εκκρεμεί (Ε-68).
@@ -120,7 +120,7 @@
 
     <div class="card">
         <div class="form-actions" style="margin-top: 0; padding-top: 0; border-top: none;">
-            {% if not cycle.is_published and access.case_section_9.edit %}
+            {% if not cycle.is_published and access.case_section_8.edit %}
             <button type="submit" class="btn btn-primary">Αποθήκευση</button>
             {% endif %}
             <a href="{% url 'cases:detail' case.pk %}" class="btn btn-secondary">Πίσω στην υπόθεση</a>
@@ -129,17 +129,17 @@
 </form>
 
 {% if not cycle.is_published %}
-{% if access.case_section_9.edit or access.case_section_9.publish %}
+{% if access.case_section_8.edit or access.case_section_8.publish %}
 <div class="card">
     <h2 class="card__title">Ενέργειες ανακοίνωσης</h2>
     <div class="toolbar">
-        {% if access.case_section_9.edit %}
+        {% if access.case_section_8.edit %}
         <form method="post" action="{% url 'cases:announcement_regenerate' case.pk cycle.pk %}">
             {% csrf_token %}
             <button type="submit" class="btn btn-secondary">Νέο προσχέδιο από τα στοιχεία</button>
         </form>
         {% endif %}
-        {% if access.case_section_9.publish %}
+        {% if access.case_section_8.publish %}
         <form method="post" action="{% url 'cases:announcement_publish' case.pk cycle.pk %}">
             {% csrf_token %}
             <button type="submit" class="btn btn-primary">Οριστικοποίηση και έκδοση</button>
@@ -147,7 +147,7 @@
         {% endif %}
     </div>
     <p class="helptext">
-        Η έκδοση επιτρέπεται μόνο όταν ο έλεγχος ετοιμότητας (9.4) δίνει ΝΑΙ για κάθε
+        Η έκδοση επιτρέπεται μόνο όταν ο έλεγχος ετοιμότητας (8.4) δίνει ΝΑΙ για κάθε
         συνδεδεμένη υπόθεση.
     </p>
 </div>

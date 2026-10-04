@@ -1,0 +1,71 @@
+{% comment %}6.7 — modal form for one ministry decision row.{% endcomment %}
+<form method="post"
+      enctype="multipart/form-data"
+      action="{% if round_form.instance.pk %}{% url 'cases:ministry_decision_round_edit' case.pk round_form.instance.pk %}{% else %}{% url 'cases:ministry_decision_round_create' case.pk %}{% endif %}"
+      class="app-form"
+      data-ministry-decision-round-form
+      novalidate>
+    {% csrf_token %}
+    <h2 class="card__title" id="ministry-decision-round-dialog-title">
+        {% if round_form.instance.pk %}Επεξεργασία εγγραφής{% else %}Νέα εγγραφή{% endif %}
+    </h2>
+
+    {% if round_form.non_field_errors %}
+    <div class="alert alert--error">
+        {% for error in round_form.non_field_errors %}{{ error }}{% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="form-grid">
+        {% include "includes/form_field.html" with field=round_form.letter_sent_date wide=True %}
+        {% include "includes/choice_with_other_field.html" with field=round_form.recommendation other=round_form.recommendation_other wide=True %}
+        <div class="form-field form-field--wide" data-file-picker>
+            <label for="{{ round_form.new_recommendation_files.id_for_label }}">Επισυναπτόμενο έγγραφο σύστασης</label>
+            {% if round_form.remove_recommendation_attachments %}
+            <ul class="attachment-list">
+                {% for option in round_form.remove_recommendation_attachments %}
+                <li>
+                    <a href="{% url 'cases:attachment_download' case.pk option.data.value.value %}">{{ option.choice_label }}</a>
+                    <label class="attachment-list__remove">{{ option.tag }} Αφαίρεση</label>
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+            {{ round_form.new_recommendation_files }}
+            <ul class="attachment-list file-picker-list" data-file-picker-list hidden></ul>
+            {% if round_form.new_recommendation_files.errors %}
+            <ul class="errorlist">
+                {% for error in round_form.new_recommendation_files.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+        {% include "includes/form_field.html" with field=round_form.comments wide=True %}
+        {% include "includes/form_field.html" with field=round_form.ministry_response_date wide=True %}
+        {% include "includes/choice_with_other_field.html" with field=round_form.ministry_decision other=round_form.ministry_decision_other wide=True %}
+        <div class="form-field form-field--wide" data-file-picker>
+            <label for="{{ round_form.new_response_files.id_for_label }}">Επισυναπτόμενο έγγραφο απάντησης</label>
+            {% if round_form.remove_response_attachments %}
+            <ul class="attachment-list">
+                {% for option in round_form.remove_response_attachments %}
+                <li>
+                    <a href="{% url 'cases:attachment_download' case.pk option.data.value.value %}">{{ option.choice_label }}</a>
+                    <label class="attachment-list__remove">{{ option.tag }} Αφαίρεση</label>
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+            {{ round_form.new_response_files }}
+            <ul class="attachment-list file-picker-list" data-file-picker-list hidden></ul>
+            {% if round_form.new_response_files.errors %}
+            <ul class="errorlist">
+                {% for error in round_form.new_response_files.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Αποθήκευση</button>
+        <button type="button" class="btn btn-secondary" data-dialog-close>Άκυρο</button>
+    </div>
+</form>
