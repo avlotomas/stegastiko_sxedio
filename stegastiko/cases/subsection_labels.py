@@ -4,11 +4,7 @@ from core.services import get_setting, set_setting
 
 CASE_SUBSECTION_LABEL_SETTING_PREFIX = "caseSubsectionLabel."
 
-# Display number when the setting key is not the same as the visible reference (e.g. two 8.7 blocks).
-SUBSECTION_HEADING_NUMBERS: dict[str, str] = {
-    "7.8-parcels": "7.8",
-    "7.8-7.9-mapping": "7.8 / 7.9",
-}
+SUBSECTION_HEADING_NUMBERS: dict[str, str] = {}
 
 DEFAULT_CASE_SUBSECTION_LABELS: dict[str, str] = {
     "1.1": "Βασικά στοιχεία",
@@ -40,13 +36,9 @@ DEFAULT_CASE_SUBSECTION_LABELS: dict[str, str] = {
     "7.4": "Κατασκευαστικά Σχέδια και Διαβουλεύσεις",
     "7.5": "Προκυρηξη και κατακυρωσης συμβασης",
     "7.6": "Παρακολουθηση κατασκευαστικων εργασιων",
-    "7.8": "Αίτηση στο ΤΚΧ",
-    "7.8-parcels": "Χωράφια",
-    "7.8-7.9-mapping": "Πίνακας αντιστοίχισης οικοπέδων",
-    "7.9.1": "Παραπομπές προς ΤΚΧ",
-    "7.9.2": "Έλεγχος ολοκλήρωσης (αυτόματο)",
-    "8.1": "Βασικά στοιχεία",
-    "8.4": "Έλεγχος ετοιμότητας (αυτόματο)",
+    "7.7": "Αίτηση στο ΤΚΧ",
+    "9.1": "Βασικά στοιχεία",
+    "9.4": "Έλεγχος ετοιμότητας (αυτόματο)",
 }
 
 CASE_SUBSECTION_LABEL_KEYS = tuple(DEFAULT_CASE_SUBSECTION_LABELS.keys())

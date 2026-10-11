@@ -13,8 +13,7 @@ DEFAULT_CASE_SECTION_LABELS = {
     "5": "Διαβουλεύσεις καταλληλότητας",
     "6": "Απόφαση καταλληλότητας",
     "7": "Σχεδιασμός και υλοποίηση διαχωρισμού",
-    "7-plots": "Οικόπεδα, αξία και τιμή (7.8–7.9)",
-    "8": "Γνωστοποίηση έναρξης αιτήσεων",
+    "9": "Γνωστοποίηση έναρξης αιτήσεων",
 }
 
 CASE_SECTION_LABEL_KEYS = tuple(DEFAULT_CASE_SECTION_LABELS.keys())
@@ -32,12 +31,11 @@ def get_case_section_label(section_key: str) -> str:
 
 
 def case_section_number(section_key: str) -> str:
-    """Specification number of a section key (e.g. 7-plots → 7)."""
-    return section_key.split("-", 1)[0]
+    return section_key
 
 
 def case_section_heading(section_key: str) -> str:
-    """Numbered heading of a section on the read-only case folder (e.g. «2. Έλεγχος πληρότητας»)."""
+    """Numbered heading of a section on the read-only case folder."""
     return f"{case_section_number(section_key)}. {get_case_section_label(section_key)}"
 
 
@@ -50,7 +48,7 @@ def save_case_section_label(section_key: str, label: str) -> None:
 
 
 def form_field_name_for_section_label(section_key: str) -> str:
-    """Safe HTML form field name for a section key (e.g. 7-plots → section_label_7__plots)."""
+    """Safe HTML form field name for a section key."""
     return "section_label_" + section_key.replace("-", "__")
 
 

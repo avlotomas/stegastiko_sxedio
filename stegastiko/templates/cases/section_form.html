@@ -93,30 +93,6 @@
 </div>
 {% endif %}
 
-{% if section == '7-plots' and completion %}
-<div class="card">
-    <h2 class="card__title">{% case_subsection_heading "7.9.2" %}</h2>
-    <dl class="detail-grid">
-        <div>
-            <dt>Οικόπεδα</dt>
-            <dd>{{ completion.parcels_count }}</dd>
-        </div>
-        <div>
-            <dt>Αξία σε όλα</dt>
-            <dd>{% if completion.all_valued %}<span class="badge badge--pass">ΝΑΙ</span>{% else %}<span class="badge badge--fail">ΟΧΙ</span>{% endif %}</dd>
-        </div>
-        <div>
-            <dt>Υπολογισμένες τιμές</dt>
-            <dd>{% if completion.all_priced %}<span class="badge badge--pass">ΝΑΙ</span>{% else %}<span class="badge badge--fail">ΟΧΙ</span>{% endif %}</dd>
-        </div>
-        <div>
-            <dt>Ολοκλήρωση Ενότητας 7</dt>
-            <dd>{% if completion.is_complete %}<span class="badge badge--pass">ΝΑΙ</span>{% else %}<span class="badge badge--fail">ΟΧΙ</span>{% endif %}</dd>
-        </div>
-    </dl>
-</div>
-{% endif %}
-
 <div class="card">
 <form method="post"{% if section == '4' or section == '7' %} enctype="multipart/form-data"{% endif %} class="app-form" novalidate>
     {% csrf_token %}
@@ -218,7 +194,6 @@
 {% elif section == '5' %}
     {% include "cases/_consultation_dialog.html" %}
 {% elif section == '7' %}
-    {% include "cases/_approved_design_plot_dialog.html" %}
     {% include "cases/_consultation_dialog.html" %}
     {% include "cases/_infrastructure_check_dialog.html" %}
 {% elif section == '6' %}

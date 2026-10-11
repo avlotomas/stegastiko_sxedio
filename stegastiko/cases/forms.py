@@ -2,6 +2,7 @@ from django import forms
 from django.db.models import Q
 
 from applications.models import Person
+from cases import section_refs as refs
 from cases.models import (
     ApprovedDesignPlot,
     Case,
@@ -10,7 +11,6 @@ from cases.models import (
     Field,
     InfrastructureCheck,
     LandPlot,
-    Parcel,
     SubmissionCycle,
     SubmissionCyclePublication,
     UtilityService,
@@ -343,7 +343,7 @@ class Section4Form(StyledFormMixin, AttachmentsFormMixin, forms.ModelForm):
     4.1 and 4.2 rows are edited one at a time from their grid modals.
     """
 
-    attachment_section_ref = "4.4"
+    attachment_section_ref = refs.REF_TECHNICAL_FILES
 
     class Meta:
         model = Case
@@ -424,8 +424,8 @@ class MinistryDecisionRoundForm(
         }
 
 
-class Section8Form(AttachmentSlotsMixin, StyledFormMixin, forms.ModelForm):
-    """7.1-7.5 and 7.7 single-row blocks of the division workflow; 7.2 and 7.3 keep their own files."""
+class Section7Form(AttachmentSlotsMixin, StyledFormMixin, forms.ModelForm):
+    """7.1-7.7 single-row blocks of the division workflow; 7.2, 7.3 and 7.7 keep their own files."""
 
     ATTACHMENT_SLOTS = {
         Case.ATTACHMENT_SECTION_DIVISION_DESIGN: (
@@ -436,6 +436,11 @@ class Section8Form(AttachmentSlotsMixin, StyledFormMixin, forms.ModelForm):
         Case.ATTACHMENT_SECTION_TPO_APPLICATION: (
             "new_tpo_application_files",
             "remove_tpo_application_attachments",
+            "Επισυναπτόμενα έγγραφα",
+        ),
+        Case.ATTACHMENT_SECTION_DLS_APPLICATION: (
+            "new_dls_application_files",
+            "remove_dls_application_attachments",
             "Επισυναπτόμενα έγγραφα",
         ),
     }
@@ -466,7 +471,11 @@ class Section8Form(AttachmentSlotsMixin, StyledFormMixin, forms.ModelForm):
             "contractor_email",
             "contract_duration_value",
             "tender_comments",
-            "section8_comments",
+            "dls_application_date",
+            "dls_file_number",
+            "dls_response_date",
+            "dls_comments",
+            "section7_comments",
         ]
         widgets = {
             "survey_assignment_date": IsoDateInput(),
@@ -475,12 +484,15 @@ class Section8Form(AttachmentSlotsMixin, StyledFormMixin, forms.ModelForm):
             "tpo_response_date": IsoDateInput(),
             "tender_announcement_date": IsoDateInput(),
             "tender_award_date": IsoDateInput(),
+            "dls_application_date": IsoDateInput(),
+            "dls_response_date": IsoDateInput(),
             "survey_assignment_comments": forms.Textarea(attrs={"rows": 2}),
             "division_design_comments": forms.Textarea(attrs={"rows": 2}),
             "tpo_comments": forms.Textarea(attrs={"rows": 2}),
             "construction_plans_stage": forms.Textarea(attrs={"rows": 3}),
             "tender_comments": forms.Textarea(attrs={"rows": 2}),
-            "section8_comments": forms.Textarea(attrs={"rows": 3}),
+            "dls_comments": forms.Textarea(attrs={"rows": 2}),
+            "section7_comments": forms.Textarea(attrs={"rows": 3}),
         }
 
     def clean(self):
@@ -503,12 +515,6 @@ class ApprovedDesignPlotForm(OtherChoiceFieldsMixin, StyledFormMixin, forms.Mode
             "plot_type",
             "plot_type_other",
             "design_number",
-            "tkx_number",
-            "title_deed_number",
-            "parcel_number",
-            "sheet_plan",
-            "final_area_sqm",
-            "numbering_status",
         ]
         widgets = {
             "plot_type_other": forms.TextInput(
@@ -516,16 +522,96 @@ class ApprovedDesignPlotForm(OtherChoiceFieldsMixin, StyledFormMixin, forms.Mode
             ),
         }
 
+    PLOT_TYPE_LOCKED_MESSAGE = (
+        "Το οικόπεδο έχει ήδη κατανομή· ο τύπος του δεν μπορεί να αλλάξει (7.3)."
+    )
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["plot_type"].choices = [
             ("", "— Επιλέξτε τύπο —"),
             *ApprovedDesignPlot.PlotType.choices,
         ]
+        # An allocated plot must stay an allocatable "division plot" (Ενότητα 10+).
+        self.plot_type_locked = self.instance.is_allocated
+        if self.plot_type_locked:
+            self.fields["plot_type"].help_text = self.PLOT_TYPE_LOCKED_MESSAGE
+
+    def clean(self):
+        cleaned_data = super().clean()
+        new_type = cleaned_data.get("plot_type")
+        if self.plot_type_locked and new_type and new_type != self.instance.plot_type:
+            self.add_error("plot_type", self.PLOT_TYPE_LOCKED_MESSAGE)
+        return cleaned_data
+
+
+class ApprovedDesignPlotInlineForm(ApprovedDesignPlotForm):
+    """Editable columns of the persistent approved-design-plots workspace."""
+
+    class Meta(ApprovedDesignPlotForm.Meta):
+        fields = [
+            "plot_type",
+            "plot_type_other",
+            "design_number",
+            "tkx_number",
+            "title_deed_number",
+            "parcel_number",
+            "sheet_plan",
+            "final_area_sqm",
+            "numbering_status",
+            "valuation_amount",
+        ]
+        widgets = {
+            **ApprovedDesignPlotForm.Meta.widgets,
+            "final_area_sqm": forms.NumberInput(attrs={"step": "0.01"}),
+            "valuation_amount": forms.NumberInput(attrs={"step": "0.01"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        form_id = f"approved-design-plot-row-{self.instance.pk}"
+        for field in self.fields.values():
+            field.widget.attrs["form"] = form_id
+            field.widget.attrs.setdefault("aria-label", field.label)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if (
+            cleaned_data.get("numbering_status") == ApprovedDesignPlot.NumberingStatus.TKX
+            and not (cleaned_data.get("tkx_number") or "").strip()
+        ):
+            self.add_error("tkx_number", "Η Αρίθμηση ΤΚΧ απαιτείται για αυτή την κατάσταση.")
+        return cleaned_data
+
+
+def approved_design_plot_inline_rows(case, bound_form=None, plots=None):
+    """Pair every plot with its row form, preserving one bound form after validation errors."""
+    rows = []
+    plot_rows = (
+        plots
+        if plots is not None
+        else case.approved_design_plots.prefetch_related("allocations").all()
+    )
+    for plot in plot_rows:
+        form = (
+            bound_form
+            if bound_form is not None and bound_form.instance.pk == plot.pk
+            else ApprovedDesignPlotInlineForm(instance=plot, prefix=f"plot-{plot.pk}")
+        )
+        rows.append({"plot": plot, "form": form})
+    return rows
+
+
+def _numeric_design_number(value):
+    value = (value or "").strip()
+    return int(value) if value.isdigit() else None
 
 
 class ApprovedDesignPlotBulkForm(OtherChoiceFieldsMixin, StyledFormMixin, forms.Form):
-    """7.3 «Μαζική προσθήκη»: many rows of one type, numbered serially from 1 or by hand.
+    """7.3 «Μαζική προσθήκη»: many rows of one type, numbered serially or by hand.
+
+    Serial numbering continues after the highest numeric design number the case already
+    has for the type; hand-typed numbers must not repeat an existing one.
 
     The hand-typed numbers arrive as repeated `manual_numbers` inputs (one per row).
     """
@@ -534,7 +620,7 @@ class ApprovedDesignPlotBulkForm(OtherChoiceFieldsMixin, StyledFormMixin, forms.
     SERIAL = "serial"
     MANUAL = "manual"
     NUMBERING_MODE_CHOICES = [
-        (SERIAL, "Σειριακή (1, 2, 3, …)"),
+        (SERIAL, "Σειριακή (συνέχεια μετά τον τελευταίο αριθμό)"),
         (MANUAL, "Χειροκίνητη"),
     ]
 
@@ -562,8 +648,10 @@ class ApprovedDesignPlotBulkForm(OtherChoiceFieldsMixin, StyledFormMixin, forms.
         widget=forms.RadioSelect(attrs={"data-bulk-numbering-mode": ""}),
     )
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, case=None, **kwargs):
         super().__init__(*args, **kwargs)
+        # Numbers continue after the rows the case already has (for the same type).
+        self.case = case
         self.fields["plot_type"].choices = [
             ("", "— Επιλέξτε τύπο —"),
             *ApprovedDesignPlot.PlotType.choices,
@@ -578,10 +666,24 @@ class ApprovedDesignPlotBulkForm(OtherChoiceFieldsMixin, StyledFormMixin, forms.
     def is_manual(self):
         return self.is_bound and self.data.get("numbering_mode") == self.MANUAL
 
+    def existing_design_numbers(self, plot_type):
+        if self.case is None or self.case.pk is None or not plot_type:
+            return set()
+        return set(
+            ApprovedDesignPlot.objects.filter(case=self.case, plot_type=plot_type)
+            .exclude(design_number="")
+            .values_list("design_number", flat=True)
+        )
+
     def clean(self):
         cleaned_data = super().clean()
         count = cleaned_data.get("count")
-        if not count or cleaned_data.get("numbering_mode") != self.MANUAL:
+        if not count:
+            return cleaned_data
+        existing = self.existing_design_numbers(cleaned_data.get("plot_type"))
+        if cleaned_data.get("numbering_mode") != self.MANUAL:
+            numeric = [_numeric_design_number(number) for number in existing]
+            self.serial_start = max((n for n in numeric if n is not None), default=0) + 1
             return cleaned_data
         numbers = self.manual_numbers
         max_length = ApprovedDesignPlot._meta.get_field("design_number").max_length
@@ -593,12 +695,19 @@ class ApprovedDesignPlotBulkForm(OtherChoiceFieldsMixin, StyledFormMixin, forms.
             )
         if len(set(numbers)) != len(numbers):
             raise forms.ValidationError("Η αρίθμηση δεν μπορεί να επαναλαμβάνεται (7.3).")
+        taken = sorted(set(numbers) & existing)
+        if taken:
+            raise forms.ValidationError(
+                "Η αρίθμηση υπάρχει ήδη στην υπόθεση για αυτόν τον τύπο (7.3): "
+                + ", ".join(taken)
+            )
         return cleaned_data
 
     def design_numbers(self):
         if self.cleaned_data["numbering_mode"] == self.MANUAL:
             return list(self.manual_numbers)
-        return [str(number) for number in range(1, self.cleaned_data["count"] + 1)]
+        start = getattr(self, "serial_start", 1)
+        return [str(number) for number in range(start, start + self.cleaned_data["count"])]
 
     def build_plots(self, case):
         return [
@@ -612,8 +721,8 @@ class ApprovedDesignPlotBulkForm(OtherChoiceFieldsMixin, StyledFormMixin, forms.
         ]
 
 
-class Section8PlotsForm(StyledFormMixin, forms.ModelForm):
-    """7.8 header block of the survey request sent to the Land Registry (ΤΚΧ)."""
+class SurveyingForm(StyledFormMixin, forms.ModelForm):
+    """8.1 header block of the survey request sent to the Land Registry (ΤΚΧ)."""
 
     class Meta:
         model = Case
@@ -628,7 +737,7 @@ class Section8PlotsForm(StyledFormMixin, forms.ModelForm):
 class LandPlotForm(OtherChoiceFieldsMixin, StyledFormMixin, AttachmentsFormMixin, forms.ModelForm):
     """3.1 One row per land plot; «Άλλο» is written in the same cell and files stay on the plot."""
 
-    attachment_section_ref = "3.1"
+    attachment_section_ref = refs.REF_LAND_PLOTS
     OTHER_TEXT_FIELDS = {
         "ownership_status": ("ownership_other", "Συμπληρώστε το είδος της άλλης ιδιοκτησίας (3.1)."),
         "access": ("access_other", "Συμπληρώστε τη διευκρίνιση της πρόσβασης (3.1)."),
@@ -824,22 +933,49 @@ class ValuationReferralForm(StyledFormMixin, forms.ModelForm):
         }
 
 
-class ParcelForm(StyledFormMixin, forms.ModelForm):
-    """7.8 mapping table plus the 7.9 valuation; the disposal price is computed."""
+class PlotTkxNumberingForm(StyledFormMixin, forms.ModelForm):
+    """8.1 inline ΤΚΧ numbering for an existing approved-design plot."""
+
+    class Meta:
+        model = ApprovedDesignPlot
+        fields = ["tkx_number", "numbering_status"]
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if (
+            cleaned_data.get("numbering_status") == ApprovedDesignPlot.NumberingStatus.TKX
+            and not (cleaned_data.get("tkx_number") or "").strip()
+        ):
+            self.add_error("tkx_number", "Η Αρίθμηση ΤΚΧ απαιτείται για αυτή την κατάσταση.")
+        return cleaned_data
+
+    def save(self, commit=True):
+        self.instance._section_ref = refs.REF_TKX_NUMBERING
+        instance = super().save(commit=False)
+        if commit:
+            instance.save(update_fields=self.changed_data)
+        return instance
+
+
+class PlotMappingForm(StyledFormMixin, forms.ModelForm):
+    """8.2 inline mapping, title and valuation fields for the same plot row."""
 
     owner = forms.ModelChoiceField(
         queryset=Person.objects.all(),
         required=False,
-        help_text="7.8 Ιδιοκτήτης οικοπέδου",
+        help_text="8.2 Ιδιοκτήτης οικοπέδου",
     )
 
     class Meta:
-        model = Parcel
+        model = ApprovedDesignPlot
         fields = [
+            "numbering_status",
+            "design_number",
+            "tkx_number",
             "field",
             "lot_number_in_field",
-            "design_lot_number",
-            "tkx_lot_number",
+            "title_deed_number",
+            "parcel_number",
             "sheet_plan",
             "kotsiani_number",
             "final_area_sqm",
@@ -847,17 +983,18 @@ class ParcelForm(StyledFormMixin, forms.ModelForm):
             "valuation_amount",
             "valuation_referral",
             "comments",
+            "owner",
         ]
         widgets = {"comments": forms.Textarea(attrs={"rows": 2})}
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if self.instance.pk and self.instance.owner_person_id:
-            self.initial["owner"] = self.instance.owner_person_id
-
     def clean(self):
         cleaned_data = super().clean()
-        # 7.9.1 Without a separate title the value has to come from a ΤΚΧ referral.
+        if (
+            cleaned_data.get("numbering_status") == ApprovedDesignPlot.NumberingStatus.TKX
+            and not (cleaned_data.get("tkx_number") or "").strip()
+        ):
+            self.add_error("tkx_number", "Η Αρίθμηση ΤΚΧ απαιτείται για αυτή την κατάσταση.")
+        # 8.2 Without a separate title the value has to come from a ΤΚΧ referral.
         if (
             cleaned_data.get("has_separate_title") == YesNo.NO
             and cleaned_data.get("valuation_amount") is not None
@@ -865,17 +1002,19 @@ class ParcelForm(StyledFormMixin, forms.ModelForm):
         ):
             self.add_error(
                 "valuation_referral",
-                "Χωρίς ξεχωριστό τίτλο, η αξία προκύπτει από παραπομπή προς ΤΚΧ (7.9.1).",
+                "Χωρίς ξεχωριστό τίτλο, η αξία προκύπτει από παραπομπή προς ΤΚΧ (8.2).",
             )
         return cleaned_data
 
     def save(self, commit=True):
-        owner = self.cleaned_data.get("owner")
-        self.instance.owner_person_id = owner.pk if owner else None
-        return super().save(commit=commit)
+        self.instance._section_ref = refs.REF_PLOT_MAPPING
+        instance = super().save(commit=False)
+        if commit:
+            instance.save(update_fields=self.changed_data)
+        return instance
 
 
-class BaseParcelFormSet(forms.BaseInlineFormSet):
+class BasePlotFormSet(forms.BaseInlineFormSet):
     def add_fields(self, form, index):
         super().add_fields(form, index)
         if "field" in form.fields:
@@ -887,7 +1026,7 @@ class BaseParcelFormSet(forms.BaseInlineFormSet):
 
 
 class SubmissionCycleForm(StyledFormMixin, forms.ModelForm):
-    """8.1 Announcement of the submission period, at community level."""
+    """9.1 Announcement of the submission period, at community level."""
 
     class Meta:
         model = SubmissionCycle
@@ -909,9 +1048,9 @@ class SubmissionCycleForm(StyledFormMixin, forms.ModelForm):
     def __init__(self, *args, community=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.community = community or getattr(self.instance, "community", None)
-        # 8.1 An announcement may only group cases of its own community.
+        # 9.1 An announcement may only group cases of its own community.
         self.fields["cases"].queryset = Case.objects.filter(community=self.community)
-        self.fields["cases"].label = "Υποθέσεις της γνωστοποίησης (8.1)"
+        self.fields["cases"].label = "Υποθέσεις της γνωστοποίησης (9.1)"
 
     def clean(self):
         cleaned_data = super().clean()
@@ -925,7 +1064,7 @@ class SubmissionCycleForm(StyledFormMixin, forms.ModelForm):
 
 
 class AnnouncementTextForm(StyledFormMixin, forms.ModelForm):
-    """8.3 Preview and edit the generated announcement before finalising it."""
+    """9.3 Preview and edit the generated announcement before finalising it."""
 
     class Meta:
         model = SubmissionCycle
@@ -954,6 +1093,18 @@ FieldFormSet = forms.inlineformset_factory(Case, Field, form=FieldForm, extra=1,
 ValuationReferralFormSet = forms.inlineformset_factory(
     Case, ValuationReferral, form=ValuationReferralForm, extra=1, can_delete=True
 )
-ParcelFormSet = forms.inlineformset_factory(
-    Case, Parcel, form=ParcelForm, formset=BaseParcelFormSet, extra=1, can_delete=True
+PlotTkxNumberingFormSet = forms.inlineformset_factory(
+    Case,
+    ApprovedDesignPlot,
+    form=PlotTkxNumberingForm,
+    extra=0,
+    can_delete=False,
+)
+PlotMappingFormSet = forms.inlineformset_factory(
+    Case,
+    ApprovedDesignPlot,
+    form=PlotMappingForm,
+    formset=BasePlotFormSet,
+    extra=0,
+    can_delete=False,
 )

@@ -1,4 +1,9 @@
+from decimal import Decimal
+
 from django import forms
+from django.core.validators import MinValueValidator
+
+from applications.rules import INCOME_LIMIT_SETTINGS, income_limit_setting
 
 from cases.section_labels import (
     CASE_SECTION_LABEL_KEYS,
@@ -68,6 +73,37 @@ def _email_setting_fields():
     }
 
 
+def income_limit_field_name(setting_key):
+    return f"setting_{setting_key}"
+
+
+def _add_income_limit_fields(form):
+    """10.4.6 income limits per family size (positive amounts in €)."""
+    for setting_key, default, label in INCOME_LIMIT_SETTINGS:
+        field_name = income_limit_field_name(setting_key)
+        form.fields[field_name] = forms.DecimalField(
+            label=label,
+            max_digits=12,
+            decimal_places=2,
+            validators=[
+                MinValueValidator(
+                    Decimal("0.01"), message="Το όριο εισοδήματος πρέπει να είναι θετικό ποσό."
+                )
+            ],
+            help_text=f"Προεπιλογή: {default} €.",
+            widget=forms.NumberInput(attrs={"class": "input", "step": "0.01", "min": "0.01"}),
+        )
+        if not form.is_bound:
+            form.fields[field_name].initial = income_limit_setting(setting_key)
+
+
+def _save_income_limit_fields(form):
+    for setting_key, _default, label in INCOME_LIMIT_SETTINGS:
+        field_name = income_limit_field_name(setting_key)
+        if field_name in form.cleaned_data:
+            set_setting(setting_key, str(form.cleaned_data[field_name]), label)
+
+
 def email_field_name(setting_key):
     return f"email_{setting_key}"
 
@@ -78,8 +114,6 @@ def _add_section_label_fields(form, *, compact=False):
         default = DEFAULT_CASE_SECTION_LABELS.get(section_key, section_key)
         if compact:
             label = f"Ενότητα {case_section_number(section_key)}"
-            if section_key == "7-plots":
-                label = "Ενότητα 7 (οικόπεδα)"
         else:
             label = f"Ενότητα {section_key} — τίτλος εμφάνισης"
         form.fields[field_name] = forms.CharField(
@@ -179,6 +213,7 @@ class SystemWorkflowSettingsForm(forms.Form):
                 CONSULTATION_DUE_REMINDER_DAYS_KEY,
                 str(CONSULTATION_DUE_REMINDER_DAYS_DEFAULT),
             )
+        _add_income_limit_fields(self)
 
     def save(self):
         for setting_key, description in WORKFLOW_SETTING_FIELDS:
@@ -192,6 +227,7 @@ class SystemWorkflowSettingsForm(forms.Form):
             str(self.cleaned_data[f"setting_{CONSULTATION_DUE_REMINDER_DAYS_KEY}"]),
             "Ημέρες υπενθύμισης προθεσμίας διαβουλεύσεων (Dashboard)",
         )
+        _save_income_limit_fields(self)
 
 
 class SystemSectionLabelSettingsForm(forms.Form):
@@ -283,6 +319,7 @@ class SystemConfigurationForm(forms.Form):
         for setting_key, field in _email_setting_fields().items():
             field.widget.attrs.setdefault("class", "input")
             self.fields[email_field_name(setting_key)] = field
+        _add_income_limit_fields(self)
         if not self.is_bound:
             for setting_key, _ in GENERAL_SETTING_FIELDS:
                 default = APP_TITLE_DEFAULT if setting_key == APP_TITLE_SETTING_KEY else ""
@@ -315,6 +352,7 @@ class SystemConfigurationForm(forms.Form):
             str(self.cleaned_data[f"setting_{CONSULTATION_DUE_REMINDER_DAYS_KEY}"]),
             "Ημέρες υπενθύμισης προθεσμίας διαβουλεύσεων (Dashboard)",
         )
+        _save_income_limit_fields(self)
         for setting_key in EMAIL_SETTING_DEFAULTS:
             field_name = email_field_name(setting_key)
             value = self.cleaned_data[field_name]

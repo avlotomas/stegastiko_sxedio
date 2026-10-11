@@ -35,7 +35,7 @@ class AppFunction:
     label: str
     actions: tuple
     parent: str | None = None
-    # Case section key (e.g. "7-plots") whose configurable title is shown instead of `label`.
+    # Case section key whose configurable title is shown instead of `label`.
     case_section: str | None = None
     description: str = ""
 
@@ -104,23 +104,16 @@ FUNCTIONS = (
         "case_section_6",
         "6",
         "Ενότητα 6",
-        (VIEW, EDIT, EXPORT),
+        (VIEW, EDIT, DELETE, EXPORT),
         "6.1–6.5 σύνοψη, 6.6 απόφαση ανά τεμάχιο, 6.7 λήψη απόφασης από υπουργό, PDF πινάκων αξιολόγησης (επιλογή υποενοτήτων 6.1–6.6).",
     ),
-    _case_section("case_section_7", "7", "Ενότητα 7", (VIEW, EDIT), "7.1–7.6."),
+    _case_section("case_section_7", "7", "Ενότητα 7", (VIEW, EDIT, DELETE), "7.1–7.7."),
     _case_section(
-        "case_section_7_plots",
-        "7-plots",
-        "Ενότητα 7",
-        (VIEW, EDIT),
-        "7.8–7.9 χωράφια, οικόπεδα, αξία και τιμή.",
-    ),
-    _case_section(
-        "case_section_8",
-        "8",
-        "Ενότητα 8",
+        "case_section_9",
+        "9",
+        "Ενότητα 9",
         (VIEW, CREATE, EDIT, PUBLISH),
-        "8.1 νέα γνωστοποίηση, 8.2–8.3 επεξεργασία, οριστικοποίηση και έκδοση ανακοίνωσης.",
+        "9.1 νέα γνωστοποίηση, επεξεργασία, οριστικοποίηση και έκδοση ανακοίνωσης.",
     ),
     AppFunction(
         "applications",
@@ -150,7 +143,7 @@ FUNCTIONS = (
         parent="settings",
         description="Ονόματα των επιλογών του κύριου μενού (§Α.9.1).",
     ),
-    AppFunction("settings_workflow", "Αριθμοδότηση και υπενθυμίσεις", (VIEW, EDIT), parent="settings"),
+    AppFunction("settings_workflow", "Αριθμοδότηση, υπενθυμίσεις και όρια εισοδήματος", (VIEW, EDIT), parent="settings"),
     AppFunction(
         "settings_section_labels", "Τίτλοι ενοτήτων Κ.Σ. / Δ.Δ.", (VIEW, EDIT), parent="settings"
     ),

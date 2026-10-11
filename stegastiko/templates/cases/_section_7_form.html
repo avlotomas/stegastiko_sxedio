@@ -1,7 +1,7 @@
 {% comment %}
 Ενότητα 7 — 7.1 ανάθεση μελέτης, 7.2 σχεδιασμός διαχωρισμού, 7.3 στοιχεία αίτησης για
-έγκριση σχεδιασμού (7.2 και 7.3 με δικά τους αρχεία· στην 7.3 και ο πίνακας «Στοιχεία
-Εγκεκριμένου Σχεδιασμού Οικοπέδων» με προσθήκη/επεξεργασία/διαγραφή σε modal) και 7.4
+έγκριση σχεδιασμού (7.2 και 7.3 με δικά τους αρχεία· ο κοινός πίνακας «Στοιχεία
+Εγκεκριμένου Σχεδιασμού Οικοπέδων» ανοίγει από το καθολικό floating κουμπί) και 7.4
 κατασκευαστικά σχέδια και διαβουλεύσεις (δικές της γραμμές, ίδιες στήλες με την Ενότητα 5, σε modal).
 Ακολουθούν η 7.5 (_section_7_5_form.html) και η 7.6 με τον πίνακα ελέγχων κατασκευαστικών
 εργασιών σε modal (_section_7_6_form.html).
@@ -36,10 +36,6 @@
     {% include "includes/form_field.html" with field=form.tpo_comments wide=True %}
 </div>
 
-<h4 class="form-section-subtitle">Στοιχεία Εγκεκριμένου Σχεδιασμού Οικοπέδων</h4>
-<div class="form-span-all" data-approved-design-plot-status></div>
-{% include "cases/_approved_design_plot_grid.html" %}
-
 <h3 class="form-section-title">{% case_subsection_heading "7.4" %}</h3>
 <h4 class="form-section-subtitle">Διαβουλεύσεις Κατασκευαστικών Σχεδίων</h4>
 <div class="form-span-all" data-consultation-status></div>
@@ -51,3 +47,16 @@
 
 {% include "cases/_section_7_5_form.html" %}
 {% include "cases/_section_7_6_form.html" %}
+
+<h3 class="form-section-title">{% case_subsection_heading "7.7" %}</h3>
+<div class="form-grid form-span-all">
+    {% include "includes/form_field.html" with field=form.dls_application_date %}
+    {% include "includes/form_field.html" with field=form.dls_file_number %}
+    {% include "includes/form_field.html" with field=form.dls_response_date %}
+    {% include "cases/_attachment_slot_field.html" with new_field=form.new_dls_application_files remove_field=form.remove_dls_application_attachments %}
+    {% include "includes/form_field.html" with field=form.dls_comments wide=True %}
+</div>
+
+<div class="form-grid form-span-all">
+    {% include "includes/form_field.html" with field=form.section7_comments wide=True %}
+</div>

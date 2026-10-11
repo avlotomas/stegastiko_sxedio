@@ -7,3 +7,6 @@ class CoreConfig(AppConfig):
 
     def ready(self):
         from core import audit  # noqa: F401
+        from core import signals
+
+        signals.connect()

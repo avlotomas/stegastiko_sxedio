@@ -30,9 +30,13 @@ def _normalize_value(field_name: str, value: Any) -> Any:
     if field_name in ("citizenship_cypriot", "citizenship_repatriated", "citizenship_eu"):
         return bool(value)
     if field_name == "date_of_birth" and isinstance(value, str) and value:
-        return date.fromisoformat(value)
+        try:
+            return date.fromisoformat(value.strip()[:10])
+        except ValueError:
+            # Unparsable incoming date: keep the text so it is reported as a difference.
+            return value
     if field_name in ("refugee_identity_number", "citizenship_other"):
-        return (value or "").strip()
+        return str(value or "").strip()
     return value
 
 
@@ -57,20 +61,25 @@ def person_payload_from_form_prefix(form, prefix: str) -> dict:
 
 def person_payload_from_mapping(data: dict, prefix: str) -> dict:
     """Build payload from Excel/import keys (p1_*, p2_*)."""
+
+    def text(key: str) -> str:
+        value = data.get(f"{prefix}_{key}")
+        return "" if value is None else str(value).strip()
+
     return {
-        "first_name": data.get(f"{prefix}_first_name", ""),
-        "last_name": data.get(f"{prefix}_last_name", ""),
-        "identity_number": (data.get(f"{prefix}_identity_number") or "").strip(),
-        "refugee_identity_number": (data.get(f"{prefix}_refugee_id") or "").strip(),
+        "first_name": text("first_name"),
+        "last_name": text("last_name"),
+        "identity_number": text("identity_number"),
+        "refugee_identity_number": text("refugee_id"),
         "citizenship_cypriot": _parse_yes_no(data.get(f"{prefix}_citizenship_cypriot")),
         "citizenship_repatriated": _parse_yes_no(data.get(f"{prefix}_citizenship_repatriated")),
         "citizenship_eu": _parse_yes_no(data.get(f"{prefix}_citizenship_eu")),
-        "citizenship_other": (data.get(f"{prefix}_citizenship_other") or "").strip(),
+        "citizenship_other": text("citizenship_other"),
         "date_of_birth": data.get(f"{prefix}_date_of_birth"),
-        "birth_place": data.get(f"{prefix}_birth_place", ""),
-        "birth_country": data.get(f"{prefix}_birth_country", ""),
-        "parents_birth_place": data.get(f"{prefix}_parents_birth_place", ""),
-        "parents_birth_country": data.get(f"{prefix}_parents_birth_country", ""),
+        "birth_place": text("birth_place"),
+        "birth_country": text("birth_country"),
+        "parents_birth_place": text("parents_birth_place"),
+        "parents_birth_country": text("parents_birth_country"),
     }
 
 
@@ -130,8 +139,6 @@ def compare_person_with_payload(identity_number: str, payload: dict) -> PersonCo
         else:
             incoming = _normalize_value(field_name, payload.get(field_name))
         stored = getattr(person, field_name)
-        if field_name == "date_of_birth" and isinstance(incoming, str) and incoming:
-            incoming = date.fromisoformat(incoming)
         if stored != incoming:
             differences.append(
                 PersonFieldDifference(

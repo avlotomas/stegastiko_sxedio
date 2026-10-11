@@ -1,7 +1,6 @@
 """Configurable labels of the main menu (§Α.9.1)."""
 
-from core.models import SystemSetting
-from core.services import set_setting
+from core.services import get_setting, set_setting
 
 MENU_LABEL_SETTING_PREFIX = "menuLabel."
 
@@ -25,14 +24,9 @@ def menu_label_setting_key(key: str) -> str:
 
 
 def get_menu_labels() -> dict[str, str]:
-    stored = dict(
-        SystemSetting.objects.filter(key__startswith=MENU_LABEL_SETTING_PREFIX).values_list(
-            "key", "value"
-        )
-    )
     labels = {}
     for key, default in DEFAULT_MENU_LABELS.items():
-        value = stored.get(menu_label_setting_key(key), "").strip()
+        value = get_setting(menu_label_setting_key(key), "").strip()
         labels[key] = value or default
     return labels
 

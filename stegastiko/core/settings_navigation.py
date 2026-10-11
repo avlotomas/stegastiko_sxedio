@@ -42,7 +42,7 @@ SETTINGS_NAV_SECTIONS = (
     {
         "key": "workflow",
         "url_name": "system_settings_workflow",
-        "label": "Αριθμοδότηση και υπενθυμίσεις",
+        "label": "Αριθμοδότηση, υπενθυμίσεις και όρια εισοδήματος",
         "function": "settings_workflow",
     },
     {

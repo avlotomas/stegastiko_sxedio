@@ -40,7 +40,7 @@ Requires: case, communications; optional empty_message (default Greek empty text
                 <td data-sort-check="{{ communication.content_object.row_label|default:''|lower }}">{{ communication.content_object.row_label|default:"—" }}</td>
                 <td data-sort-recipient="{{ communication.recipient|lower }}">{{ communication.recipient }}</td>
                 <td data-sort-subject="{{ communication.subject|lower }}">{{ communication.subject }}</td>
-                <td data-sort-status="{{ communication.status }}">{% if communication.status == "sent" %}Απεστάλη{% else %}Προσχέδιο{% endif %}</td>
+                <td data-sort-status="{{ communication.status }}">{% if communication.status == "sent" %}Απεστάλη{% elif communication.status == "failed" %}Αποτυχία αποστολής{% elif communication.status == "sending" %}Σε αποστολή{% else %}Προσχέδιο{% endif %}</td>
                 <td data-sort-sent-at="{{ communication.sent_at|date:'Y-m-d H:i:s' }}">{{ communication.sent_at|default:"—" }}</td>
                 <td>
                     <button type="button"

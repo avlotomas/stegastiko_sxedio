@@ -21,7 +21,6 @@ from cases.models import (
     InfrastructureCheck,
     LandPlot,
     MinistryDecisionRound,
-    Parcel,
     SubmissionCycle,
     UtilityServiceType,
     ValuationReferral,
@@ -87,14 +86,15 @@ def _make_check(case, **overrides):
 
 def _ready_parcel(case, **overrides):
     values = {
-        "design_lot_number": "1",
-        "tkx_lot_number": "301",
+        "plot_type": ApprovedDesignPlot.PlotType.DIVISION_PLOT,
+        "design_number": "1",
+        "tkx_number": "301",
         "final_area_sqm": Decimal("600"),
         "has_separate_title": YesNo.YES,
         "valuation_amount": Decimal("70000"),
     }
     values.update(overrides)
-    return Parcel.objects.create(case=case, **values)
+    return ApprovedDesignPlot.objects.create(case=case, **values)
 
 
 def _make_case_ready_for_announcement(community, number="CASE-ABG-01"):
@@ -127,11 +127,11 @@ def test_same_community_holds_both_case_types(community):
 
 
 @pytest.mark.django_db
-def test_unallocated_case_skips_sections_2_to_7_7(community):
-    """§Α.3.3 An unallocated-plots case has no Αίτηση Α, so it goes straight to 7.9."""
+def test_unallocated_case_skips_sections_2_to_7(community):
+    """§Α.3.3 An unallocated-plots case goes straight to announcement in section 9."""
     unallocated = _make_case(community, case_type=Case.CaseType.UNALLOCATED_PLOTS)
-    assert unallocated.applicable_sections == ("1", "7-plots", "8")
-    for skipped in ("2", "3", "4", "5", "6", "7"):
+    assert unallocated.applicable_sections == ("1", "9")
+    for skipped in ("2", "3", "4", "5", "6", "7", "8"):
         assert skipped not in unallocated.applicable_sections
 
 
@@ -142,10 +142,10 @@ def test_unallocated_case_blocks_section_screen(community, staff_client):
         reverse("cases:section_edit", args=[unallocated.pk, "3"])
     )
     assert blocked.status_code == 404
-    allowed = staff_client.get(
-        reverse("cases:section_edit", args=[unallocated.pk, "7-plots"])
+    blocked8 = staff_client.get(
+        reverse("cases:section_edit", args=[unallocated.pk, "8"])
     )
-    assert allowed.status_code == 200
+    assert blocked8.status_code == 404
 
 
 # --- Scenario 6: Ενότητα 2 — multiple checks, current result by latest check date ---
@@ -276,7 +276,11 @@ def test_section8_completion_requires_value_and_price_on_every_plot(community):
     case.dls_response_date = date(2027, 6, 1)
     case.save()
     _ready_parcel(case)
-    unvalued = Parcel.objects.create(case=case, design_lot_number="2")
+    unvalued = ApprovedDesignPlot.objects.create(
+        case=case,
+        plot_type=ApprovedDesignPlot.PlotType.DIVISION_PLOT,
+        design_number="2",
+    )
 
     completion = section8_completion(case)
     assert completion["parcels_count"] == 2
@@ -336,7 +340,12 @@ def test_announcement_blocked_without_values(community):
     )
     case.dls_response_date = date(2027, 6, 1)
     case.save()
-    Parcel.objects.create(case=case, design_lot_number="1", final_area_sqm=Decimal("600"))
+    ApprovedDesignPlot.objects.create(
+        case=case,
+        plot_type=ApprovedDesignPlot.PlotType.DIVISION_PLOT,
+        design_number="1",
+        final_area_sqm=Decimal("600"),
+    )
 
     assert not announcement_readiness(case)["can_start"]
 
@@ -372,12 +381,12 @@ def test_publish_is_refused_while_a_linked_case_is_not_ready(community):
 def test_one_announcement_covers_old_and_new_split(community):
     new_division = _make_case_ready_for_announcement(community, number="CASE-ABG-02")
     field = Field.objects.create(case=new_division, code="FLD-ABG-02")
-    _ready_parcel(new_division, design_lot_number="2", field=field)
+    _ready_parcel(new_division, design_number="2", field=field)
 
     unallocated = _make_case(
         community, case_type=Case.CaseType.UNALLOCATED_PLOTS, number="CASE-ABG-01"
     )
-    _ready_parcel(unallocated, design_lot_number="U-1", valuation_amount=Decimal("80000"))
+    _ready_parcel(unallocated, design_number="U-1", valuation_amount=Decimal("80000"))
 
     cycle = SubmissionCycle.objects.create(
         community=community,
@@ -398,7 +407,11 @@ def test_one_announcement_covers_old_and_new_split(community):
 @pytest.mark.django_db
 def test_available_plots_exclude_unvalued_parcels(community):
     case = _make_case_ready_for_announcement(community)
-    Parcel.objects.create(case=case, design_lot_number="pending")
+    ApprovedDesignPlot.objects.create(
+        case=case,
+        plot_type=ApprovedDesignPlot.PlotType.DIVISION_PLOT,
+        design_number="pending",
+    )
     cycle = SubmissionCycle.objects.create(
         community=community,
         announcement_date=date(2027, 6, 1),
@@ -406,7 +419,7 @@ def test_available_plots_exclude_unvalued_parcels(community):
         submission_end_date=date(2027, 7, 1),
     )
     cycle.cases.add(case)
-    assert case.parcels.count() == 2
+    assert case.approved_design_plots.count() == 2
     assert cycle.available_plots_count == 1
 
 
@@ -488,9 +501,11 @@ def test_case_screens_render(community, staff_client):
         response = staff_client.get(reverse("cases:section_edit", args=[case.pk, section]))
         assert response.status_code == 200, f"Ενότητα {section} δεν ανοίγει"
 
-    # Ενότητα 8 lives on the announcement screens, not the generic section screen.
-    assert "8" in case.applicable_sections
+    assert "8" not in case.applicable_sections
     assert "8" not in section_screens_for(case)
+    assert "7" in case.applicable_sections
+    assert "7" in section_screens_for(case)
+    assert "9" not in section_screens_for(case)
 
 
 @pytest.mark.django_db
@@ -588,7 +603,7 @@ def test_section_edit_shows_persistent_case_actions_sidebar(community, staff_cli
     html = staff_client.get(reverse("cases:section_edit", args=[case.pk, "4"])).content.decode()
     assert "case-actions-nav" in html
     assert reverse("cases:section_edit", args=[case.pk, "1"]) in html
-    assert reverse("cases:section_edit", args=[case.pk, "7-plots"]) in html
+    assert reverse("cases:section_edit", args=[case.pk, "7"]) in html
     assert reverse("cases:announcement_create", args=[case.pk]) in html
     assert 'class="case-actions-nav__link is-active"' in html
     assert reverse("cases:section_edit", args=[case.pk, "4"]) in html
@@ -625,14 +640,14 @@ def test_case_detail_section_titles_come_from_settings(community, staff_client):
 
     case = _make_case(community)
     save_case_section_label("2", "Πληρότητα αίτησης από ρυθμίσεις")
-    save_case_section_label("7-plots", "Οικόπεδα από ρυθμίσεις")
+    save_case_section_label("7", "Διαχωρισμός από ρυθμίσεις")
 
     main = _detail_main_html(staff_client, case)
     assert '<h2 class="card__title">1. Βασικά στοιχεία και προτεραιότητα</h2>' in main
     assert '<h2 class="card__title">2. Πληρότητα αίτησης από ρυθμίσεις</h2>' in main
-    assert '<h2 class="card__title">7. Οικόπεδα από ρυθμίσεις</h2>' in main
-    assert '<h2 class="card__title">8. Γνωστοποίηση έναρξης αιτήσεων</h2>' in main
-    assert main.count('<h2 class="card__title">') == 9
+    assert '<h2 class="card__title">7. Διαχωρισμός από ρυθμίσεις</h2>' in main
+    assert '<h2 class="card__title">9. Γνωστοποίηση έναρξης αιτήσεων</h2>' in main
+    assert main.count('<h2 class="card__title">') == 8
 
 
 @pytest.mark.django_db
@@ -769,8 +784,9 @@ def test_deficiency_email_send_endpoint(community, staff_client, smtp_configured
     assert response.json()["ok"]
     assert len(mail.outbox) == 2
 
-    # Without JavaScript the form posts normally and returns to section 2.
-    response = staff_client.post(url, payload)
+    # Without JavaScript the form posts normally and returns to section 2. (An identical
+    # resend right away would be refused as a double submit, so the body differs.)
+    response = staff_client.post(url, {**payload, "body": "Δεύτερη υπενθύμιση."})
     assert response.status_code == 302
     assert response.url == reverse("cases:section_edit", args=[case.pk, "2"])
     assert case_communications(case).count() == 3
@@ -1943,7 +1959,6 @@ def test_section_7_4_has_consultations_grid_then_construction_plans_fields(commu
     )
     html = staff_client.get(reverse("cases:section_edit", args=[case.pk, "7"])).content.decode()
     positions = [
-        html.index("data-approved-design-plot-table"),
         html.index("7.4 Κατασκευαστικά Σχέδια και Διαβουλεύσεις"),
         html.index("data-consultation-table"),
         html.index('name="construction_plans_stage"'),
@@ -2138,7 +2153,9 @@ def test_section_6_7_ministry_decision_round_grid(community, staff_client):
     assert "data-ministry-decision-round-table" in detail
     assert "Επισυναπτόμενο έγγραφο σύστασης" in detail
     assert "Επισυναπτόμενο έγγραφο απάντησης" in detail
+    assert staff_client.get(reverse("cases:section_edit", args=[case.pk, "7"])).status_code == 200
     assert staff_client.get(reverse("cases:section_edit", args=[case.pk, "8"])).status_code == 404
+    assert staff_client.get(reverse("cases:section_edit", args=[case.pk, "9"])).status_code == 404
 
     from django.core.files.uploadedfile import SimpleUploadedFile
 
@@ -2182,7 +2199,7 @@ def _approved_design_plot_values(**overrides):
 
 
 @pytest.mark.django_db
-def test_section_7_3_approved_design_plots_grid_sits_after_7_3_comments(community, staff_client):
+def test_approved_design_plots_grid_opens_from_persistent_workspace(community, staff_client):
     case = _make_case(community)
     case.approved_design_plots.create(
         plot_type=ApprovedDesignPlot.PlotType.GREEN_SPACE,
@@ -2190,26 +2207,24 @@ def test_section_7_3_approved_design_plots_grid_sits_after_7_3_comments(communit
         final_area_sqm=Decimal("512.75"),
     )
     html = staff_client.get(reverse("cases:section_edit", args=[case.pk, "7"])).content.decode()
-    positions = [
-        html.index('name="tpo_comments"'),
-        html.index("Στοιχεία Εγκεκριμένου Σχεδιασμού Οικοπέδων"),
-        html.index("data-approved-design-plot-table"),
-        html.index("7.4 Κατασκευαστικά Σχέδια και Διαβουλεύσεις"),
-    ]
-    assert positions == sorted(positions)
-    assert reverse("cases:approved_design_plot_create", args=[case.pk]) in html
+    assert 'class="approved-design-plots-fab"' in html
+    assert 'id="approved-design-plots-workspace"' in html
     assert 'id="approved-design-plot-dialog"' in html
-    for key in ("type", "number", "tkx", "title", "parcel", "sheet", "area", "status"):
-        assert f'data-approved-design-plot-sort="{key}"' in html
-    assert "Τελικό εμβαδόν (τ.μ.)" in html
+    assert "data-approved-design-plot-table" not in html
 
-    detail = staff_client.get(reverse("cases:detail", args=[case.pk])).content.decode()
-    assert "Στοιχεία Εγκεκριμένου Σχεδιασμού Οικοπέδων" in detail
-    assert "Χώρος πρασίνου" in detail
-    assert "Π-1" in detail
-    assert "Τελικό εμβαδόν (τ.μ.)" in detail
-    assert "data-approved-design-plot-open" not in detail
-    assert "data-approved-design-plot-delete" not in detail
+    grid = staff_client.get(
+        reverse("cases:approved_design_plot_grid", args=[case.pk]), **JSON
+    ).json()["grid_html"]
+    assert reverse("cases:approved_design_plot_create", args=[case.pk]) in grid
+    for key in (
+        "type", "number", "tkx", "title", "parcel", "sheet", "area", "status", "valuation", "price"
+    ):
+        assert f'data-approved-design-plot-sort="{key}"' in grid
+    assert "Χώρος πρασίνου" in grid
+    assert "Π-1" in grid
+    assert "Τελικό εμβαδόν (τ.μ.)" in grid
+    assert "Αξία τελευταίας γενικής εκτίμησης (€)" in grid
+    assert "Τιμή διάθεσης (€)" in grid
 
 
 @pytest.mark.django_db
@@ -2222,8 +2237,8 @@ def test_section_7_5_and_7_6_close_the_section_7_screen(community, staff_client)
     assert html.index(heading_7_5) < html.index('name="tender_announcement_date"')
     assert html.index('name="tender_announcement_date"') < html.index(heading_7_6)
     assert html.index(heading_7_6) < html.index("data-infrastructure-check-table")
-    assert html.index("data-infrastructure-check-table") < html.index('name="section8_comments"')
-    assert html.index('name="section8_comments"') < html.rindex('class="form-actions form-span-all"')
+    assert html.index("data-infrastructure-check-table") < html.index('name="section7_comments"')
+    assert html.index('name="section7_comments"') < html.rindex('class="form-actions form-span-all"')
     for removed in (
         "7.7 Έλεγχος υποδομών",
         "infrastructure_checks-TOTAL_FORMS",
@@ -2239,19 +2254,22 @@ def test_section_7_5_and_7_6_close_the_section_7_screen(community, staff_client)
     assert detail.index("7.4 Κατασκευαστικά Σχέδια και Διαβουλεύσεις") < detail.index(heading_7_5)
     assert detail.index(heading_7_5) < detail.index(heading_7_6)
     assert detail.index(heading_7_6) < detail.index("data-infrastructure-check-table")
-    assert detail.index("data-infrastructure-check-table") < detail.index("7.8 Αίτηση στο ΤΚΧ")
+    assert detail.index("data-infrastructure-check-table") < detail.index(
+        "7.7 Αίτηση στο ΤΚΧ"
+    )
     assert "7.7 Έλεγχος υποδομών" not in detail
     assert 'name="contract_duration_unit"' not in html
     tender_block = detail[detail.index(heading_7_5):detail.index(heading_7_6)]
     assert "Διάρκεια σύμβασης (μήνες)" in tender_block
     assert "Διάρκεια σύμβασης (μονάδα" not in tender_block
     for heading in (
-        "7.8 Χωράφια",
-        "7.9.1 Παραπομπές προς ΤΚΧ",
-        "7.8 / 7.9 Πίνακας αντιστοίχισης οικοπέδων",
-        "7.9.2 Έλεγχος ολοκλήρωσης (αυτόματο)",
+        "8.1 Τελική χωρομετρική εργασία",
+        "8.2 Χωράφια",
+        "8.2 Παραπομπές προς ΤΚΧ",
+        "8.2 Πίνακας αντιστοίχισης οικοπέδων",
+        "8.3 Έλεγχος ολοκλήρωσης (αυτόματο)",
     ):
-        assert heading in detail
+        assert heading not in detail
 
 
 @pytest.mark.django_db
@@ -2268,11 +2286,10 @@ def test_approved_design_plot_modal_adds_rows_and_requires_other_type(community,
         "Υποσταθμός ΑΗΚ",
         "Χώρος κοινοτικού εξοπλισμού",
         "Άλλο",
-        "Αρίθμηση σχεδιασμού",
-        "Αρίθμηση ΤΚΧ",
-        "Αρίθμηση βάσει τίτλου ιδιοκτησίας",
     ):
         assert label in form["html"]
+    for absent in ('name="tkx_number"', 'name="numbering_status"', 'name="final_area_sqm"'):
+        assert absent not in form["html"]
 
     missing_type = staff_client.post(url, _approved_design_plot_values(plot_type=""), **JSON)
     assert missing_type.status_code == 400
@@ -2310,13 +2327,19 @@ def test_approved_design_plot_modal_adds_rows_and_requires_other_type(community,
 def test_approved_design_plot_modal_edits_and_deletes_rows(community, staff_client):
     case = _make_case(community)
     plot = case.approved_design_plots.create(
-        plot_type=ApprovedDesignPlot.PlotType.OTHER, plot_type_other="Πλατεία", design_number="1"
+        plot_type=ApprovedDesignPlot.PlotType.OTHER,
+        plot_type_other="Πλατεία",
+        design_number="1",
+        tkx_number="300",
+        final_area_sqm=Decimal("400"),
     )
     edit_url = reverse("cases:approved_design_plot_edit", args=[case.pk, plot.pk])
     payload = staff_client.post(
         edit_url,
         _approved_design_plot_values(
-            plot_type_other="Πλατεία",
+            plot_type=ApprovedDesignPlot.PlotType.DIVISION_PLOT,
+            plot_type_other="",
+            design_number="2",
             tkx_number="301",
             title_deed_number="0/1234",
             final_area_sqm="450.50",
@@ -2328,17 +2351,16 @@ def test_approved_design_plot_modal_edits_and_deletes_rows(community, staff_clie
     plot.refresh_from_db()
     assert plot.plot_type == ApprovedDesignPlot.PlotType.DIVISION_PLOT
     assert plot.plot_type_other == ""
-    assert plot.tkx_number == "301"
-    assert plot.final_area_sqm == Decimal("450.50")
-    assert plot.get_numbering_status_display() == "Αρίθμηση βάσει τίτλου ιδιοκτησίας"
-    for field_name in ("numbering_status", "final_area_sqm"):
-        assert ActionHistory.objects.filter(
-            entity_type="ApprovedDesignPlot",
-            action="UPDATE",
-            case_id=case.pk,
-            section_ref="7.3",
-            field_name=field_name,
-        ).exists()
+    assert plot.design_number == "2"
+    assert plot.tkx_number == "300"
+    assert plot.final_area_sqm == Decimal("400")
+    assert ActionHistory.objects.filter(
+        entity_type="ApprovedDesignPlot",
+        action="UPDATE",
+        case_id=case.pk,
+        section_ref="7.3",
+        field_name="design_number",
+    ).exists()
 
     delete_url = reverse("cases:approved_design_plot_delete", args=[case.pk, plot.pk])
     assert staff_client.get(delete_url, **JSON).status_code == 404
@@ -2377,8 +2399,13 @@ def test_approved_design_plot_needs_section_7_edit_access(community, client, mak
     client.force_login(make_user("reader", "Μόνο ανάγνωση"))
 
     html = client.get(reverse("cases:section_edit", args=[case.pk, "7"])).content.decode()
-    assert "Χώρος πρασίνου" in html
     assert "data-approved-design-plot-open" not in html
+    grid = client.get(
+        reverse("cases:approved_design_plot_grid", args=[case.pk]), **JSON
+    ).json()["grid_html"]
+    assert "Χώρος πρασίνου" in grid
+    assert "data-approved-design-plot-open" not in grid
+    assert "data-approved-design-plot-inline-form" not in grid
     create_url = reverse("cases:approved_design_plot_create", args=[case.pk])
     assert client.get(create_url, **JSON).status_code == 403
     assert client.post(create_url, _approved_design_plot_values(), **JSON).status_code == 403
@@ -2396,12 +2423,75 @@ def test_approved_design_plot_needs_section_7_edit_access(community, client, mak
 
 
 @pytest.mark.django_db
+def test_section_7_saves_7_7_dls_application_and_attachments(community, staff_client):
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    case = _make_case(community)
+    url = reverse("cases:section_edit", args=[case.pk, "7"])
+    response = staff_client.post(
+        url,
+        {
+            "dls_application_date": "2027-01-10",
+            "dls_file_number": "TKX-1234",
+            "dls_response_date": "2027-04-15",
+            "dls_comments": "Σχόλια ΤΚΧ 7.7",
+            "section7_comments": "Γενικά σχόλια 7",
+            "new_dls_application_files": SimpleUploadedFile(
+                "aitisi_tkx.pdf", b"%PDF-tkx", content_type="application/pdf"
+            ),
+        },
+    )
+    assert response.status_code == 302
+    case.refresh_from_db()
+    assert str(case.dls_application_date) == "2027-01-10"
+    assert case.dls_file_number == "TKX-1234"
+    assert str(case.dls_response_date) == "2027-04-15"
+    assert case.dls_comments == "Σχόλια ΤΚΧ 7.7"
+    assert case.section7_comments == "Γενικά σχόλια 7"
+    assert [a.filename for a in case.dls_application_attachments()] == ["aitisi_tkx.pdf"]
+
+    detail = staff_client.get(reverse("cases:detail", args=[case.pk])).content.decode()
+    assert "7.7 Αίτηση στο ΤΚΧ" in detail
+    assert "TKX-1234" in detail
+    assert "Σχόλια ΤΚΧ 7.7" in detail
+    assert "aitisi_tkx.pdf" in detail
+
+
+@pytest.mark.django_db
+def test_unallocated_case_can_add_plot(community, staff_client):
+    case = _make_case(community, case_type=Case.CaseType.UNALLOCATED_PLOTS)
+    url = reverse("cases:approved_design_plot_create", args=[case.pk])
+    form = staff_client.get(url, **JSON)
+    assert form.status_code == 200
+    payload = staff_client.post(
+        url,
+        {
+            "plot_type": ApprovedDesignPlot.PlotType.DIVISION_PLOT,
+            "plot_type_other": "",
+            "design_number": "A-1",
+        },
+        **JSON,
+    ).json()
+    assert payload["ok"] is True
+    assert payload["reload"] is False
+    plot = case.approved_design_plots.get()
+    assert plot.design_number == "A-1"
+    assert ActionHistory.objects.filter(
+        entity_type="ApprovedDesignPlot", section_ref="7.3", action="CREATE"
+    ).exists()
+
+
+@pytest.mark.django_db
 def test_approved_design_plot_bulk_add_numbers_rows_serially(community, staff_client):
     case = _make_case(community)
     html = staff_client.get(reverse("cases:section_edit", args=[case.pk, "7"])).content.decode()
     bulk_url = reverse("cases:approved_design_plot_bulk_create", args=[case.pk])
-    assert "Μαζική προσθήκη" in html
-    assert bulk_url in html
+    assert 'class="approved-design-plots-fab"' in html
+    grid = staff_client.get(
+        reverse("cases:approved_design_plot_grid", args=[case.pk]), **JSON
+    ).json()["grid_html"]
+    assert "Μαζική προσθήκη" in grid
+    assert bulk_url in grid
     assert staff_client.get(bulk_url).status_code == 404
 
     form = staff_client.get(bulk_url, **JSON).json()

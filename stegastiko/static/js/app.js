@@ -388,123 +388,581 @@ bindFilePickers(document);
 
 
 
-// 2.2 deficiencies email dialog, sent without reloading so unsaved section edits survive.
-
+// Grids and dialogs driven by JSON endpoints; helpers are scoped to this block.
 (function () {
+    // ---------------------------------------------------------------------------
+    // Shared helpers for the JSON endpoints, status alerts and sortable grids below.
+    // ---------------------------------------------------------------------------
 
-    document.addEventListener("click", function (event) {
+    const SERVER_ERROR_MESSAGE = "Αποτυχία επικοινωνίας με τον διακομιστή.";
 
-        const button = event.target.closest("[data-dialog-open]");
+    const GREEK_COLLATOR = new Intl.Collator("el", { numeric: true, sensitivity: "base" });
 
-        if (!button) {
+    function requestJson(url, options) {
+        return fetch(url, Object.assign({
+            headers: { Accept: "application/json" },
+            credentials: "same-origin",
+        }, options)).then(function (response) {
+            return response.json();
+        });
+    }
 
+    // POST body carrying only the page's CSRF token (used by the grid delete buttons).
+    function csrfFormData() {
+        const token = document.querySelector('input[name="csrfmiddlewaretoken"]');
+        const data = new FormData();
+        data.append("csrfmiddlewaretoken", token ? token.value : "");
+        return data;
+    }
+
+    // Replaces the contents of the status area `selector` with one alert (text only).
+    function showStatusAlert(selector, message, kind) {
+        const status = document.querySelector(selector);
+        if (!status) {
             return;
-
         }
+        status.textContent = "";
+        const alert = document.createElement("div");
+        alert.className = "alert alert--" + (kind || "success");
+        alert.setAttribute("role", "status");
+        alert.textContent = message;
+        status.appendChild(alert);
+    }
 
-        const dialog = document.getElementById(button.dataset.dialogOpen);
+    // Swaps a server-rendered fragment (grid, log) in place.
+    function replaceOuterHtml(selector, html) {
+        const element = document.querySelector(selector);
+        if (element) {
+            element.outerHTML = html;
+        }
+    }
 
-        if (!dialog) {
+    // Same column clicked again flips the direction; another column starts ascending.
+    function toggleSortDir(table, key) {
+        const currentKey = table.dataset.sortKey || "";
+        const currentDir = table.dataset.sortDir || "asc";
+        const nextDir = currentKey === key && currentDir === "asc" ? "desc" : "asc";
+        table.dataset.sortKey = key;
+        table.dataset.sortDir = nextDir;
+        return nextDir;
+    }
 
+    function sortValue(row, key) {
+        const cell = row.querySelector("[data-sort-" + key + "]");
+        return cell ? cell.getAttribute("data-sort-" + key) || "" : "";
+    }
+
+    // Reorders `rowSelector` rows of `tbody` by their data-sort-<key> cells; `compare` sorts ascending.
+    function reorderRows(tbody, rowSelector, key, dir, compare) {
+        const rows = Array.from(tbody.querySelectorAll(rowSelector));
+        rows.sort(function (a, b) {
+            const order = compare(sortValue(a, key), sortValue(b, key));
+            return dir === "asc" ? order : -order;
+        });
+        rows.forEach(function (row) {
+            tbody.appendChild(row);
+        });
+    }
+
+    // Ascending comparator on transform(value).
+    function compareBy(transform) {
+        return function (a, b) {
+            const left = transform(a);
+            const right = transform(b);
+            if (left < right) {
+                return -1;
+            }
+            if (left > right) {
+                return 1;
+            }
+            return 0;
+        };
+    }
+
+    function rankOf(ranks) {
+        return function (value) {
+            return ranks[value] || 0;
+        };
+    }
+
+    function dateValue(value) {
+        return Date.parse(value) || 0;
+    }
+
+    function numberValue(value) {
+        return Number(value) || 0;
+    }
+
+    function lowerValue(value) {
+        return value.toLowerCase();
+    }
+
+    // Sorting of the modal grids that follow the data-<name>-table / -row / -sort convention:
+    // Greek-aware collation and aria-sort on the clicked header.
+    function collatorSort(name) {
+        return {
+            button: "[data-" + name + "-sort]",
+            apply: function (button) {
+                const table = button.closest("[data-" + name + "-table]");
+                const tbody = table ? table.querySelector("tbody") : null;
+                if (!tbody) {
+                    return;
+                }
+                const key = button.getAttribute("data-" + name + "-sort");
+                const nextDir = toggleSortDir(table, key);
+                table.querySelectorAll("th").forEach(function (th) {
+                    th.removeAttribute("aria-sort");
+                });
+                button.closest("th").setAttribute("aria-sort", nextDir === "asc" ? "ascending" : "descending");
+                reorderRows(tbody, "tr[data-" + name + "-row]", key, nextDir, GREEK_COLLATOR.compare);
+            },
+        };
+    }
+
+    // Binds the form fragments that host «Άλλο» choices and multiple-file pickers.
+    function bindOtherGroupsAndFilePickers(body, pendingFiles) {
+        bindOtherGroups(body);
+        bindFilePickers(body, pendingFiles);
+    }
+
+    /*
+     * Grid edited in a modal, each change saved immediately so unsaved edits elsewhere on the page
+     * survive. The markup follows a naming convention on `config.name` (e.g. "consultation"):
+     *   [data-<name>-dialog] > [data-<name>-errors], [data-<name>-dialog-body]
+     *   [data-<name>-open]="<form url>"      opens the dialog with the server-rendered form
+     *   [data-<name>-form]                   form fragment (JSON {ok, html} / {ok, grid_html, message})
+     *   [data-<name>-delete]="<url>" + [data-<name>-label]
+     *   [data-<name>-container]              grid replaced from grid_html (config.containerSelector)
+     *   [data-<name>-status]                 success / error alerts
+     * Options:
+     *   requireDialog      skip everything (sorting too) when the page has no dialog
+     *   sort               {button, apply(button)} column sorting, active even without the dialog
+     *   bindForm(body, pendingFiles)  binders run on the freshly mounted fragment
+     *   afterMount(form)   extra binding after the submit handler is attached
+     *   focusSelector      first field to focus (none when omitted)
+     *   keepFiles          on a validation re-render, carry the chosen files over
+     *   reloadOnSave       honour {reload: true} on save
+     *   loadingHtml, loadErrorMessage
+     *   deleteRow(button, ui)  custom delete; otherwise confirm(deleteConfirm + label + ";") + POST
+     *   reloadOnDelete     honour {reload: true} on delete
+     *   serverDeleteErrors show the server's message (or the thrown error) instead of deleteErrorMessage
+     */
+    function initGridModal(config) {
+        const name = config.name;
+        const attr = function (suffix) {
+            return "data-" + name + "-" + suffix;
+        };
+        const sel = function (suffix) {
+            return "[" + attr(suffix) + "]";
+        };
+
+        const dialog = document.querySelector(sel("dialog"));
+        if (config.requireDialog && !dialog) {
             return;
-
         }
+        const body = dialog ? dialog.querySelector(sel("dialog-body")) : null;
+        const errors = dialog ? dialog.querySelector(sel("errors")) : null;
+        const containerSelector = config.containerSelector || sel("container");
 
-        const error = dialog.querySelector("[data-section-6-report-pdf-error]");
+        const ui = {
+            showStatus: function (message, kind) {
+                showStatusAlert(sel("status"), message, kind);
+            },
+            replaceGrid: function (html) {
+                replaceOuterHtml(containerSelector, html);
+                if (config.afterGridReplace) {
+                    config.afterGridReplace(document.querySelector(containerSelector));
+                }
+            },
+        };
 
-        if (error) {
+        const showDialogError = function (message) {
+            if (!errors) {
+                return;
+            }
+            errors.textContent = message;
+            errors.hidden = !message;
+        };
 
-            error.hidden = true;
+        const mountForm = function (html, pendingFiles) {
+            body.innerHTML = html;
+            if (config.bindForm) {
+                config.bindForm(body, pendingFiles);
+            }
+            const form = body.querySelector(sel("form"));
+            form.addEventListener("submit", onSubmit);
+            if (config.afterMount) {
+                config.afterMount(form);
+            }
+            if (config.focusSelector) {
+                const first = form.querySelector(config.focusSelector);
+                if (first) {
+                    first.focus();
+                }
+            }
+        };
 
-        }
+        const onSubmit = function (event) {
+            event.preventDefault();
+            const form = event.currentTarget;
+            const submit = form.querySelector('button[type="submit"]');
+            submit.disabled = true;
+            showDialogError("");
+            requestJson(form.action, { method: "POST", body: new FormData(form) })
+                .then(function (data) {
+                    if (!data.ok) {
+                        if (config.keepFiles) {
+                            // Browsers cannot refill a file input, so keep the chosen files across the re-render.
+                            const fileInput = form.querySelector('[data-file-picker] input[type="file"]');
+                            mountForm(data.html, fileInput ? Array.from(fileInput.files) : []);
+                        } else {
+                            mountForm(data.html);
+                        }
+                        return;
+                    }
+                    if (config.reloadOnSave && data.reload) {
+                        window.location.reload();
+                        return;
+                    }
+                    ui.replaceGrid(data.grid_html);
+                    ui.showStatus(data.message);
+                    dialog.close();
+                })
+                .catch(function () {
+                    showDialogError(SERVER_ERROR_MESSAGE);
+                })
+                .finally(function () {
+                    submit.disabled = false;
+                });
+        };
 
-        dialog.showModal();
+        const openForm = function (url) {
+            showDialogError("");
+            body.innerHTML = config.loadingHtml || '<p class="text-muted">Φόρτωση…</p>';
+            dialog.showModal();
+            requestJson(url)
+                .then(function (data) {
+                    if (!data.ok) {
+                        throw new Error("bad response");
+                    }
+                    mountForm(data.html);
+                })
+                .catch(function () {
+                    body.textContent = "";
+                    showDialogError(config.loadErrorMessage);
+                });
+        };
 
-        const form = dialog.querySelector("[data-email-form]");
+        const deleteRow = function (button) {
+            if (config.deleteRow) {
+                config.deleteRow(button, ui);
+                return;
+            }
+            const label = button.getAttribute(attr("label")) || "";
+            if (!window.confirm(config.deleteConfirm + label + ";")) {
+                return;
+            }
+            button.disabled = true;
+            requestJson(button.getAttribute(attr("delete")), { method: "POST", body: csrfFormData() })
+                .then(function (result) {
+                    if (!result.ok) {
+                        throw new Error(config.serverDeleteErrors ? result.message || "bad response" : "bad response");
+                    }
+                    if (config.reloadOnDelete && result.reload) {
+                        window.location.reload();
+                        return;
+                    }
+                    ui.replaceGrid(result.grid_html);
+                    ui.showStatus(result.message);
+                })
+                .catch(function (error) {
+                    button.disabled = false;
+                    ui.showStatus(
+                        config.serverDeleteErrors && error.message !== "bad response"
+                            ? error.message
+                            : config.deleteErrorMessage,
+                        "error"
+                    );
+                });
+        };
 
-        if (!form) {
-
-            return;
-
-        }
-
-        if (button.dataset.emailAction) {
-
-            form.action = button.dataset.emailAction;
-
-        }
-
-        const source = button.dataset.copyText || "";
-
-        const body = dialog.querySelector("[data-email-body]");
-
-        if (body) {
-
-            body.value = source;
-
-        }
-
-        const checkLabel = dialog.querySelector("[data-email-check-label]");
-
-        if (checkLabel) {
-
-            checkLabel.textContent = button.dataset.checkLabel || "";
-
-        }
-
-        const errors = dialog.querySelector("[data-email-errors]");
-
-        if (errors) {
-
-            errors.hidden = true;
-
-            errors.textContent = "";
-
-        }
-
-    });
+        document.addEventListener("click", function (event) {
+            if (config.sort) {
+                const sort = event.target.closest(config.sort.button);
+                if (sort) {
+                    event.preventDefault();
+                    config.sort.apply(sort);
+                    return;
+                }
+            }
+            if (!dialog) {
+                return;
+            }
+            const open = event.target.closest(sel("open"));
+            if (open) {
+                event.preventDefault();
+                openForm(open.getAttribute(attr("open")));
+                return;
+            }
+            const remove = event.target.closest(sel("delete"));
+            if (remove) {
+                event.preventDefault();
+                deleteRow(remove);
+            }
+        });
+    }
 
 
 
-    const showErrors = function (container, messages) {
+    // 2.2 deficiencies email dialog, sent without reloading so unsaved section edits survive.
 
-        container.textContent = "";
+    (function () {
 
-        messages.forEach(function (message) {
+        document.addEventListener("click", function (event) {
 
-            const line = document.createElement("div");
+            const button = event.target.closest("[data-dialog-open]");
 
-            line.textContent = message;
+            if (!button) {
 
-            container.appendChild(line);
+                return;
+
+            }
+
+            const dialog = document.getElementById(button.dataset.dialogOpen);
+
+            if (!dialog) {
+
+                return;
+
+            }
+
+            const error = dialog.querySelector("[data-section-6-report-pdf-error]");
+
+            if (error) {
+
+                error.hidden = true;
+
+            }
+
+            dialog.showModal();
+
+            const form = dialog.querySelector("[data-email-form]");
+
+            if (!form) {
+
+                return;
+
+            }
+
+            if (button.dataset.emailAction) {
+
+                form.action = button.dataset.emailAction;
+
+            }
+
+            const source = button.dataset.copyText || "";
+
+            const body = dialog.querySelector("[data-email-body]");
+
+            if (body) {
+
+                body.value = source;
+
+            }
+
+            const checkLabel = dialog.querySelector("[data-email-check-label]");
+
+            if (checkLabel) {
+
+                checkLabel.textContent = button.dataset.checkLabel || "";
+
+            }
+
+            const errors = dialog.querySelector("[data-email-errors]");
+
+            if (errors) {
+
+                errors.hidden = true;
+
+                errors.textContent = "";
+
+            }
 
         });
 
-        container.hidden = messages.length === 0;
-
-    };
 
 
+        const showErrors = function (container, messages) {
 
-    document.querySelectorAll("[data-email-form]").forEach(function (form) {
+            container.textContent = "";
 
-        form.addEventListener("submit", function (event) {
+            messages.forEach(function (message) {
 
-            event.preventDefault();
+                const line = document.createElement("div");
 
-            const dialog = form.closest("dialog");
+                line.textContent = message;
 
-            const errors = form.querySelector("[data-email-errors]");
+                container.appendChild(line);
 
-            const submit = form.querySelector('button[type="submit"]');
+            });
 
-            submit.disabled = true;
+            container.hidden = messages.length === 0;
 
-            fetch(form.action, {
+        };
 
-                method: "POST",
 
-                body: new FormData(form),
+
+        document.querySelectorAll("[data-email-form]").forEach(function (form) {
+
+            form.addEventListener("submit", function (event) {
+
+                event.preventDefault();
+
+                const dialog = form.closest("dialog");
+
+                const errors = form.querySelector("[data-email-errors]");
+
+                const submit = form.querySelector('button[type="submit"]');
+
+                submit.disabled = true;
+
+                requestJson(form.action, { method: "POST", body: new FormData(form) })
+
+                    .then(function (data) {
+
+                        if (!data.ok) {
+
+                            showErrors(errors, data.errors || []);
+
+                            return;
+
+                        }
+
+                        replaceOuterHtml("[data-deficiency-email-log]", data.log_html);
+
+                        if (data.grid_html) {
+
+                            replaceOuterHtml("[data-completeness-check-container]", data.grid_html);
+
+                        }
+
+                        showStatusAlert("[data-completeness-check-status]", data.message);
+
+                        dialog.close();
+
+                    })
+
+                    .catch(function () {
+
+                        showErrors(errors, [SERVER_ERROR_MESSAGE]);
+
+                    })
+
+                    .finally(function () {
+
+                        submit.disabled = false;
+
+                    });
+
+            });
+
+        });
+
+    })();
+
+
+
+    // 2.2 sent-email history: read-only modal for a Communication record.
+
+    (function () {
+
+        const getDialog = function () {
+
+            return document.getElementById("communication-email-view-dialog");
+
+        };
+
+
+
+        const setLoading = function (dialog) {
+
+            const recipient = dialog.querySelector("[data-communication-view-recipient]");
+
+            const status = dialog.querySelector("[data-communication-view-status]");
+
+            const sentAt = dialog.querySelector("[data-communication-view-sent-at]");
+
+            const subject = dialog.querySelector("[data-communication-view-subject]");
+
+            const body = dialog.querySelector("[data-communication-view-body]");
+
+            const errors = dialog.querySelector("[data-communication-view-errors]");
+
+            if (errors) {
+
+                errors.hidden = true;
+
+                errors.textContent = "";
+
+            }
+
+            recipient.textContent = "…";
+
+            status.textContent = "…";
+
+            sentAt.textContent = "…";
+
+            subject.textContent = "…";
+
+            body.textContent = "Φόρτωση…";
+
+        };
+
+
+
+        const openFromTrigger = function (trigger) {
+
+            const dialog = getDialog();
+
+            if (!dialog) {
+
+                return;
+
+            }
+
+            const url = trigger.getAttribute("data-communication-detail-url");
+
+            if (!url) {
+
+                return;
+
+            }
+
+            setLoading(dialog);
+
+            if (typeof dialog.showModal === "function") {
+
+                dialog.showModal();
+
+            }
+
+
+
+            const recipient = dialog.querySelector("[data-communication-view-recipient]");
+
+            const status = dialog.querySelector("[data-communication-view-status]");
+
+            const sentAt = dialog.querySelector("[data-communication-view-sent-at]");
+
+            const subject = dialog.querySelector("[data-communication-view-subject]");
+
+            const body = dialog.querySelector("[data-communication-view-body]");
+
+            const errors = dialog.querySelector("[data-communication-view-errors]");
+
+
+
+            fetch(url, {
 
                 headers: { Accept: "application/json" },
 
@@ -514,1691 +972,295 @@ bindFilePickers(document);
 
                 .then(function (response) {
 
-                    return response.json();
+                    return response.json().then(function (data) {
+
+                        if (!response.ok || !data.ok) {
+
+                            throw new Error("bad response");
+
+                        }
+
+                        return data;
+
+                    });
 
                 })
 
                 .then(function (data) {
 
-                    if (!data.ok) {
+                    recipient.textContent = data.recipient || "—";
 
-                        showErrors(errors, data.errors || []);
+                    status.textContent = data.status_display || "—";
 
-                        return;
+                    sentAt.textContent = data.sent_at || "—";
 
-                    }
+                    subject.textContent = data.subject || "—";
 
-                    const log = document.querySelector("[data-deficiency-email-log]");
-
-                    if (log) {
-
-                        log.outerHTML = data.log_html;
-
-                    }
-
-                    if (data.grid_html) {
-
-                        const grid = document.querySelector("[data-completeness-check-container]");
-
-                        if (grid) {
-
-                            grid.outerHTML = data.grid_html;
-
-                        }
-
-                    }
-
-                    const status = document.querySelector("[data-completeness-check-status]");
-
-                    if (status) {
-
-                        status.innerHTML = "";
-
-                        const alert = document.createElement("div");
-
-                        alert.className = "alert alert--success";
-
-                        alert.setAttribute("role", "status");
-
-                        alert.textContent = data.message;
-
-                        status.appendChild(alert);
-
-                    }
-
-                    dialog.close();
+                    body.textContent = data.body || "—";
 
                 })
 
                 .catch(function () {
 
-                    showErrors(errors, ["Αποτυχία επικοινωνίας με τον διακομιστή."]);
+                    if (errors) {
 
-                })
+                        errors.textContent = "Αποτυχία φόρτωσης του email.";
 
-                .finally(function () {
-
-                    submit.disabled = false;
-
-                });
-
-        });
-
-    });
-
-})();
-
-
-
-// 2.2 sent-email history: read-only modal for a Communication record.
-
-(function () {
-
-    const getDialog = function () {
-
-        return document.getElementById("communication-email-view-dialog");
-
-    };
-
-
-
-    const setLoading = function (dialog) {
-
-        const recipient = dialog.querySelector("[data-communication-view-recipient]");
-
-        const status = dialog.querySelector("[data-communication-view-status]");
-
-        const sentAt = dialog.querySelector("[data-communication-view-sent-at]");
-
-        const subject = dialog.querySelector("[data-communication-view-subject]");
-
-        const body = dialog.querySelector("[data-communication-view-body]");
-
-        const errors = dialog.querySelector("[data-communication-view-errors]");
-
-        if (errors) {
-
-            errors.hidden = true;
-
-            errors.textContent = "";
-
-        }
-
-        recipient.textContent = "…";
-
-        status.textContent = "…";
-
-        sentAt.textContent = "…";
-
-        subject.textContent = "…";
-
-        body.textContent = "Φόρτωση…";
-
-    };
-
-
-
-    const openFromTrigger = function (trigger) {
-
-        const dialog = getDialog();
-
-        if (!dialog) {
-
-            return;
-
-        }
-
-        const url = trigger.getAttribute("data-communication-detail-url");
-
-        if (!url) {
-
-            return;
-
-        }
-
-        setLoading(dialog);
-
-        if (typeof dialog.showModal === "function") {
-
-            dialog.showModal();
-
-        }
-
-
-
-        const recipient = dialog.querySelector("[data-communication-view-recipient]");
-
-        const status = dialog.querySelector("[data-communication-view-status]");
-
-        const sentAt = dialog.querySelector("[data-communication-view-sent-at]");
-
-        const subject = dialog.querySelector("[data-communication-view-subject]");
-
-        const body = dialog.querySelector("[data-communication-view-body]");
-
-        const errors = dialog.querySelector("[data-communication-view-errors]");
-
-
-
-        fetch(url, {
-
-            headers: { Accept: "application/json" },
-
-            credentials: "same-origin",
-
-        })
-
-            .then(function (response) {
-
-                return response.json().then(function (data) {
-
-                    if (!response.ok || !data.ok) {
-
-                        throw new Error("bad response");
+                        errors.hidden = false;
 
                     }
 
-                    return data;
+                    body.textContent = "—";
 
                 });
 
-            })
-
-            .then(function (data) {
-
-                recipient.textContent = data.recipient || "—";
-
-                status.textContent = data.status_display || "—";
-
-                sentAt.textContent = data.sent_at || "—";
-
-                subject.textContent = data.subject || "—";
-
-                body.textContent = data.body || "—";
-
-            })
-
-            .catch(function () {
-
-                if (errors) {
-
-                    errors.textContent = "Αποτυχία φόρτωσης του email.";
-
-                    errors.hidden = false;
-
-                }
-
-                body.textContent = "—";
-
-            });
-
-    };
-
-
-
-    const statusRank = function (value) {
-
-        if (value === "sent") {
-
-            return 2;
-
-        }
-
-        if (value === "draft") {
-
-            return 1;
-
-        }
-
-        return 0;
-
-    };
-
-    const sortCommunicationGrid = function (button) {
-
-        const table = button.closest("[data-communication-table]");
-
-        if (!table) {
-
-            return;
-
-        }
-
-        const key = button.dataset.communicationSort;
-
-        const currentKey = table.dataset.sortKey || "";
-
-        const currentDir = table.dataset.sortDir || "asc";
-
-        const nextDir = currentKey === key && currentDir === "asc" ? "desc" : "asc";
-
-        table.dataset.sortKey = key;
-
-        table.dataset.sortDir = nextDir;
-
-        const tbody = table.querySelector("tbody");
-
-        if (!tbody) {
-
-            return;
-
-        }
-
-        const rows = Array.from(tbody.querySelectorAll("tr[data-communication-row]"));
-
-        const read = function (row, sortKey) {
-
-            const cell = row.querySelector("[data-sort-" + sortKey + "]");
-
-            return cell ? cell.getAttribute("data-sort-" + sortKey) || "" : "";
-
         };
 
-        rows.sort(function (a, b) {
 
-            let left = "";
 
-            let right = "";
+        const statusRank = rankOf({ sent: 2, draft: 1 });
 
+        const sortCommunicationGrid = function (button) {
+            const table = button.closest("[data-communication-table]");
+            if (!table) {
+                return;
+            }
+            const key = button.dataset.communicationSort;
+            const nextDir = toggleSortDir(table, key);
+            const tbody = table.querySelector("tbody");
+            if (!tbody) {
+                return;
+            }
+            let transform = lowerValue;
             if (key === "sent-at") {
-
-                left = Date.parse(read(a, key)) || 0;
-
-                right = Date.parse(read(b, key)) || 0;
-
+                transform = dateValue;
             } else if (key === "status") {
+                transform = statusRank;
+            }
+            reorderRows(tbody, "tr[data-communication-row]", key, nextDir, compareBy(transform));
+        };
 
-                left = statusRank(read(a, key));
+        document.addEventListener("click", function (event) {
 
-                right = statusRank(read(b, key));
+            const sort = event.target.closest("[data-communication-sort]");
 
-            } else {
+            if (sort) {
 
-                left = read(a, key).toLowerCase();
+                event.preventDefault();
 
-                right = read(b, key).toLowerCase();
+                sortCommunicationGrid(sort);
+
+                return;
 
             }
 
-            if (left < right) {
+            const trigger = event.target.closest("[data-communication-view]");
 
-                return nextDir === "asc" ? -1 : 1;
+            if (!trigger) {
 
-            }
-
-            if (left > right) {
-
-                return nextDir === "asc" ? 1 : -1;
+                return;
 
             }
-
-            return 0;
-
-        });
-
-        rows.forEach(function (row) {
-
-            tbody.appendChild(row);
-
-        });
-
-    };
-
-    document.addEventListener("click", function (event) {
-
-        const sort = event.target.closest("[data-communication-sort]");
-
-        if (sort) {
 
             event.preventDefault();
 
-            sortCommunicationGrid(sort);
+            openFromTrigger(trigger);
 
-            return;
+        });
 
-        }
+    })();
 
-        const trigger = event.target.closest("[data-communication-view]");
 
-        if (!trigger) {
 
-            return;
+    // Completeness check grid (2.1): add / edit / delete in a modal, each saved immediately.
+    (function () {
+        const resultRank = rankOf({ yes: 2, no: 1 });
 
-        }
-
-        event.preventDefault();
-
-        openFromTrigger(trigger);
-
-    });
-
-})();
-
-
-
-// Completeness check grid (2.1): add / edit / delete in a modal, each saved immediately.
-
-(function () {
-
-    const dialog = document.querySelector("[data-completeness-check-dialog]");
-
-    if (!dialog) {
-
-        return;
-
-    }
-
-    const body = dialog.querySelector("[data-completeness-check-dialog-body]");
-
-    const errors = dialog.querySelector("[data-completeness-check-errors]");
-
-    const showDialogError = function (message) {
-
-        errors.textContent = message;
-
-        errors.hidden = !message;
-
-    };
-
-    const showStatus = function (message, kind) {
-
-        const status = document.querySelector("[data-completeness-check-status]");
-
-        if (!status) {
-
-            return;
-
-        }
-
-        status.textContent = "";
-
-        const alert = document.createElement("div");
-
-        alert.className = "alert alert--" + (kind || "success");
-
-        alert.setAttribute("role", "status");
-
-        alert.textContent = message;
-
-        status.appendChild(alert);
-
-    };
-
-    const replaceGrid = function (html) {
-
-        const grid = document.querySelector("[data-completeness-check-container]");
-
-        if (grid) {
-
-            grid.outerHTML = html;
-
-        }
-
-    };
-
-    const resultRank = function (value) {
-
-        if (value === "yes") {
-
-            return 2;
-
-        }
-
-        if (value === "no") {
-
-            return 1;
-
-        }
-
-        return 0;
-
-    };
-
-    const sortGrid = function (button) {
-
-        const table = document.querySelector("[data-completeness-check-table]");
-
-        if (!table) {
-
-            return;
-
-        }
-
-        const key = button.dataset.completenessSort;
-
-        const currentKey = table.dataset.sortKey || "";
-
-        const currentDir = table.dataset.sortDir || "asc";
-
-        const nextDir = currentKey === key && currentDir === "asc" ? "desc" : "asc";
-
-        table.dataset.sortKey = key;
-
-        table.dataset.sortDir = nextDir;
-
-        const tbody = table.querySelector("tbody");
-
-        if (!tbody) {
-
-            return;
-
-        }
-
-        const rows = Array.from(tbody.querySelectorAll("tr[data-completeness-row]"));
-
-        const read = function (row, sortKey) {
-
-            const cell = row.querySelector("[data-sort-" + sortKey + "]");
-
-            return cell ? cell.getAttribute("data-sort-" + sortKey) || "" : "";
-
-        };
-
-        rows.sort(function (a, b) {
-
-            let left = "";
-
-            let right = "";
-
+        const sortGrid = function (button) {
+            const table = document.querySelector("[data-completeness-check-table]");
+            if (!table) {
+                return;
+            }
+            const key = button.dataset.completenessSort;
+            const nextDir = toggleSortDir(table, key);
+            const tbody = table.querySelector("tbody");
+            if (!tbody) {
+                return;
+            }
+            let transform = lowerValue;
             if (key === "sequence" || key === "emails") {
-
-                left = Number(read(a, key)) || 0;
-
-                right = Number(read(b, key)) || 0;
-
+                transform = numberValue;
             } else if (key === "date") {
-
-                left = Date.parse(read(a, key)) || 0;
-
-                right = Date.parse(read(b, key)) || 0;
-
+                transform = dateValue;
             } else if (key === "result") {
-
-                left = resultRank(read(a, key));
-
-                right = resultRank(read(b, key));
-
-            } else {
-
-                left = read(a, key).toLowerCase();
-
-                right = read(b, key).toLowerCase();
-
+                transform = resultRank;
             }
+            reorderRows(tbody, "tr[data-completeness-row]", key, nextDir, compareBy(transform));
+        };
 
-            if (left < right) {
-
-                return nextDir === "asc" ? -1 : 1;
-
+        // A check that blocks deletion (e.g. has sent emails) explains why instead of asking;
+        // a refused delete may still refresh the grid.
+        const deleteCheck = function (button, ui) {
+            const blockedReason = button.dataset.completenessCheckDeleteBlockedReason || "";
+            if (blockedReason) {
+                ui.showStatus(blockedReason, "error");
+                return;
             }
-
-            if (left > right) {
-
-                return nextDir === "asc" ? 1 : -1;
-
+            const label = button.dataset.completenessCheckLabel || "";
+            if (!window.confirm("Διαγραφή του ελέγχου " + label + ";")) {
+                return;
             }
-
-            return 0;
-
-        });
-
-        rows.forEach(function (row) {
-
-            tbody.appendChild(row);
-
-        });
-
-    };
-
-    const requestJson = function (url, options) {
-
-        return fetch(url, Object.assign({
-
-            headers: { Accept: "application/json" },
-
-            credentials: "same-origin",
-
-        }, options)).then(function (response) {
-
-            return response.json();
-
-        });
-
-    };
-
-    const mountForm = function (html) {
-
-        body.innerHTML = html;
-
-        bindCompletenessDeficiencies(body);
-
-        const form = body.querySelector("[data-completeness-check-form]");
-
-        form.addEventListener("submit", onSubmit);
-
-    };
-
-    const onSubmit = function (event) {
-
-        event.preventDefault();
-
-        const form = event.currentTarget;
-
-        const submit = form.querySelector('button[type="submit"]');
-
-        submit.disabled = true;
-
-        showDialogError("");
-
-        requestJson(form.action, { method: "POST", body: new FormData(form) })
-
-            .then(function (data) {
-
-                if (!data.ok) {
-
-                    mountForm(data.html);
-
-                    return;
-
-                }
-
-                replaceGrid(data.grid_html);
-
-                showStatus(data.message);
-
-                dialog.close();
-
-            })
-
-            .catch(function () {
-
-                showDialogError("Αποτυχία επικοινωνίας με τον διακομιστή.");
-
-            })
-
-            .finally(function () {
-
-                submit.disabled = false;
-
-            });
-
-    };
-
-    const openForm = function (url) {
-
-        showDialogError("");
-
-        body.innerHTML = '<p class="text-muted">Φόρτωση...</p>';
-
-        dialog.showModal();
-
-        requestJson(url)
-
-            .then(function (data) {
-
-                if (!data.ok) {
-
-                    throw new Error("bad response");
-
-                }
-
-                mountForm(data.html);
-
-            })
-
-            .catch(function () {
-
-                body.textContent = "";
-
-                showDialogError("Αποτυχία φόρτωσης της φόρμας ελέγχου.");
-
-            });
-
-    };
-
-    const deleteCheck = function (button) {
-
-        const blockedReason = button.dataset.completenessCheckDeleteBlockedReason || "";
-
-        if (blockedReason) {
-
-            showStatus(blockedReason, "error");
-
-            return;
-
-        }
-
-        const label = button.dataset.completenessCheckLabel || "";
-
-        if (!window.confirm("Διαγραφή του ελέγχου " + label + ";")) {
-
-            return;
-
-        }
-
-        button.disabled = true;
-
-        const token = document.querySelector('input[name="csrfmiddlewaretoken"]');
-
-        const data = new FormData();
-
-        data.append("csrfmiddlewaretoken", token ? token.value : "");
-
-        requestJson(button.dataset.completenessCheckDelete, { method: "POST", body: data })
-            .then(function (result) {
-
-                if (!result.ok) {
-
-                    const message = result.message || "Αποτυχία διαγραφής του ελέγχου.";
-
-                    showStatus(message, "error");
-
-                    if (result.grid_html) {
-
-                        replaceGrid(result.grid_html);
-
+            button.disabled = true;
+            requestJson(button.dataset.completenessCheckDelete, { method: "POST", body: csrfFormData() })
+                .then(function (result) {
+                    if (!result.ok) {
+                        ui.showStatus(result.message || "Αποτυχία διαγραφής του ελέγχου.", "error");
+                        if (result.grid_html) {
+                            ui.replaceGrid(result.grid_html);
+                        }
+                        return;
                     }
-
-                    return;
-
-                }
-
-                replaceGrid(result.grid_html);
-
-                showStatus(result.message);
-
-            })
-            .catch(function () {
-
-                showStatus("Αποτυχία διαγραφής του ελέγχου.", "error");
-
-            })
-            .finally(function () {
-
-                button.disabled = false;
-
-            });
-
-    };
-
-    document.addEventListener("click", function (event) {
-
-        const sort = event.target.closest("[data-completeness-sort]");
-
-        if (sort) {
-
-            event.preventDefault();
-
-            sortGrid(sort);
-
-            return;
-
-        }
-
-        const open = event.target.closest("[data-completeness-check-open]");
-
-        if (open) {
-
-            event.preventDefault();
-
-            openForm(open.dataset.completenessCheckOpen);
-
-            return;
-
-        }
-
-        const remove = event.target.closest("[data-completeness-check-delete]");
-
-        if (remove) {
-
-            event.preventDefault();
-
-            deleteCheck(remove);
-
-        }
-
-    });
-
-})();
-
-
-// Land plot grids — 3.1 add / edit / delete and 4.1 edit of the technical evaluation — in a
-
-// modal, each saved immediately so unsaved edits elsewhere on the page survive.
-
-(function () {
-
-    const dialog = document.querySelector("[data-land-plot-dialog]");
-
-    if (!dialog) {
-
-        return;
-
-    }
-
-    const body = dialog.querySelector("[data-land-plot-dialog-body]");
-
-    const errors = dialog.querySelector("[data-land-plot-errors]");
-
-
-
-    const showDialogError = function (message) {
-
-        errors.textContent = message;
-
-        errors.hidden = !message;
-
-    };
-
-
-
-    const showStatus = function (message, kind) {
-
-        const status = document.querySelector("[data-land-plot-status]");
-
-        if (!status) {
-
-            return;
-
-        }
-
-        status.textContent = "";
-
-        const alert = document.createElement("div");
-
-        alert.className = "alert alert--" + (kind || "success");
-
-        alert.setAttribute("role", "status");
-
-        alert.textContent = message;
-
-        status.appendChild(alert);
-
-    };
-
-
-
-    const replaceGrid = function (html) {
-
-        const grid = document.querySelector("[data-land-plot-grid]");
-
-        if (grid) {
-
-            grid.outerHTML = html;
-
-        }
-
-    };
-
-
-
-    const requestJson = function (url, options) {
-
-        return fetch(url, Object.assign({
-
-            headers: { Accept: "application/json" },
-
-            credentials: "same-origin",
-
-        }, options)).then(function (response) {
-
-            return response.json();
-
+                    ui.replaceGrid(result.grid_html);
+                    ui.showStatus(result.message);
+                })
+                .catch(function () {
+                    ui.showStatus("Αποτυχία διαγραφής του ελέγχου.", "error");
+                })
+                .finally(function () {
+                    button.disabled = false;
+                });
+        };
+
+        initGridModal({
+            name: "completeness-check",
+            requireDialog: true,
+            sort: { button: "[data-completeness-sort]", apply: sortGrid },
+            bindForm: bindCompletenessDeficiencies,
+            loadingHtml: '<p class="text-muted">Φόρτωση...</p>',
+            loadErrorMessage: "Αποτυχία φόρτωσης της φόρμας ελέγχου.",
+            deleteRow: deleteCheck,
         });
-
-    };
-
-
-
-    const mountForm = function (html, pendingFiles) {
-
-        body.innerHTML = html;
-
-        bindOtherGroups(body);
-
-        bindFilePickers(body, pendingFiles);
-
-        const form = body.querySelector("[data-land-plot-form]");
-
-        form.addEventListener("submit", onSubmit);
-
-        const first = form.querySelector("input:not([type=hidden]), select, textarea");
-
-        if (first) {
-
-            first.focus();
-
-        }
-
-    };
-
-
-
-    const onSubmit = function (event) {
-
-        event.preventDefault();
-
-        const form = event.currentTarget;
-
-        const submit = form.querySelector('button[type="submit"]');
-
-        submit.disabled = true;
-
-        showDialogError("");
-
-        requestJson(form.action, { method: "POST", body: new FormData(form) })
-
-            .then(function (data) {
-
-                if (!data.ok) {
-
-                    // Browsers cannot refill a file input, so keep the chosen files across the re-render.
-
-                    const fileInput = form.querySelector('[data-file-picker] input[type="file"]');
-
-                    mountForm(data.html, fileInput ? Array.from(fileInput.files) : []);
-
-                    return;
-
-                }
-
-                replaceGrid(data.grid_html);
-
-                showStatus(data.message);
-
-                dialog.close();
-
-            })
-
-            .catch(function () {
-
-                showDialogError("Αποτυχία επικοινωνίας με τον διακομιστή.");
-
-            })
-
-            .finally(function () {
-
-                submit.disabled = false;
-
-            });
-
-    };
-
-
-
-    const openForm = function (url) {
-
-        showDialogError("");
-
-        body.innerHTML = '<p class="text-muted">Φόρτωση…</p>';
-
-        dialog.showModal();
-
-        requestJson(url)
-
-            .then(function (data) {
-
-                if (!data.ok) {
-
-                    throw new Error("bad response");
-
-                }
-
-                mountForm(data.html);
-
-            })
-
-            .catch(function () {
-
-                body.textContent = "";
-
-                showDialogError("Αποτυχία φόρτωσης της φόρμας τεμαχίου.");
-
-            });
-
-    };
-
-
-
-    // A plot with a 4.1 technical evaluation is deleted only after the officer saw that warning.
-
-    const confirmDelete = function (label, warning) {
-
-        if (warning) {
-
-            return window.confirm(warning + "\n\nΣυνέχεια με τη διαγραφή του τεμαχίου " + label + ";");
-
-        }
-
-        return window.confirm(
-
-            "Διαγραφή του τεμαχίου " + label + ";\n" +
-
-            "Θα διαγραφούν και τα αρχεία του, καθώς και τα στοιχεία του τεμαχίου στις Ενότητες 4 και 6."
-
-        );
-
-    };
-
-
-
-    const deletePlot = function (button) {
-
-        const url = button.dataset.landPlotDelete;
-
-        const label = button.dataset.landPlotLabel || "";
-
-        const warning = button.dataset.landPlotWarning || "";
-
-        if (!confirmDelete(label, warning)) {
-
-            return;
-
-        }
-
-        const token = document.querySelector('input[name="csrfmiddlewaretoken"]');
-
-        const send = function (evaluationConfirmed) {
-
-            const data = new FormData();
-
-            data.append("csrfmiddlewaretoken", token ? token.value : "");
-
-            if (evaluationConfirmed) {
-
-                data.append("confirm_evaluation", "1");
-
+    })();
+
+
+    // Land plot grids — 3.1 add / edit / delete and 4.1 edit of the technical evaluation — in a
+    // modal, each saved immediately so unsaved edits elsewhere on the page survive.
+    (function () {
+        // A plot with a 4.1 technical evaluation is deleted only after the officer saw that warning.
+        const confirmDelete = function (label, warning) {
+            if (warning) {
+                return window.confirm(warning + "\n\nΣυνέχεια με τη διαγραφή του τεμαχίου " + label + ";");
             }
-
-            return requestJson(url, { method: "POST", body: data });
-
+            return window.confirm(
+                "Διαγραφή του τεμαχίου " + label + ";\n" +
+                "Θα διαγραφούν και τα αρχεία του, καθώς και τα στοιχεία του τεμαχίου στις Ενότητες 4 και 6."
+            );
         };
 
-        button.disabled = true;
-
-        send(Boolean(warning))
-
-            .then(function (result) {
-
-                if (!result.ok && result.requires_confirmation) {
-
-                    // A 4.1 evaluation was recorded after this grid was loaded.
-
-                    replaceGrid(result.grid_html);
-
-                    if (!confirmDelete(label, result.message)) {
-
-                        return null;
-
+        const deletePlot = function (button, ui) {
+            const url = button.dataset.landPlotDelete;
+            const label = button.dataset.landPlotLabel || "";
+            const warning = button.dataset.landPlotWarning || "";
+            if (!confirmDelete(label, warning)) {
+                return;
+            }
+            const send = function (evaluationConfirmed) {
+                const data = csrfFormData();
+                if (evaluationConfirmed) {
+                    data.append("confirm_evaluation", "1");
+                }
+                return requestJson(url, { method: "POST", body: data });
+            };
+            button.disabled = true;
+            send(Boolean(warning))
+                .then(function (result) {
+                    if (!result.ok && result.requires_confirmation) {
+                        // A 4.1 evaluation was recorded after this grid was loaded.
+                        ui.replaceGrid(result.grid_html);
+                        if (!confirmDelete(label, result.message)) {
+                            return null;
+                        }
+                        return send(true);
                     }
+                    return result;
+                })
+                .then(function (result) {
+                    if (result === null) {
+                        return;
+                    }
+                    if (!result.ok) {
+                        throw new Error("bad response");
+                    }
+                    ui.replaceGrid(result.grid_html);
+                    ui.showStatus(result.message);
+                })
+                .catch(function () {
+                    button.disabled = false;
+                    ui.showStatus("Αποτυχία διαγραφής του τεμαχίου.", "error");
+                });
+        };
 
-                    return send(true);
-
-                }
-
-                return result;
-
-            })
-
-            .then(function (result) {
-
-                if (result === null) {
-
-                    return;
-
-                }
-
-                if (!result.ok) {
-
-                    throw new Error("bad response");
-
-                }
-
-                replaceGrid(result.grid_html);
-
-                showStatus(result.message);
-
-            })
-
-            .catch(function () {
-
-                button.disabled = false;
-
-                showStatus("Αποτυχία διαγραφής του τεμαχίου.", "error");
-
-            });
-
-    };
+        initGridModal({
+            name: "land-plot",
+            requireDialog: true,
+            containerSelector: "[data-land-plot-grid]",
+            bindForm: bindOtherGroupsAndFilePickers,
+            keepFiles: true,
+            focusSelector: "input:not([type=hidden]), select, textarea",
+            loadErrorMessage: "Αποτυχία φόρτωσης της φόρμας τεμαχίου.",
+            deleteRow: deletePlot,
+        });
+    })();
 
 
+    const MODAL_FOCUS = "select, input:not([type=hidden]), textarea";
 
-    document.addEventListener("click", function (event) {
-
-        const open = event.target.closest("[data-land-plot-open]");
-
-        if (open) {
-
-            event.preventDefault();
-
-            openForm(open.dataset.landPlotOpen);
-
-            return;
-
-        }
-
-        const remove = event.target.closest("[data-land-plot-delete]");
-
-        if (remove) {
-
-            event.preventDefault();
-
-            deletePlot(remove);
-
-        }
-
+    // Utility services grid (4.2): columns sort on click (also on the read-only case folder);
+    // add / edit / delete in a modal, each saved immediately.
+    initGridModal({
+        name: "utility-service",
+        sort: collatorSort("utility-service"),
+        focusSelector: MODAL_FOCUS,
+        reloadOnSave: true,
+        loadErrorMessage: "Αποτυχία φόρτωσης της φόρμας υπηρεσίας.",
+        deleteConfirm: "Διαγραφή της υπηρεσίας ",
+        deleteErrorMessage: "Αποτυχία διαγραφής της υπηρεσίας.",
     });
 
-})();
 
-
-// Utility services grid (4.2): columns sort on click (also on the read-only case folder);
-// add / edit / delete in a modal, each saved immediately.
-(function () {
-    const collator = new Intl.Collator("el", { numeric: true, sensitivity: "base" });
-
-    const sortGrid = function (button) {
-        const table = button.closest("[data-utility-service-table]");
-        const tbody = table ? table.querySelector("tbody") : null;
-        if (!tbody) {
-            return;
-        }
-        const key = button.dataset.utilityServiceSort;
-        const nextDir = table.dataset.sortKey === key && table.dataset.sortDir === "asc" ? "desc" : "asc";
-        table.dataset.sortKey = key;
-        table.dataset.sortDir = nextDir;
-        table.querySelectorAll("th").forEach(function (th) {
-            th.removeAttribute("aria-sort");
-        });
-        button.closest("th").setAttribute("aria-sort", nextDir === "asc" ? "ascending" : "descending");
-        const read = function (row) {
-            const cell = row.querySelector("[data-sort-" + key + "]");
-            return cell ? cell.getAttribute("data-sort-" + key) || "" : "";
-        };
-        const rows = Array.from(tbody.querySelectorAll("tr[data-utility-service-row]"));
-        rows.sort(function (a, b) {
-            const order = collator.compare(read(a), read(b));
-            return nextDir === "asc" ? order : -order;
-        });
-        rows.forEach(function (row) {
-            tbody.appendChild(row);
-        });
-    };
-
-    const dialog = document.querySelector("[data-utility-service-dialog]");
-    const body = dialog ? dialog.querySelector("[data-utility-service-dialog-body]") : null;
-    const errors = dialog ? dialog.querySelector("[data-utility-service-errors]") : null;
-
-    const showDialogError = function (message) {
-        errors.textContent = message;
-        errors.hidden = !message;
-    };
-
-    const showStatus = function (message, kind) {
-        const status = document.querySelector("[data-utility-service-status]");
-        if (!status) {
-            return;
-        }
-        status.textContent = "";
-        const alert = document.createElement("div");
-        alert.className = "alert alert--" + (kind || "success");
-        alert.setAttribute("role", "status");
-        alert.textContent = message;
-        status.appendChild(alert);
-    };
-
-    const replaceGrid = function (html) {
-        const grid = document.querySelector("[data-utility-service-container]");
-        if (grid) {
-            grid.outerHTML = html;
-        }
-    };
-
-    const requestJson = function (url, options) {
-        return fetch(url, Object.assign({
-            headers: { Accept: "application/json" },
-            credentials: "same-origin",
-        }, options)).then(function (response) {
-            return response.json();
-        });
-    };
-
-    const mountForm = function (html) {
-        body.innerHTML = html;
-        const form = body.querySelector("[data-utility-service-form]");
-        form.addEventListener("submit", onSubmit);
-        const first = form.querySelector("select, input:not([type=hidden]), textarea");
-        if (first) {
-            first.focus();
-        }
-    };
-
-    const onSubmit = function (event) {
-        event.preventDefault();
-        const form = event.currentTarget;
-        const submit = form.querySelector('button[type="submit"]');
-        submit.disabled = true;
-        showDialogError("");
-        requestJson(form.action, { method: "POST", body: new FormData(form) })
-            .then(function (data) {
-                if (!data.ok) {
-                    mountForm(data.html);
-                    return;
-                }
-                replaceGrid(data.grid_html);
-                showStatus(data.message);
-                dialog.close();
-            })
-            .catch(function () {
-                showDialogError("Αποτυχία επικοινωνίας με τον διακομιστή.");
-            })
-            .finally(function () {
-                submit.disabled = false;
-            });
-    };
-
-    const openForm = function (url) {
-        showDialogError("");
-        body.innerHTML = '<p class="text-muted">Φόρτωση…</p>';
-        dialog.showModal();
-        requestJson(url)
-            .then(function (data) {
-                if (!data.ok) {
-                    throw new Error("bad response");
-                }
-                mountForm(data.html);
-            })
-            .catch(function () {
-                body.textContent = "";
-                showDialogError("Αποτυχία φόρτωσης της φόρμας υπηρεσίας.");
-            });
-    };
-
-    const deleteService = function (button) {
-        const label = button.dataset.utilityServiceLabel || "";
-        if (!window.confirm("Διαγραφή της υπηρεσίας " + label + ";")) {
-            return;
-        }
-        button.disabled = true;
-        const token = document.querySelector('input[name="csrfmiddlewaretoken"]');
-        const data = new FormData();
-        data.append("csrfmiddlewaretoken", token ? token.value : "");
-        requestJson(button.dataset.utilityServiceDelete, { method: "POST", body: data })
-            .then(function (result) {
-                if (!result.ok) {
-                    throw new Error("bad response");
-                }
-                replaceGrid(result.grid_html);
-                showStatus(result.message);
-            })
-            .catch(function () {
-                button.disabled = false;
-                showStatus("Αποτυχία διαγραφής της υπηρεσίας.", "error");
-            });
-    };
-
-    document.addEventListener("click", function (event) {
-        const sort = event.target.closest("[data-utility-service-sort]");
-        if (sort) {
-            event.preventDefault();
-            sortGrid(sort);
-            return;
-        }
-        if (!dialog) {
-            return;
-        }
-        const open = event.target.closest("[data-utility-service-open]");
-        if (open) {
-            event.preventDefault();
-            openForm(open.dataset.utilityServiceOpen);
-            return;
-        }
-        const remove = event.target.closest("[data-utility-service-delete]");
-        if (remove) {
-            event.preventDefault();
-            deleteService(remove);
-        }
+    // Consultations grid (Ενότητα 5 and 7.4): sortable columns; add / edit / delete in a modal.
+    initGridModal({
+        name: "consultation",
+        sort: collatorSort("consultation"),
+        bindForm: bindOtherGroupsAndFilePickers,
+        keepFiles: true,
+        focusSelector: MODAL_FOCUS,
+        loadErrorMessage: "Αποτυχία φόρτωσης της φόρμας διαβούλευσης.",
+        deleteConfirm: "Διαγραφή της διαβούλευσης ",
+        deleteErrorMessage: "Αποτυχία διαγραφής της διαβούλευσης.",
     });
-})();
 
 
-// Consultations grid (Ενότητα 5 and 7.4): sortable columns; add / edit / delete in a modal.
-(function () {
-    const collator = new Intl.Collator("el", { numeric: true, sensitivity: "base" });
-
-    const sortGrid = function (button) {
-        const table = button.closest("[data-consultation-table]");
-        const tbody = table ? table.querySelector("tbody") : null;
-        if (!tbody) {
-            return;
-        }
-        const key = button.dataset.consultationSort;
-        const nextDir = table.dataset.sortKey === key && table.dataset.sortDir === "asc" ? "desc" : "asc";
-        table.dataset.sortKey = key;
-        table.dataset.sortDir = nextDir;
-        table.querySelectorAll("th").forEach(function (th) {
-            th.removeAttribute("aria-sort");
-        });
-        button.closest("th").setAttribute("aria-sort", nextDir === "asc" ? "ascending" : "descending");
-        const read = function (row) {
-            const cell = row.querySelector("[data-sort-" + key + "]");
-            return cell ? cell.getAttribute("data-sort-" + key) || "" : "";
-        };
-        const rows = Array.from(tbody.querySelectorAll("tr[data-consultation-row]"));
-        rows.sort(function (a, b) {
-            const order = collator.compare(read(a), read(b));
-            return nextDir === "asc" ? order : -order;
-        });
-        rows.forEach(function (row) {
-            tbody.appendChild(row);
-        });
-    };
-
-    const dialog = document.querySelector("[data-consultation-dialog]");
-    const body = dialog ? dialog.querySelector("[data-consultation-dialog-body]") : null;
-    const errors = dialog ? dialog.querySelector("[data-consultation-errors]") : null;
-
-    const showDialogError = function (message) {
-        errors.textContent = message;
-        errors.hidden = !message;
-    };
-
-    const showStatus = function (message, kind) {
-        const status = document.querySelector("[data-consultation-status]");
-        if (!status) {
-            return;
-        }
-        status.textContent = "";
-        const alert = document.createElement("div");
-        alert.className = "alert alert--" + (kind || "success");
-        alert.setAttribute("role", "status");
-        alert.textContent = message;
-        status.appendChild(alert);
-    };
-
-    const replaceGrid = function (html) {
-        const grid = document.querySelector("[data-consultation-container]");
-        if (grid) {
-            grid.outerHTML = html;
-        }
-    };
-
-    const requestJson = function (url, options) {
-        return fetch(url, Object.assign({
-            headers: { Accept: "application/json" },
-            credentials: "same-origin",
-        }, options)).then(function (response) {
-            return response.json();
-        });
-    };
-
-    const mountForm = function (html, pendingFiles) {
-        body.innerHTML = html;
-        bindOtherGroups(body);
-        bindFilePickers(body, pendingFiles);
-        const form = body.querySelector("[data-consultation-form]");
-        form.addEventListener("submit", onSubmit);
-        const first = form.querySelector("select, input:not([type=hidden]), textarea");
-        if (first) {
-            first.focus();
-        }
-    };
-
-    const onSubmit = function (event) {
-        event.preventDefault();
-        const form = event.currentTarget;
-        const submit = form.querySelector('button[type="submit"]');
-        submit.disabled = true;
-        showDialogError("");
-        requestJson(form.action, { method: "POST", body: new FormData(form) })
-            .then(function (data) {
-                if (!data.ok) {
-                    const fileInput = form.querySelector('[data-file-picker] input[type="file"]');
-                    mountForm(data.html, fileInput ? Array.from(fileInput.files) : []);
-                    return;
-                }
-                replaceGrid(data.grid_html);
-                showStatus(data.message);
-                dialog.close();
-            })
-            .catch(function () {
-                showDialogError("Αποτυχία επικοινωνίας με τον διακομιστή.");
-            })
-            .finally(function () {
-                submit.disabled = false;
-            });
-    };
-
-    const openForm = function (url) {
-        showDialogError("");
-        body.innerHTML = '<p class="text-muted">Φόρτωση…</p>';
-        dialog.showModal();
-        requestJson(url)
-            .then(function (data) {
-                if (!data.ok) {
-                    throw new Error("bad response");
-                }
-                mountForm(data.html);
-            })
-            .catch(function () {
-                body.textContent = "";
-                showDialogError("Αποτυχία φόρτωσης της φόρμας διαβούλευσης.");
-            });
-    };
-
-    const deleteConsultation = function (button) {
-        const label = button.dataset.consultationLabel || "";
-        if (!window.confirm("Διαγραφή της διαβούλευσης " + label + ";")) {
-            return;
-        }
-        button.disabled = true;
-        const token = document.querySelector('input[name="csrfmiddlewaretoken"]');
-        const data = new FormData();
-        data.append("csrfmiddlewaretoken", token ? token.value : "");
-        requestJson(button.dataset.consultationDelete, { method: "POST", body: data })
-            .then(function (result) {
-                if (!result.ok) {
-                    throw new Error("bad response");
-                }
-                replaceGrid(result.grid_html);
-                showStatus(result.message);
-            })
-            .catch(function () {
-                button.disabled = false;
-                showStatus("Αποτυχία διαγραφής της διαβούλευσης.", "error");
-            });
-    };
-
-    document.addEventListener("click", function (event) {
-        const sort = event.target.closest("[data-consultation-sort]");
-        if (sort) {
-            event.preventDefault();
-            sortGrid(sort);
-            return;
-        }
-        if (!dialog) {
-            return;
-        }
-        const open = event.target.closest("[data-consultation-open]");
-        if (open) {
-            event.preventDefault();
-            openForm(open.dataset.consultationOpen);
-            return;
-        }
-        const remove = event.target.closest("[data-consultation-delete]");
-        if (remove) {
-            event.preventDefault();
-            deleteConsultation(remove);
-        }
+    // Ministry decision rounds grid (6.7): sortable columns; add / edit / delete in a modal.
+    // A refused delete shows the server's reason; a delete may ask for a full reload.
+    initGridModal({
+        name: "ministry-decision-round",
+        sort: collatorSort("ministry-decision-round"),
+        bindForm: bindOtherGroupsAndFilePickers,
+        keepFiles: true,
+        focusSelector: MODAL_FOCUS,
+        loadErrorMessage: "Αποτυχία φόρτωσης της φόρμας.",
+        deleteConfirm: "Διαγραφή της εγγραφής ",
+        deleteErrorMessage: "Αποτυχία διαγραφής της εγγραφής.",
+        reloadOnDelete: true,
+        serverDeleteErrors: true,
     });
-})();
 
-
-
-
-// Ministry decision rounds grid (6.7): sortable columns; add / edit / delete in a modal.
-(function () {
-    const collator = new Intl.Collator("el", { numeric: true, sensitivity: "base" });
-
-    const sortGrid = function (button) {
-        const table = button.closest("[data-ministry-decision-round-table]");
-        const tbody = table ? table.querySelector("tbody") : null;
-        if (!tbody) {
-            return;
-        }
-        const key = button.dataset.ministryDecisionRoundSort;
-        const nextDir = table.dataset.sortKey === key && table.dataset.sortDir === "asc" ? "desc" : "asc";
-        table.dataset.sortKey = key;
-        table.dataset.sortDir = nextDir;
-        table.querySelectorAll("th").forEach(function (th) {
-            th.removeAttribute("aria-sort");
-        });
-        button.closest("th").setAttribute("aria-sort", nextDir === "asc" ? "ascending" : "descending");
-        const read = function (row) {
-            const cell = row.querySelector("[data-sort-" + key + "]");
-            return cell ? cell.getAttribute("data-sort-" + key) || "" : "";
-        };
-        const rows = Array.from(tbody.querySelectorAll("tr[data-ministry-decision-round-row]"));
-        rows.sort(function (a, b) {
-            const order = collator.compare(read(a), read(b));
-            return nextDir === "asc" ? order : -order;
-        });
-        rows.forEach(function (row) {
-            tbody.appendChild(row);
-        });
-    };
-
-    const dialog = document.querySelector("[data-ministry-decision-round-dialog]");
-    const body = dialog ? dialog.querySelector("[data-ministry-decision-round-dialog-body]") : null;
-    const errors = dialog ? dialog.querySelector("[data-ministry-decision-round-errors]") : null;
-
-    const showDialogError = function (message) {
-        if (!errors) {
-            return;
-        }
-        errors.textContent = message;
-        errors.hidden = !message;
-    };
-
-    const showStatus = function (message, kind) {
-        const status = document.querySelector("[data-ministry-decision-round-status]");
-        if (!status) {
-            return;
-        }
-        status.textContent = "";
-        const alert = document.createElement("div");
-        alert.className = "alert alert--" + (kind || "success");
-        alert.setAttribute("role", "status");
-        alert.textContent = message;
-        status.appendChild(alert);
-    };
-
-    const replaceGrid = function (html) {
-        const grid = document.querySelector("[data-ministry-decision-round-container]");
-        if (grid) {
-            grid.outerHTML = html;
-        }
-    };
-
-    const requestJson = function (url, options) {
-        return fetch(url, Object.assign({
-            headers: { Accept: "application/json" },
-            credentials: "same-origin",
-        }, options)).then(function (response) {
-            return response.json();
-        });
-    };
-
-    const mountForm = function (html, pendingFiles) {
-        body.innerHTML = html;
-        bindOtherGroups(body);
-        bindFilePickers(body, pendingFiles);
-        const form = body.querySelector("[data-ministry-decision-round-form]");
-        form.addEventListener("submit", onSubmit);
-        const first = form.querySelector("select, input:not([type=hidden]), textarea");
-        if (first) {
-            first.focus();
-        }
-    };
-
-    const onSubmit = function (event) {
-        event.preventDefault();
-        const form = event.currentTarget;
-        const submit = form.querySelector('button[type="submit"]');
-        submit.disabled = true;
-        showDialogError("");
-        requestJson(form.action, { method: "POST", body: new FormData(form) })
-            .then(function (data) {
-                if (!data.ok) {
-                    const fileInput = form.querySelector('[data-file-picker] input[type="file"]');
-                    mountForm(data.html, fileInput ? Array.from(fileInput.files) : []);
-                    return;
-                }
-                replaceGrid(data.grid_html);
-                showStatus(data.message);
-                dialog.close();
-            })
-            .catch(function () {
-                showDialogError("Αποτυχία επικοινωνίας με τον διακομιστή.");
-            })
-            .finally(function () {
-                submit.disabled = false;
-            });
-    };
-
-    const openForm = function (url) {
-        if (!dialog) {
-            return;
-        }
-        showDialogError("");
-        body.innerHTML = '<p class="text-muted">Φόρτωση…</p>';
-        dialog.showModal();
-        requestJson(url)
-            .then(function (data) {
-                if (!data.ok) {
-                    throw new Error("bad response");
-                }
-                mountForm(data.html);
-            })
-            .catch(function () {
-                body.textContent = "";
-                showDialogError("Αποτυχία φόρτωσης της φόρμας.");
-            });
-    };
-
-    const deleteRound = function (button) {
-        const label = button.dataset.ministryDecisionRoundLabel || "";
-        if (!window.confirm("Διαγραφή της εγγραφής " + label + ";")) {
-            return;
-        }
-        button.disabled = true;
-        const token = document.querySelector('input[name="csrfmiddlewaretoken"]');
-        const data = new FormData();
-        data.append("csrfmiddlewaretoken", token ? token.value : "");
-        requestJson(button.dataset.ministryDecisionRoundDelete, { method: "POST", body: data })
-            .then(function (result) {
-                if (!result.ok) {
-                    throw new Error("bad response");
-                }
-                replaceGrid(result.grid_html);
-                showStatus(result.message);
-            })
-            .catch(function () {
-                button.disabled = false;
-                showStatus("Αποτυχία διαγραφής της εγγραφής.", "error");
-            });
-    };
-
-    document.addEventListener("click", function (event) {
-        const sort = event.target.closest("[data-ministry-decision-round-sort]");
-        if (sort) {
-            event.preventDefault();
-            sortGrid(sort);
-            return;
-        }
-        if (!dialog) {
-            return;
-        }
-        const open = event.target.closest("[data-ministry-decision-round-open]");
-        if (open) {
-            event.preventDefault();
-            openForm(open.dataset.ministryDecisionRoundOpen);
-            return;
-        }
-        const remove = event.target.closest("[data-ministry-decision-round-delete]");
-        if (remove) {
-            event.preventDefault();
-            deleteRound(remove);
-        }
-    });
-})();
-
-// Approved design plots grid (7.3): sortable columns; add / edit / delete in a modal.
-(function () {
-    const collator = new Intl.Collator("el", { numeric: true, sensitivity: "base" });
-
-    const sortGrid = function (button) {
-        const table = button.closest("[data-approved-design-plot-table]");
-        const tbody = table ? table.querySelector("tbody") : null;
-        if (!tbody) {
-            return;
-        }
-        const key = button.dataset.approvedDesignPlotSort;
-        const nextDir = table.dataset.sortKey === key && table.dataset.sortDir === "asc" ? "desc" : "asc";
-        table.dataset.sortKey = key;
-        table.dataset.sortDir = nextDir;
-        table.querySelectorAll("th").forEach(function (th) {
-            th.removeAttribute("aria-sort");
-        });
-        button.closest("th").setAttribute("aria-sort", nextDir === "asc" ? "ascending" : "descending");
-        const read = function (row) {
-            const cell = row.querySelector("[data-sort-" + key + "]");
-            return cell ? cell.getAttribute("data-sort-" + key) || "" : "";
-        };
-        const rows = Array.from(tbody.querySelectorAll("tr[data-approved-design-plot-row]"));
-        rows.sort(function (a, b) {
-            const order = collator.compare(read(a), read(b));
-            return nextDir === "asc" ? order : -order;
-        });
-        rows.forEach(function (row) {
-            tbody.appendChild(row);
-        });
-    };
-
-    const dialog = document.querySelector("[data-approved-design-plot-dialog]");
-    const body = dialog ? dialog.querySelector("[data-approved-design-plot-dialog-body]") : null;
-    const errors = dialog ? dialog.querySelector("[data-approved-design-plot-errors]") : null;
-
-    const showDialogError = function (message) {
-        if (!errors) {
-            return;
-        }
-        errors.textContent = message;
-        errors.hidden = !message;
-    };
-
-    const showStatus = function (message, kind) {
-        const status = document.querySelector("[data-approved-design-plot-status]");
-        if (!status) {
-            return;
-        }
-        status.textContent = "";
-        const alert = document.createElement("div");
-        alert.className = "alert alert--" + (kind || "success");
-        alert.setAttribute("role", "status");
-        alert.textContent = message;
-        status.appendChild(alert);
-    };
-
-    const replaceGrid = function (html) {
-        const grid = document.querySelector("[data-approved-design-plot-container]");
-        if (grid) {
-            grid.outerHTML = html;
-        }
-    };
-
-    const requestJson = function (url, options) {
-        return fetch(url, Object.assign({
-            headers: { Accept: "application/json" },
-            credentials: "same-origin",
-        }, options)).then(function (response) {
-            return response.json();
-        });
-    };
 
     const MAX_BULK_ROWS = 500;
 
-    // «Μαζική προσθήκη»: one numbering textbox per row while «Χειροκίνητη» is selected.
-    const bindBulkNumbering = function (form) {
+    // 7.3 «Μαζική προσθήκη»: one numbering textbox per row while «Χειροκίνητη» is selected.
+    function bindBulkNumbering(form) {
         const countInput = form.querySelector("[data-bulk-count]");
         const manual = form.querySelector("[data-bulk-manual]");
         const rows = manual ? manual.querySelector("[data-bulk-manual-rows]") : null;
@@ -2247,278 +1309,107 @@ bindFilePickers(document);
             radio.addEventListener("change", sync);
         });
         sync();
-    };
+    }
 
-    const mountForm = function (html) {
-        body.innerHTML = html;
-        bindOtherGroups(body);
-        const form = body.querySelector("[data-approved-design-plot-form]");
-        form.addEventListener("submit", onSubmit);
-        if (form.hasAttribute("data-approved-design-plot-bulk")) {
-            bindBulkNumbering(form);
+    // Approved design plots workspace: load only when opened so every case screen stays lightweight.
+    document.addEventListener("click", function (event) {
+        const open = event.target.closest("[data-approved-design-plots-workspace-open]");
+        if (!open) {
+            return;
         }
-        const first = form.querySelector("select, input:not([type=hidden]), textarea");
-        if (first) {
-            first.focus();
-        }
-    };
-
-    const onSubmit = function (event) {
         event.preventDefault();
-        const form = event.currentTarget;
-        const submit = form.querySelector('button[type="submit"]');
-        submit.disabled = true;
-        showDialogError("");
-        requestJson(form.action, { method: "POST", body: new FormData(form) })
-            .then(function (data) {
-                if (!data.ok) {
-                    mountForm(data.html);
-                    return;
-                }
-                replaceGrid(data.grid_html);
-                showStatus(data.message);
-                dialog.close();
-            })
-            .catch(function () {
-                showDialogError("Αποτυχία επικοινωνίας με τον διακομιστή.");
-            })
-            .finally(function () {
-                submit.disabled = false;
-            });
-    };
-
-    const openForm = function (url) {
-        showDialogError("");
+        const dialog = document.getElementById("approved-design-plots-workspace");
+        const body = dialog ? dialog.querySelector("[data-approved-design-plots-workspace-body]") : null;
+        if (!dialog || !body) {
+            return;
+        }
         body.innerHTML = '<p class="text-muted">Φόρτωση…</p>';
         dialog.showModal();
-        requestJson(url)
+        requestJson(open.dataset.approvedDesignPlotsWorkspaceOpen)
             .then(function (data) {
                 if (!data.ok) {
                     throw new Error("bad response");
                 }
-                mountForm(data.html);
+                body.innerHTML = data.grid_html;
+                bindOtherGroups(body);
             })
             .catch(function () {
-                body.textContent = "";
-                showDialogError("Αποτυχία φόρτωσης της φόρμας.");
+                body.innerHTML = "";
+                showStatusAlert(
+                    "[data-approved-design-plot-status]",
+                    "Αποτυχία φόρτωσης του πίνακα οικοπέδων.",
+                    "error"
+                );
             });
-    };
-
-    const deletePlot = function (button) {
-        const label = button.dataset.approvedDesignPlotLabel || "";
-        if (!window.confirm("Διαγραφή της εγγραφής " + label + ";")) {
-            return;
-        }
-        button.disabled = true;
-        const token = document.querySelector('input[name="csrfmiddlewaretoken"]');
-        const data = new FormData();
-        data.append("csrfmiddlewaretoken", token ? token.value : "");
-        requestJson(button.dataset.approvedDesignPlotDelete, { method: "POST", body: data })
-            .then(function (result) {
-                if (!result.ok) {
-                    throw new Error("bad response");
-                }
-                replaceGrid(result.grid_html);
-                showStatus(result.message);
-            })
-            .catch(function () {
-                button.disabled = false;
-                showStatus("Αποτυχία διαγραφής της εγγραφής.", "error");
-            });
-    };
-
-    document.addEventListener("click", function (event) {
-        const sort = event.target.closest("[data-approved-design-plot-sort]");
-        if (sort) {
-            event.preventDefault();
-            sortGrid(sort);
-            return;
-        }
-        if (!dialog) {
-            return;
-        }
-        const open = event.target.closest("[data-approved-design-plot-open]");
-        if (open) {
-            event.preventDefault();
-            openForm(open.dataset.approvedDesignPlotOpen);
-            return;
-        }
-        const remove = event.target.closest("[data-approved-design-plot-delete]");
-        if (remove) {
-            event.preventDefault();
-            deletePlot(remove);
-        }
     });
-})();
 
-// Construction works checks grid (7.6): sortable columns; add / edit / delete in a modal.
-(function () {
-    const collator = new Intl.Collator("el", { numeric: true, sensitivity: "base" });
+    // Additions use a form dialog; existing rows save inline.
+    initGridModal({
+        name: "approved-design-plot",
+        sort: collatorSort("approved-design-plot"),
+        bindForm: bindOtherGroups,
+        afterGridReplace: function (container) {
+            if (container) {
+                bindOtherGroups(container);
+            }
+        },
+        afterMount: function (form) {
+            if (form.hasAttribute("data-approved-design-plot-bulk")) {
+                bindBulkNumbering(form);
+            }
+        },
+        focusSelector: MODAL_FOCUS,
+        loadErrorMessage: "Αποτυχία φόρτωσης της φόρμας.",
+        deleteConfirm: "Διαγραφή της εγγραφής ",
+        deleteErrorMessage: "Αποτυχία διαγραφής της εγγραφής.",
+    });
 
-    const sortGrid = function (button) {
-        const table = button.closest("[data-infrastructure-check-table]");
-        const tbody = table ? table.querySelector("tbody") : null;
-        if (!tbody) {
+    document.addEventListener("submit", function (event) {
+        const form = event.target.closest("[data-approved-design-plot-inline-form]");
+        if (!form) {
             return;
         }
-        const key = button.dataset.infrastructureCheckSort;
-        const nextDir = table.dataset.sortKey === key && table.dataset.sortDir === "asc" ? "desc" : "asc";
-        table.dataset.sortKey = key;
-        table.dataset.sortDir = nextDir;
-        table.querySelectorAll("th").forEach(function (th) {
-            th.removeAttribute("aria-sort");
-        });
-        button.closest("th").setAttribute("aria-sort", nextDir === "asc" ? "ascending" : "descending");
-        const read = function (row) {
-            const cell = row.querySelector("[data-sort-" + key + "]");
-            return cell ? cell.getAttribute("data-sort-" + key) || "" : "";
-        };
-        const rows = Array.from(tbody.querySelectorAll("tr[data-infrastructure-check-row]"));
-        rows.sort(function (a, b) {
-            const order = collator.compare(read(a), read(b));
-            return nextDir === "asc" ? order : -order;
-        });
-        rows.forEach(function (row) {
-            tbody.appendChild(row);
-        });
-    };
-
-    const dialog = document.querySelector("[data-infrastructure-check-dialog]");
-    const body = dialog ? dialog.querySelector("[data-infrastructure-check-dialog-body]") : null;
-    const errors = dialog ? dialog.querySelector("[data-infrastructure-check-errors]") : null;
-
-    const showDialogError = function (message) {
-        if (!errors) {
-            return;
-        }
-        errors.textContent = message;
-        errors.hidden = !message;
-    };
-
-    const showStatus = function (message, kind) {
-        const status = document.querySelector("[data-infrastructure-check-status]");
-        if (!status) {
-            return;
-        }
-        status.textContent = "";
-        const alert = document.createElement("div");
-        alert.className = "alert alert--" + (kind || "success");
-        alert.setAttribute("role", "status");
-        alert.textContent = message;
-        status.appendChild(alert);
-    };
-
-    const replaceGrid = function (html) {
-        const grid = document.querySelector("[data-infrastructure-check-container]");
-        if (grid) {
-            grid.outerHTML = html;
-        }
-    };
-
-    const requestJson = function (url, options) {
-        return fetch(url, Object.assign({
-            headers: { Accept: "application/json" },
-            credentials: "same-origin",
-        }, options)).then(function (response) {
-            return response.json();
-        });
-    };
-
-    const mountForm = function (html) {
-        body.innerHTML = html;
-        const form = body.querySelector("[data-infrastructure-check-form]");
-        form.addEventListener("submit", onSubmit);
-        const first = form.querySelector("select, input:not([type=hidden]), textarea");
-        if (first) {
-            first.focus();
-        }
-    };
-
-    const onSubmit = function (event) {
         event.preventDefault();
-        const form = event.currentTarget;
         const submit = form.querySelector('button[type="submit"]');
         submit.disabled = true;
-        showDialogError("");
         requestJson(form.action, { method: "POST", body: new FormData(form) })
             .then(function (data) {
+                if (data.grid_html) {
+                    replaceOuterHtml("[data-approved-design-plot-container]", data.grid_html);
+                    const container = document.querySelector("[data-approved-design-plot-container]");
+                    if (container) {
+                        bindOtherGroups(container);
+                    }
+                }
                 if (!data.ok) {
-                    mountForm(data.html);
+                    showStatusAlert(
+                        "[data-approved-design-plot-status]",
+                        "Η εγγραφή δεν αποθηκεύτηκε. Ελέγξτε τα επισημασμένα πεδία.",
+                        "error"
+                    );
                     return;
                 }
-                replaceGrid(data.grid_html);
-                showStatus(data.message);
-                dialog.close();
+                showStatusAlert("[data-approved-design-plot-status]", data.message);
             })
             .catch(function () {
-                showDialogError("Αποτυχία επικοινωνίας με τον διακομιστή.");
-            })
-            .finally(function () {
                 submit.disabled = false;
+                showStatusAlert(
+                    "[data-approved-design-plot-status]",
+                    SERVER_ERROR_MESSAGE,
+                    "error"
+                );
             });
-    };
+    });
 
-    const openForm = function (url) {
-        showDialogError("");
-        body.innerHTML = '<p class="text-muted">Φόρτωση…</p>';
-        dialog.showModal();
-        requestJson(url)
-            .then(function (data) {
-                if (!data.ok) {
-                    throw new Error("bad response");
-                }
-                mountForm(data.html);
-            })
-            .catch(function () {
-                body.textContent = "";
-                showDialogError("Αποτυχία φόρτωσης της φόρμας.");
-            });
-    };
 
-    const deleteCheck = function (button) {
-        const label = button.dataset.infrastructureCheckLabel || "";
-        if (!window.confirm("Διαγραφή του ελέγχου " + label + ";")) {
-            return;
-        }
-        button.disabled = true;
-        const token = document.querySelector('input[name="csrfmiddlewaretoken"]');
-        const data = new FormData();
-        data.append("csrfmiddlewaretoken", token ? token.value : "");
-        requestJson(button.dataset.infrastructureCheckDelete, { method: "POST", body: data })
-            .then(function (result) {
-                if (!result.ok) {
-                    throw new Error("bad response");
-                }
-                replaceGrid(result.grid_html);
-                showStatus(result.message);
-            })
-            .catch(function () {
-                button.disabled = false;
-                showStatus("Αποτυχία διαγραφής του ελέγχου.", "error");
-            });
-    };
-
-    document.addEventListener("click", function (event) {
-        const sort = event.target.closest("[data-infrastructure-check-sort]");
-        if (sort) {
-            event.preventDefault();
-            sortGrid(sort);
-            return;
-        }
-        if (!dialog) {
-            return;
-        }
-        const open = event.target.closest("[data-infrastructure-check-open]");
-        if (open) {
-            event.preventDefault();
-            openForm(open.dataset.infrastructureCheckOpen);
-            return;
-        }
-        const remove = event.target.closest("[data-infrastructure-check-delete]");
-        if (remove) {
-            event.preventDefault();
-            deleteCheck(remove);
-        }
+    // Construction works checks grid (7.6): sortable columns; add / edit / delete in a modal.
+    initGridModal({
+        name: "infrastructure-check",
+        sort: collatorSort("infrastructure-check"),
+        focusSelector: MODAL_FOCUS,
+        loadErrorMessage: "Αποτυχία φόρτωσης της φόρμας.",
+        deleteConfirm: "Διαγραφή του ελέγχου ",
+        deleteErrorMessage: "Αποτυχία διαγραφής του ελέγχου.",
     });
 })();
 

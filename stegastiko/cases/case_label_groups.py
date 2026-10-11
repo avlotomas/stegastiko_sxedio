@@ -13,9 +13,7 @@ from cases.subsection_labels import (
 
 
 def parent_section_key_for_subsection(subsection_key: str) -> str:
-    """Map a subsection setting key to its parent section key (incl. 7-plots)."""
-    if subsection_key.startswith(("7.8", "7.9")):
-        return "7-plots"
+    """Map a subsection setting key to its parent section key."""
     if "." not in subsection_key:
         return subsection_key
     return subsection_key.split(".", 1)[0]
@@ -56,7 +54,5 @@ def case_label_groups():
 
 
 def section_toc_label(section_key: str, section_number: str) -> str:
-    """Short label for the table of contents (distinguish 7 vs 7-plots)."""
-    if section_key == "7-plots":
-        return f"{section_number} (οικόπεδα)"
+    """Short label for the table of contents."""
     return section_number

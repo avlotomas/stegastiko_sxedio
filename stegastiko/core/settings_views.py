@@ -92,8 +92,8 @@ def system_settings_workflow(request):
         function_code="settings_workflow",
         form_class=SystemWorkflowSettingsForm,
         template_name="core/settings/form_page.html",
-        page_title="Αριθμοδότηση και υπενθυμίσεις",
-        page_lead="Παράμετροι αρίθμησης φακέλων αιτητών και υπενθυμίσεων διαβουλεύσεων στο dashboard.",
+        page_title="Αριθμοδότηση, υπενθυμίσεις και όρια εισοδήματος",
+        page_lead="Παράμετροι αρίθμησης φακέλων αιτητών, υπενθυμίσεων διαβουλεύσεων στο dashboard και ορίων εισοδήματος (10.4).",
     )
 
 

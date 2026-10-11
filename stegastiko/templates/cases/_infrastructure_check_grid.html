@@ -63,11 +63,13 @@ re-rendered after every modal add/edit/delete. `readonly` hides the actions (π�
                             data-infrastructure-check-open="{% url 'cases:infrastructure_check_edit' case.pk check.pk %}">
                         Επεξεργασία
                     </button>
-                    <button type="button" class="btn btn-danger btn-sm"
-                            data-infrastructure-check-delete="{% url 'cases:infrastructure_check_delete' case.pk check.pk %}"
-                            data-infrastructure-check-label="{{ check.row_label }}">
-                        Διαγραφή
-                    </button>
+                    {% if access.case_section_7.delete %}
+                        <button type="button" class="btn btn-danger btn-sm"
+                                data-infrastructure-check-delete="{% url 'cases:infrastructure_check_delete' case.pk check.pk %}"
+                                data-infrastructure-check-label="{{ check.row_label }}">
+                            Διαγραφή
+                        </button>
+                    {% endif %}
                     {% endif %}
                 </td>
                 {% endif %}

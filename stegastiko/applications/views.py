@@ -1,7 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -9,20 +9,25 @@ from django.utils import timezone
 from applications.forms import ApplicationForm, DependentChildFormSet
 from applications.models import Application, EligibilityCheck
 from applications.rules import evaluate_eligibility
-from applications.import_reader import ParsedImport, parse_import_workbook
+from applications.import_reader import MAX_IMPORT_FILE_SIZE, ParsedImport, parse_import_workbook
 from applications.import_services import save_import, validate_import
 from applications.person_identity import compare_person_with_payload, person_payload_from_form_prefix
 from applications.services import (
     application_form_initial,
     ensure_person,
-    generate_folder_number,
     previous_applications_for_identity,
+    save_with_new_folder_number,
     upsert_eligibility_checks,
 )
 from cases.models import SubmissionCycle
 from core.function_catalog import CREATE, EDIT, IMPORT
 from core.models import Community
 from core.permissions import access_required, has_access, has_any_access
+
+
+CONCURRENT_SAVE_MESSAGE = (
+    "Η αποθήκευση δεν ολοκληρώθηκε λόγω ταυτόχρονης καταχώρισης. Δοκιμάστε ξανά."
+)
 
 
 def _person_to_json(person):
@@ -87,17 +92,24 @@ def _save_application_from_form(form, formset, existing: Application | None = No
         )
 
     application = form.save(commit=False)
-    if existing:
-        application.folder_number = existing.folder_number
-    else:
-        if application.submission_cycle.published_at is None:
-            raise ValidationError("Δεν επιτρέπεται αίτηση πριν τη δημοσίευση του κύκλου υποβολής.")
-        application.folder_number = generate_folder_number(application.submission_cycle)
-
     application.person = p1
     application.person2 = p2
     application.completeness_updated_at = timezone.now()
-    application.save()
+    if existing:
+        # The form rejects cycle changes on edit (10.1.1); keep the issued folder number.
+        stored_cycle_id = (
+            Application.objects.filter(pk=existing.pk)
+            .values_list("submission_cycle_id", flat=True)
+            .first()
+        )
+        if application.submission_cycle_id != stored_cycle_id:
+            raise ValidationError("Ο κύκλος υποβολής δεν μπορεί να αλλάξει μετά τη δημιουργία της αίτησης.")
+        application.folder_number = existing.folder_number
+        application.save()
+    else:
+        if application.submission_cycle.published_at is None:
+            raise ValidationError("Δεν επιτρέπεται αίτηση πριν τη δημοσίευση του κύκλου υποβολής.")
+        save_with_new_folder_number(application, application.submission_cycle)
 
     formset.instance = application
     formset.save()
@@ -125,6 +137,8 @@ def application_create(request):
                     application = _save_application_from_form(form, formset)
             except ValidationError as exc:
                 form.add_error(None, exc.messages[0] if exc.messages else str(exc))
+            except IntegrityError:
+                form.add_error(None, CONCURRENT_SAVE_MESSAGE)
             else:
                 messages.success(request, "Η αίτηση αποθηκεύτηκε.")
                 return redirect("applications:detail", pk=application.pk)
@@ -157,6 +171,8 @@ def application_edit(request, pk):
                     application = _save_application_from_form(form, formset, existing=application)
             except ValidationError as exc:
                 form.add_error(None, exc.messages[0] if exc.messages else str(exc))
+            except IntegrityError:
+                form.add_error(None, CONCURRENT_SAVE_MESSAGE)
             else:
                 messages.success(request, "Η αίτηση ενημερώθηκε.")
                 return redirect("applications:detail", pk=application.pk)
@@ -259,11 +275,15 @@ def person_compare(request):
         return JsonResponse({"error": "POST required"}, status=405)
     try:
         body = json.loads(request.body.decode("utf-8"))
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
+    if not isinstance(body, dict):
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
-    identity = (body.get("identity_number") or "").strip()
+    identity = str(body.get("identity_number") or "").strip()
     payload = body.get("payload") or {}
+    if not isinstance(payload, dict):
+        return JsonResponse({"error": "payload must be an object"}, status=400)
     if not identity:
         return JsonResponse({"error": "identity_number required"}, status=400)
 
@@ -325,11 +345,14 @@ def application_import(request):
         if not payload:
             messages.error(request, "Η προεπισκόπηση έληξε. Ανεβάστε ξανά το αρχείο.")
             return redirect("applications:import")
+        parsed = _parsed_from_session(payload)
         try:
-            parsed = _parsed_from_session(payload)
             application = save_import(parsed)
-        except ValidationError as exc:
-            messages.error(request, exc.messages[0] if exc.messages else str(exc))
+        except (ValidationError, IntegrityError) as exc:
+            if isinstance(exc, ValidationError):
+                messages.error(request, exc.messages[0] if exc.messages else str(exc))
+            else:
+                messages.error(request, CONCURRENT_SAVE_MESSAGE)
             validation = validate_import(parsed)
             return render(
                 request,
@@ -348,6 +371,13 @@ def application_import(request):
         upload = request.FILES.get("import_file")
         if not upload:
             messages.error(request, "Επιλέξτε αρχείο .xlsx.")
+            return render(request, "applications/import.html")
+        if upload.size > MAX_IMPORT_FILE_SIZE:
+            messages.error(
+                request,
+                f"Το αρχείο υπερβαίνει το μέγιστο επιτρεπτό μέγεθος "
+                f"({MAX_IMPORT_FILE_SIZE // (1024 * 1024)} MB).",
+            )
             return render(request, "applications/import.html")
         try:
             parsed = parse_import_workbook(upload)

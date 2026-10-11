@@ -68,6 +68,41 @@ class ApplicationForm(forms.ModelForm):
             elif not isinstance(field.widget, forms.HiddenInput):
                 field.widget.attrs.setdefault("class", "input")
 
+    PERSON2_REQUIRED_FIELDS = (
+        "person2_first_name",
+        "person2_last_name",
+        "person2_date_of_birth",
+        "person2_birth_place",
+        "person2_birth_country",
+        "person2_parents_birth_place",
+        "person2_parents_birth_country",
+    )
+
+    def clean(self):
+        cleaned = super().clean()
+        person2_identity = (cleaned.get("person2_identity_number") or "").strip()
+        if person2_identity:
+            for name in self.PERSON2_REQUIRED_FIELDS:
+                value = cleaned.get(name)
+                if name in self.errors:
+                    continue
+                if value is None or (isinstance(value, str) and not value.strip()):
+                    self.add_error(
+                        name, "Υποχρεωτικό πεδίο όταν δηλώνεται ΑΔΤ Προσώπου 2."
+                    )
+
+        # 10.1.1: the folder number is tied to the cycle's Community and is not editable
+        # after creation, so an existing application cannot be moved to another cycle.
+        if self.instance.pk and "submission_cycle" in cleaned:
+            new_cycle = cleaned.get("submission_cycle")
+            if new_cycle is not None and new_cycle.pk != self.instance.submission_cycle_id:
+                self.add_error(
+                    "submission_cycle",
+                    "Ο κύκλος υποβολής δεν μπορεί να αλλάξει μετά τη δημιουργία της αίτησης "
+                    "(ο Αρ. Φακέλου Αιτητή είναι συνδεδεμένος με τον κύκλο / Κοινότητα).",
+                )
+        return cleaned
+
     class Meta:
         model = Application
         fields = [

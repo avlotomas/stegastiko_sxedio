@@ -1,5 +1,5 @@
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Q
 
 from applications.models import Application, EligibilityCheck, Person
@@ -15,6 +15,7 @@ from core.services import get_setting
 __all__ = [
     "ensure_person",
     "generate_folder_number",
+    "save_with_new_folder_number",
     "get_setting",
     "person_payload_from_form_prefix",
     "previous_applications_for_identity",
@@ -42,20 +43,65 @@ def ensure_person(identity_number: str, payload: dict) -> Person:
     return person
 
 
-@transaction.atomic
-def generate_folder_number(submission_cycle) -> str:
-    community = submission_cycle.community
-    community = community.__class__.objects.select_for_update().get(pk=community.pk)
+FOLDER_NUMBER_MAX_ATTEMPTS = 5
+
+
+def _folder_number_base(community) -> str:
     if not community.community_folder_code:
         raise ValidationError("Η κοινότητα δεν έχει communityFolderCode.")
-
     prefix = get_setting("applicationFolderPrefix", "12")
+    return f"{prefix}{community.community_folder_code}"
+
+
+def _highest_folder_sequence(community, base: str) -> int:
+    """Largest numeric suffix already used by this community under `base` (0 if none)."""
+    highest = 0
+    numbers = Application.objects.filter(
+        submission_cycle__community=community, folder_number__startswith=base
+    ).values_list("folder_number", flat=True)
+    for number in numbers:
+        suffix = number[len(base):]
+        if suffix.isdigit():
+            highest = max(highest, int(suffix))
+    return highest
+
+
+@transaction.atomic
+def generate_folder_number(submission_cycle, offset: int = 0) -> str:
+    """Next folder number (10.1.1): prefix + communityFolderCode + per-community sequence.
+
+    The sequence continues from the highest number already issued (not the row count),
+    so deleted applications never cause a number to be reused.
+    """
+    community = submission_cycle.community
+    community = community.__class__.objects.select_for_update().get(pk=community.pk)
+    base = _folder_number_base(community)
     digits = int(get_setting("folderSequenceDigits", "3"))
-    existing_count = Application.objects.select_for_update().filter(
-        submission_cycle__community=community
-    ).count()
-    sequence = str(existing_count + 1).zfill(digits)
-    return f"{prefix}{community.community_folder_code}{sequence}"
+    sequence = _highest_folder_sequence(community, base) + 1 + offset
+    return f"{base}{str(sequence).zfill(digits)}"
+
+
+def _is_folder_number_conflict(exc: IntegrityError) -> bool:
+    return "folder_number" in str(exc)
+
+
+def save_with_new_folder_number(application: Application, submission_cycle) -> Application:
+    """Assign a fresh folder number and insert; retry on a concurrent unique-number clash."""
+    for attempt in range(FOLDER_NUMBER_MAX_ATTEMPTS):
+        application.folder_number = generate_folder_number(submission_cycle, offset=attempt)
+        try:
+            with transaction.atomic():
+                application.save()
+        except IntegrityError as exc:
+            if not _is_folder_number_conflict(exc):
+                raise
+            application.pk = None
+            application._state.adding = True
+            continue
+        return application
+    raise ValidationError(
+        "Δεν ήταν δυνατή η απόδοση μοναδικού Αρ. Φακέλου Αιτητή. Δοκιμάστε ξανά."
+    )
 
 
 def upsert_eligibility_checks(application: Application, results: dict) -> None:

@@ -8,7 +8,6 @@ from cases.models import (
     Field,
     InfrastructureCheck,
     LandPlot,
-    Parcel,
     SubmissionCycle,
     SubmissionCyclePublication,
     UtilityService,
@@ -25,7 +24,6 @@ admin.site.register(Consultation)
 admin.site.register(InfrastructureCheck)
 admin.site.register(ApprovedDesignPlot)
 admin.site.register(Field)
-admin.site.register(Parcel)
 admin.site.register(ValuationReferral)
 admin.site.register(SubmissionCycle)
 admin.site.register(SubmissionCyclePublication)

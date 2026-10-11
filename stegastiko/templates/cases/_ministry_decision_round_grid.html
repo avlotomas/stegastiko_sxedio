@@ -70,11 +70,13 @@
                             data-ministry-decision-round-open="{% url 'cases:ministry_decision_round_edit' case.pk row.pk %}">
                         Επεξεργασία
                     </button>
-                    <button type="button" class="btn btn-danger btn-sm"
-                            data-ministry-decision-round-delete="{% url 'cases:ministry_decision_round_delete' case.pk row.pk %}"
-                            data-ministry-decision-round-label="{{ row.row_label }}">
-                        Διαγραφή
-                    </button>
+                    {% if access.case_section_6.delete %}
+                        <button type="button" class="btn btn-danger btn-sm"
+                                data-ministry-decision-round-delete="{% url 'cases:ministry_decision_round_delete' case.pk row.pk %}"
+                                data-ministry-decision-round-label="{{ row.row_label }}">
+                            Διαγραφή
+                        </button>
+                    {% endif %}
                     {% endif %}
                 </td>
                 {% endif %}

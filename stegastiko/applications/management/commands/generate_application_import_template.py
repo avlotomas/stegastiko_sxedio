@@ -22,6 +22,27 @@ from applications.import_template import (
 )
 
 
+TEXT_FORMAT = "@"
+# Rows pre-formatted as text on table sheets (children, income, documents).
+TABLE_TEXT_ROWS = 200
+# Codes/identifiers that Excel would otherwise turn into numbers (dropping leading zeros).
+TEXT_KEY_MARKERS = (
+    "identity_number",
+    "refugee_id",
+    "social_insurance",
+    "alien_registration",
+    "phone",
+    "postal_code",
+    "community_code",
+    "protocol_number",
+    "document_code",
+)
+
+
+def is_text_key(key: str) -> bool:
+    return any(marker in key for marker in TEXT_KEY_MARKERS)
+
+
 def _write_key_value_sheet(ws, fields, default_values=None):
     default_values = default_values or {}
     header_font = Font(bold=True)
@@ -35,6 +56,8 @@ def _write_key_value_sheet(ws, fields, default_values=None):
     for key, label, hint in fields:
         value = default_values.get(key, "")
         ws.append([key, label, value])
+        if is_text_key(key):
+            ws.cell(row=ws.max_row, column=3).number_format = TEXT_FORMAT
 
 
 def _write_horizontal_sheet(ws, fields):
@@ -53,6 +76,8 @@ def _write_horizontal_sheet(ws, fields):
             c3 = ws.cell(row=3, column=col_idx, value=hint)
             c3.font = Font(color="666666", size=9)
             c3.alignment = Alignment(wrap_text=True, vertical="top")
+        if is_text_key(key):
+            ws.cell(row=4, column=col_idx).number_format = TEXT_FORMAT
 
 
 def _write_table_sheet(ws, columns):
@@ -66,6 +91,9 @@ def _write_table_sheet(ws, columns):
         ws.cell(row=2, column=col_idx, value=key).font = key_font
         if hint:
             ws.cell(row=3, column=col_idx, value=hint).font = Font(color="666666", size=9)
+        if is_text_key(key):
+            for row in range(4, 4 + TABLE_TEXT_ROWS):
+                ws.cell(row=row, column=col_idx).number_format = TEXT_FORMAT
 
 
 def build_workbook():

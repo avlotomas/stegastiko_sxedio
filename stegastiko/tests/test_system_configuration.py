@@ -164,7 +164,8 @@ def test_case_labels_settings_screen_groups_sections_and_subsections(admin_clien
     html = admin_client.get(url).content.decode()
     assert "Τίτλοι αίτησης διαχωρισμού" in html
     assert "Μετάβαση σε ενότητα" in html
-    assert 'id="section-7_plots"' in html
+    assert 'id="section-7"' in html
+    assert "7.7" in html
     assert "3.2" in html
     assert "settings-case-labels__group" in html
 

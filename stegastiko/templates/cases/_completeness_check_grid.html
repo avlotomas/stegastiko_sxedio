@@ -56,7 +56,7 @@
                     {% endif %}
                 </td>
                 <td data-sort-deficiencies="{{ check.deficiencies|lower }}">{{ check.deficiencies|default:"—"|truncatechars:80 }}</td>
-                <td data-sort-emails="{{ check.communications.count }}">{{ check.communications.count }}</td>
+                <td data-sort-emails="{{ check.sent_emails_count }}">{{ check.sent_emails_count }}</td>
                 <td class="data-table__actions">
                     {% if access.case_section_2.edit %}
                     <button type="button"

@@ -1,0 +1,30 @@
+{% if show_approved_design_plot_workspace %}
+<button type="button"
+        class="approved-design-plots-fab"
+        data-approved-design-plots-workspace-open="{% url 'cases:approved_design_plot_grid' case.pk %}"
+        aria-controls="approved-design-plots-workspace">
+    Οικόπεδα
+</button>
+
+<dialog id="approved-design-plots-workspace"
+        class="modal modal--approved-design-plots"
+        aria-labelledby="approved-design-plots-workspace-title">
+    <div class="approved-design-plots-workspace__header">
+        <div>
+            <h2 class="card__title" id="approved-design-plots-workspace-title">
+                Στοιχεία Εγκεκριμένου Σχεδιασμού Οικοπέδων
+            </h2>
+            <p class="text-muted">Οι αλλαγές αποθηκεύονται ξεχωριστά σε κάθε εγγραφή.</p>
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" data-dialog-close>Κλείσιμο</button>
+    </div>
+    <div data-approved-design-plot-status></div>
+    <div data-approved-design-plots-workspace-body>
+        <p class="text-muted">Φόρτωση…</p>
+    </div>
+</dialog>
+
+{% if can_edit_approved_design_plots %}
+{% include "cases/_approved_design_plot_dialog.html" %}
+{% endif %}
+{% endif %}

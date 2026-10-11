@@ -1,7 +1,8 @@
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from applications.models import Application, EligibilityCheck
+from core.services import get_setting
 
 
 def age_at(reference_date: date, born_on: date) -> int:
@@ -11,14 +12,39 @@ def age_at(reference_date: date, born_on: date) -> int:
     return years
 
 
+# 10.4.6 income limits (€) by family size; overridable via SystemSetting (Ρυθμίσεις).
+INCOME_LIMIT_SETTINGS: tuple[tuple[str, Decimal, str], ...] = (
+    ("incomeLimitUpTo2Members", Decimal("45000"), "Όριο εισοδήματος 10.4.6 — έως 2 μέλη (€)"),
+    ("incomeLimit3Members", Decimal("50000"), "Όριο εισοδήματος 10.4.6 — 3 μέλη (€)"),
+    ("incomeLimit4Members", Decimal("55000"), "Όριο εισοδήματος 10.4.6 — 4 μέλη (€)"),
+    ("incomeLimit5PlusMembers", Decimal("65000"), "Όριο εισοδήματος 10.4.6 — 5 ή περισσότερα μέλη (€)"),
+)
+INCOME_LIMIT_DEFAULTS: dict[str, Decimal] = {key: default for key, default, _ in INCOME_LIMIT_SETTINGS}
+
+
+def income_limit_setting(key: str) -> Decimal:
+    """Configured limit for `key`; falls back to the default if unset or invalid."""
+    default = INCOME_LIMIT_DEFAULTS[key]
+    raw = get_setting(key, str(default))
+    try:
+        value = Decimal(str(raw).strip())
+    except InvalidOperation:
+        return default
+    if not value.is_finite() or value <= 0:
+        return default
+    return value
+
+
 def _income_limit(family_members_count: int) -> Decimal:
     if family_members_count <= 2:
-        return Decimal("45000")
-    if family_members_count == 3:
-        return Decimal("50000")
-    if family_members_count == 4:
-        return Decimal("55000")
-    return Decimal("65000")
+        key = "incomeLimitUpTo2Members"
+    elif family_members_count == 3:
+        key = "incomeLimit3Members"
+    elif family_members_count == 4:
+        key = "incomeLimit4Members"
+    else:
+        key = "incomeLimit5PlusMembers"
+    return income_limit_setting(key)
 
 
 def evaluate_eligibility(application: Application):

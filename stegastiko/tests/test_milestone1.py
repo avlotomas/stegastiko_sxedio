@@ -11,7 +11,7 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 
 from applications.services import application_form_initial, ensure_person, generate_folder_number
-from cases.models import Case, Parcel, SubmissionCycle
+from cases.models import ApprovedDesignPlot, Case, SubmissionCycle
 from core.models import ActionHistory, Community, SystemSetting
 
 
@@ -95,7 +95,9 @@ def test_audit_history_create_update_delete(baseline_data):
         person2_result=EligibilityCheck.Result.PASS,
         overall_result=EligibilityCheck.Result.PASS,
     )
-    parcel = Parcel.objects.create(case=case)
+    parcel = ApprovedDesignPlot.objects.create(
+        case=case, plot_type=ApprovedDesignPlot.PlotType.DIVISION_PLOT
+    )
 
     # UPDATE audit
     app.applicant_email = "new-email@example.org"
@@ -109,7 +111,9 @@ def test_audit_history_create_update_delete(baseline_data):
     assert ActionHistory.objects.filter(
         entity_type="Application", action="UPDATE", field_name="applicant_email"
     ).exists()
-    assert ActionHistory.objects.filter(entity_type="Parcel", entity_id=str(parcel_id), action="DELETE").exists()
+    assert ActionHistory.objects.filter(
+        entity_type="ApprovedDesignPlot", entity_id=str(parcel_id), action="DELETE"
+    ).exists()
     assert ActionHistory.objects.filter(entity_type="EligibilityCheck", action="CREATE").exists()
 
     history_entry = create_events.first()

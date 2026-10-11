@@ -137,6 +137,11 @@ urlpatterns = [
         name="approved_design_plot_create",
     ),
     path(
+        "<int:pk>/approved-design-plots/grid/",
+        views.approved_design_plot_grid,
+        name="approved_design_plot_grid",
+    ),
+    path(
         "<int:pk>/approved-design-plots/bulk/",
         views.approved_design_plot_bulk_create,
         name="approved_design_plot_bulk_create",
@@ -145,6 +150,11 @@ urlpatterns = [
         "<int:pk>/approved-design-plots/<int:plot_id>/edit/",
         views.approved_design_plot_form,
         name="approved_design_plot_edit",
+    ),
+    path(
+        "<int:pk>/approved-design-plots/<int:plot_id>/inline-edit/",
+        views.approved_design_plot_inline_edit,
+        name="approved_design_plot_inline_edit",
     ),
     path(
         "<int:pk>/approved-design-plots/<int:plot_id>/delete/",

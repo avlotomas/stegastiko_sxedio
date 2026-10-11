@@ -1,8 +1,12 @@
 from decimal import Decimal
 
+from django.apps import apps
 from django.contrib.contenttypes.fields import GenericRelation
-from django.db import models
+from django.db import IntegrityError, models, transaction
+from django.db.models import Count, OuterRef, Subquery
+from django.db.models.functions import Coalesce
 
+from cases import section_refs as refs
 from core.models import Attachment, AuditedModel, Communication, Community
 
 
@@ -12,9 +16,85 @@ class YesNo(models.TextChoices):
 
 
 # §Α.3.3 A new-division case runs every section; an unallocated-plots case has no
-# Αίτηση Α, so its plots are registered straight into 7.9 and announced in 8.
-SECTION_KEYS_NEW_DIVISION = ("1", "2", "3", "4", "5", "6", "7", "7-plots", "8")
-SECTION_KEYS_UNALLOCATED = ("1", "7-plots", "8")
+# Αίτηση Α, so its plots are registered straight into 8.2 and announced in 9.
+SECTION_KEYS_NEW_DIVISION = (
+    refs.SECTION_1,
+    refs.SECTION_2,
+    refs.SECTION_3,
+    refs.SECTION_4,
+    refs.SECTION_5,
+    refs.SECTION_6,
+    refs.SECTION_7,
+    refs.SECTION_9,
+)
+SECTION_KEYS_UNALLOCATED = (refs.SECTION_1, refs.SECTION_9)
+
+class CommunicationStatus:
+    """Values of `core.Communication.status` used by the 2.2 deficiency emails."""
+
+    DRAFT = "draft"
+    SENDING = "sending"
+    SENT = "sent"
+    FAILED = "failed"
+
+    LABELS = {
+        DRAFT: "Προσχέδιο",
+        SENDING: "Σε αποστολή",
+        SENT: "Απεστάλη",
+        FAILED: "Αποτυχία αποστολής",
+    }
+
+    @classmethod
+    def label(cls, status):
+        return cls.LABELS.get(status, cls.LABELS[cls.DRAFT])
+
+
+# 2.1 The "current" completeness check of a case is the latest by date.
+COMPLETENESS_LATEST_ORDER = ("-check_date", "-sequence", "-id")
+
+
+def _count_subquery(model_name, related_field="case"):
+    """Correlated COUNT(*) of child rows, so several counts do not multiply via joins."""
+    model = apps.get_model("cases", model_name)
+    return Coalesce(
+        Subquery(
+            model.objects.filter(**{related_field: OuterRef("pk")})
+            .order_by()
+            .values(related_field)
+            .annotate(total=Count("pk"))
+            .values("total")[:1],
+            output_field=models.IntegerField(),
+        ),
+        0,
+    )
+
+
+class CaseQuerySet(AuditedModel.AuditedQuerySet):
+    def with_list_data(self):
+        """Per-row data of the case list in the same query (no query per row)."""
+        completeness = apps.get_model("cases", "CompletenessCheck").objects.filter(
+            case=OuterRef("pk")
+        ).order_by(*COMPLETENESS_LATEST_ORDER)
+        rounds = apps.get_model("cases", "MinistryDecisionRound").objects.filter(
+            case=OuterRef("pk")
+        ).order_by("-id")
+        return self.select_related("community").annotate(
+            list_completeness_result=Subquery(completeness.values("result")[:1]),
+            list_ministry_decision=Subquery(rounds.values("ministry_decision")[:1]),
+            list_ministry_decision_other=Subquery(rounds.values("ministry_decision_other")[:1]),
+            land_plots_count=_count_subquery("LandPlot"),
+            approved_design_plots_count=_count_subquery("ApprovedDesignPlot"),
+        )
+
+
+class CaseManager(AuditedModel.AuditedManager):
+    """Keeps the audited manager's blocked bulk updates and adds the list helpers."""
+
+    def get_queryset(self):
+        return CaseQuerySet(self.model, using=self._db)
+
+    def with_list_data(self):
+        return self.get_queryset().with_list_data()
 
 
 class Case(AuditedModel):
@@ -94,10 +174,11 @@ class Case(AuditedModel):
         null=True, blank=True, help_text="4.6 Ημερομηνία επισκεψης"
     )
     # Case-level files are told apart by section_ref: 4.4 technical evaluation as a whole,
-    # 7.2 division design, 7.3 ΤΠΟ application.
+    # 7.2 division design, 7.3 ΤΠΟ application, 7.7 DLS application.
     attachments = GenericRelation(Attachment)
-    ATTACHMENT_SECTION_DIVISION_DESIGN = "7.2"
-    ATTACHMENT_SECTION_TPO_APPLICATION = "7.3"
+    ATTACHMENT_SECTION_DIVISION_DESIGN = refs.REF_DIVISION_DESIGN
+    ATTACHMENT_SECTION_TPO_APPLICATION = refs.REF_TPO_APPLICATION
+    ATTACHMENT_SECTION_DLS_APPLICATION = refs.REF_DLS_APPLICATION
 
     survey_assignment_date = models.DateField(
         null=True, blank=True, help_text="7.1 Ημερομηνία ανάθεσης μελέτης"
@@ -164,17 +245,19 @@ class Case(AuditedModel):
     tender_comments = models.TextField(blank=True, help_text="7.5 Σχόλια")
 
     dls_application_date = models.DateField(
-        null=True, blank=True, help_text="8.7 Ημερομηνία υποβολής αίτησης στο ΤΚΧ"
+        null=True, blank=True, help_text="7.7 Ημερομηνία υποβολής αίτησης στο ΤΚΧ"
     )
-    dls_file_number = models.CharField(max_length=64, blank=True, help_text="8.7 Αριθμός φακέλου ΤΚΧ")
+    dls_file_number = models.CharField(max_length=64, blank=True, help_text="7.7 Αριθμός φακέλου ΤΚΧ")
     dls_response_date = models.DateField(
-        null=True, blank=True, help_text="8.7 Ημερομηνία απάντησης / ολοκλήρωσης ΤΚΧ"
+        null=True, blank=True, help_text="7.7 Ημερομηνία απάντησης / ολοκλήρωσης ΤΚΧ"
     )
-    dls_comments = models.TextField(blank=True, help_text="8.7 Σχόλια")
+    dls_comments = models.TextField(blank=True, help_text="7.7 Σχόλια")
 
-    section8_comments = models.TextField(
+    section7_comments = models.TextField(
         blank=True, help_text="7 Σχόλια / Παρατηρήσεις Ενότητας 7"
     )
+
+    objects = CaseManager()
 
     class Meta:
         ordering = ("-start_date", "-id")
@@ -208,6 +291,9 @@ class Case(AuditedModel):
     def tpo_application_attachments(self):
         return self.attachments.filter(section_ref=self.ATTACHMENT_SECTION_TPO_APPLICATION)
 
+    def dls_application_attachments(self):
+        return self.attachments.filter(section_ref=self.ATTACHMENT_SECTION_DLS_APPLICATION)
+
     @property
     def latest_infrastructure_check(self):
         return self.infrastructure_checks.first()
@@ -219,25 +305,36 @@ class Case(AuditedModel):
     @property
     def latest_completeness_check(self):
         """2.1 Current completeness result for this case (latest by date)."""
-        return self.completeness_checks.order_by("-check_date", "-sequence", "-id").first()
+        return self.completeness_checks.order_by(*COMPLETENESS_LATEST_ORDER).first()
 
     @property
     def completeness_result(self):
+        # Case lists annotate the value (CaseQuerySet.with_list_data) to avoid a query per row.
+        if hasattr(self, "list_completeness_result"):
+            return self.list_completeness_result or ""
         check = self.latest_completeness_check
         return check.result if check else ""
 
     @property
     def latest_ministry_decision_display(self):
         """Latest ΥΠΕΣ decision for case lists (source: 6.7 rows)."""
-        latest = self.ministry_decision_rounds.order_by("-id").first()
-        if not latest or not latest.ministry_decision:
+        if hasattr(self, "list_ministry_decision"):
+            decision = self.list_ministry_decision
+            other = self.list_ministry_decision_other
+        else:
+            latest = self.ministry_decision_rounds.order_by("-id").first()
+            decision = latest.ministry_decision if latest else ""
+            other = latest.ministry_decision_other if latest else ""
+        if not decision:
             return ""
-        return latest.ministry_decision_display
+        return MinistryDecisionRound(
+            ministry_decision=decision, ministry_decision_other=other or ""
+        ).ministry_decision_display
 
     @property
     def completeness_result_display(self):
-        check = self.latest_completeness_check
-        return check.get_result_display() if check else ""
+        result = self.completeness_result
+        return dict(YesNo.choices).get(result, "") if result else ""
 
     @property
     def applicable_sections(self):
@@ -281,19 +378,39 @@ class CompletenessCheck(AuditedModel):
 
     @property
     def can_delete(self):
-        """Checks with sent emails stay immutable for traceability."""
-        return not self.communications.exists()
+        """Checks with sent (or in-flight) emails stay immutable for traceability."""
+        return not self.communications.exclude(status=CommunicationStatus.FAILED).exists()
+
+    @property
+    def sent_emails_count(self):
+        return self.communications.filter(status=CommunicationStatus.SENT).count()
+
+    SEQUENCE_ATTEMPTS = 5
+
+    def _next_sequence(self):
+        last = (
+            CompletenessCheck.objects.filter(case_id=self.case_id)
+            .order_by("-sequence")
+            .values_list("sequence", flat=True)
+            .first()
+        )
+        return (last or 0) + 1
 
     def save(self, *args, **kwargs):
-        if not self.sequence:
-            last = (
-                CompletenessCheck.objects.filter(case=self.case)
-                .order_by("-sequence")
-                .values_list("sequence", flat=True)
-                .first()
-            )
-            self.sequence = (last or 0) + 1
-        return super().save(*args, **kwargs)
+        if self.sequence:
+            return super().save(*args, **kwargs)
+        # 2.1 numbering is max+1 per case. Lock the case row (where the database supports
+        # it) and retry in a savepoint if a concurrent save took the same number.
+        for attempt in range(self.SEQUENCE_ATTEMPTS):
+            try:
+                with transaction.atomic():
+                    Case.objects.select_for_update().filter(pk=self.case_id).exists()
+                    self.sequence = self._next_sequence()
+                    return super().save(*args, **kwargs)
+            except IntegrityError:
+                self.sequence = None
+                if attempt == self.SEQUENCE_ATTEMPTS - 1:
+                    raise
 
 
 class LandPlot(AuditedModel):
@@ -513,32 +630,35 @@ class Consultation(AuditedModel):
         CLOSED = "closed", "Κλείστηκε"
 
     # Section 5 and subsection 7.4 keep separate rows (and files) on the same entity.
-    SECTION_REF_BY_STAGE = {Stage.SUITABILITY: "5", Stage.DIVISION: "7.4"}
+    SECTION_REF_BY_STAGE = {
+        Stage.SUITABILITY: refs.REF_SUITABILITY_CONSULTATIONS,
+        Stage.DIVISION: refs.REF_DIVISION_CONSULTATIONS,
+    }
 
     case = models.ForeignKey(Case, on_delete=models.CASCADE, related_name="consultations")
-    stage = models.CharField(max_length=16, choices=Stage.choices, help_text="5 / 8.4 Στάδιο")
+    stage = models.CharField(max_length=16, choices=Stage.choices, help_text="5 / 7.4 Στάδιο")
     department = models.CharField(
         max_length=16,
         choices=Department.choices,
-        help_text="5 / 8.4 Τμήμα / Υπηρεσία",
+        help_text="5 / 7.4 Τμήμα / Υπηρεσία",
     )
     department_other = models.CharField(
         max_length=255,
         blank=True,
-        help_text="5 / 8.4 Περιγραφή όταν Τμήμα / Υπηρεσία = Άλλο",
+        help_text="5 / 7.4 Περιγραφή όταν Τμήμα / Υπηρεσία = Άλλο",
     )
-    topic = models.TextField(blank=True, help_text="5 / 8.4 Θέμα διαβούλευσης")
-    sent_date = models.DateField(null=True, blank=True, help_text="5 / 8.4 Ημ. αποστολής")
-    due_date = models.DateField(null=True, blank=True, help_text="5 / 8.4 Προθεσμία απάντησης")
-    response_date = models.DateField(null=True, blank=True, help_text="5 / 8.4 Ημ. λήψης απάντησης")
-    response_text = models.TextField(blank=True, help_text="5 / 8.4 Άποψη / Απάντηση")
+    topic = models.TextField(blank=True, help_text="5 / 7.4 Θέμα διαβούλευσης")
+    sent_date = models.DateField(null=True, blank=True, help_text="5 / 7.4 Ημ. αποστολής")
+    due_date = models.DateField(null=True, blank=True, help_text="5 / 7.4 Προθεσμία απάντησης")
+    response_date = models.DateField(null=True, blank=True, help_text="5 / 7.4 Ημ. λήψης απάντησης")
+    response_text = models.TextField(blank=True, help_text="5 / 7.4 Άποψη / Απάντηση")
     status = models.CharField(
         max_length=16,
         choices=Status.choices,
         default=Status.PENDING,
-        help_text="5 / 8.4 Κατάσταση (αυτόματη από την ημ. απάντησης)",
+        help_text="5 / 7.4 Κατάσταση (αυτόματη από την ημ. απάντησης)",
     )
-    comments = models.TextField(blank=True, help_text="5 / 8.4 Σχόλια")
+    comments = models.TextField(blank=True, help_text="5 / 7.4 Σχόλια")
     attachments = GenericRelation(Attachment)
 
     class Meta:
@@ -609,7 +729,7 @@ class InfrastructureCheck(AuditedModel):
         return " · ".join(part for part in parts if part) or "Νέος έλεγχος"
 
     def _audit_context(self):
-        return self.case_id, None, getattr(self, "_section_ref", "7.6")
+        return self.case_id, None, getattr(self, "_section_ref", refs.REF_INFRASTRUCTURE_CHECKS)
 
     def save(self, *args, **kwargs):
         # Μέρος Β §2: readiness requires at least gutters/kerbs and asphalt road surface.
@@ -622,8 +742,8 @@ class InfrastructureCheck(AuditedModel):
 class MinistryDecisionRound(AuditedModel):
     """6.7 One row per recommendation / ministry decision cycle."""
 
-    ATTACHMENT_SECTION_RECOMMENDATION = "6.7-rec"
-    ATTACHMENT_SECTION_RESPONSE = "6.7-res"
+    ATTACHMENT_SECTION_RECOMMENDATION = refs.REF_MINISTRY_RECOMMENDATION_FILES
+    ATTACHMENT_SECTION_RESPONSE = refs.REF_MINISTRY_RESPONSE_FILES
 
     class Recommendation(models.TextChoices):
         POSITIVE = "positive", "Θετική"
@@ -702,7 +822,7 @@ class MinistryDecisionRound(AuditedModel):
         return " · ".join(parts) if parts else "Νέα γραμμή"
 
     def _audit_context(self):
-        return self.case_id, None, getattr(self, "_section_ref", "6.7")
+        return self.case_id, None, getattr(self, "_section_ref", refs.REF_MINISTRY_DECISIONS)
 
 
 class ApprovedDesignPlot(AuditedModel):
@@ -720,28 +840,80 @@ class ApprovedDesignPlot(AuditedModel):
         TKX = "tkx", "Αρίθμηση ΤΚΧ"
         TITLE_DEED = "title_deed", "Αρίθμηση βάσει τίτλου ιδιοκτησίας"
 
+    DISPOSAL_PRICE_RATE = Decimal("0.25")
+
     case = models.ForeignKey(
         Case, on_delete=models.CASCADE, related_name="approved_design_plots"
+    )
+    field = models.ForeignKey(
+        "cases.Field",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="approved_design_plots",
+        help_text="8.2 Χωράφι προέλευσης (προαιρετικό)",
+    )
+    valuation_referral = models.ForeignKey(
+        "cases.ValuationReferral",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="approved_design_plots",
+        help_text="8.2 Παραπομπή προς Διευθυντή ΤΚΧ που καθόρισε την αξία",
     )
     plot_type = models.CharField(max_length=32, choices=PlotType.choices, help_text="7.3 Τύπος")
     plot_type_other = models.CharField(
         max_length=255, blank=True, help_text="7.3 Τύπος — Άλλο"
     )
     design_number = models.CharField(max_length=64, blank=True, help_text="7.3 Αρίθμηση")
-    tkx_number = models.CharField(max_length=64, blank=True, help_text="7.3 Αρίθμηση ΤΚΧ")
+    tkx_number = models.CharField(max_length=64, blank=True, help_text="8.1 Αρίθμηση ΤΚΧ")
     title_deed_number = models.CharField(
-        max_length=64, blank=True, help_text="7.3 Αριθμός τίτλου ιδιοκτησίας"
+        max_length=64, blank=True, help_text="8.2 Αριθμός τίτλου ιδιοκτησίας"
     )
-    parcel_number = models.CharField(max_length=64, blank=True, help_text="7.3 Αριθμός τεμαχίου")
-    sheet_plan = models.CharField(max_length=64, blank=True, help_text="7.3 Φύλλο/Σχέδιο")
+    parcel_number = models.CharField(max_length=64, blank=True, help_text="8.2 Αριθμός τεμαχίου")
+    sheet_plan = models.CharField(max_length=64, blank=True, help_text="8.2 Φύλλο/Σχέδιο")
     final_area_sqm = models.DecimalField(
-        max_digits=12, decimal_places=2, null=True, blank=True, help_text="7.3 Τελικό εμβαδόν (τ.μ.)"
+        max_digits=12, decimal_places=2, null=True, blank=True, help_text="8.2 Τελικό εμβαδόν (τ.μ.)"
     )
+    # The column keeps its historical name; it used to be a plain integer id.
+    owner = models.ForeignKey(
+        "applications.Person",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_column="owner_person_id",
+        related_name="owned_design_plots",
+        help_text="8.2 Ιδιοκτήτης οικοπέδου",
+    )
+    lot_number_in_field = models.CharField(
+        max_length=64, blank=True, help_text="8.2 Νούμερο εντός χωραφιού (προαιρετικό)"
+    )
+    kotsiani_number = models.CharField(
+        max_length=64, blank=True, help_text="8.2 Αριθμός κοτσιάνι (προαιρετικός)"
+    )
+    has_separate_title = models.CharField(
+        max_length=8,
+        choices=YesNo.choices,
+        blank=True,
+        help_text="8.2 Υπάρχει ξεχωριστός Τίτλος Ιδιοκτησίας;",
+    )
+    valuation_amount = models.DecimalField(
+        max_digits=14, decimal_places=2, null=True, blank=True, help_text="8.2 Αξία για υπολογισμό"
+    )
+    disposal_price = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        editable=False,
+        help_text="8.2 Τιμή διάθεσης (αυτόματα 25% της αξίας)",
+    )
+    comments = models.TextField(blank=True, help_text="8.2 Σχόλια οικοπέδου")
     numbering_status = models.CharField(
         max_length=16,
         choices=NumberingStatus.choices,
         default=NumberingStatus.DESIGN,
-        help_text="7.3 Κατάσταση αρίθμησης",
+        help_text="8.1 / 8.2 Κατάσταση αρίθμησης",
     )
 
     class Meta:
@@ -761,14 +933,36 @@ class ApprovedDesignPlot(AuditedModel):
         number = self.design_number or self.tkx_number or self.title_deed_number
         return " ".join(part for part in (self.plot_type_display, number) if part) or "Νέα γραμμή"
 
+    @property
+    def is_valued(self):
+        return self.valuation_amount is not None and self.disposal_price is not None
+
+    @property
+    def is_allocated(self):
+        """Whether an allocation (Ενότητα 10+) already points at this plot."""
+        if not self.pk:
+            return False
+        return self.allocations.exists()
+
+    def save(self, *args, **kwargs):
+        if self.valuation_amount is None:
+            self.disposal_price = None
+        else:
+            self.disposal_price = (self.valuation_amount * self.DISPOSAL_PRICE_RATE).quantize(
+                Decimal("0.01")
+            )
+        if kwargs.get("update_fields") is not None and "valuation_amount" in kwargs["update_fields"]:
+            kwargs["update_fields"] = {*kwargs["update_fields"], "disposal_price"}
+        return super().save(*args, **kwargs)
+
     def _audit_context(self):
-        return self.case_id, None, getattr(self, "_section_ref", "7.3")
+        return self.case_id, None, getattr(self, "_section_ref", refs.REF_APPROVED_DESIGN_PLOTS)
 
 
 class Field(AuditedModel):
     case = models.ForeignKey(Case, on_delete=models.CASCADE, related_name="fields")
-    code = models.CharField(max_length=64, help_text="8.7 Κωδικός χωραφιού")
-    description = models.CharField(max_length=255, blank=True, help_text="8.7 Περιγραφή χωραφιού")
+    code = models.CharField(max_length=64, help_text="8.2 Κωδικός χωραφιού")
+    description = models.CharField(max_length=255, blank=True, help_text="8.2 Περιγραφή χωραφιού")
 
     class Meta:
         ordering = ("code",)
@@ -778,101 +972,16 @@ class Field(AuditedModel):
         return self.code
 
 
-class Parcel(AuditedModel):
-    DISPOSAL_PRICE_RATE = Decimal("0.25")
-
-    case = models.ForeignKey(Case, on_delete=models.CASCADE, related_name="parcels")
-    field = models.ForeignKey(
-        Field,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="parcels",
-        help_text="8.7 Χωράφι προέλευσης (προαιρετικό)",
-    )
-    valuation_referral = models.ForeignKey(
-        "cases.ValuationReferral",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="parcels",
-        help_text="8.8 Παραπομπή προς Διευθυντή ΤΚΧ που καθόρισε την αξία",
-    )
-    owner_person_id = models.IntegerField(null=True, blank=True, help_text="8.7 Ιδιοκτήτης (Person)")
-    lot_number_in_field = models.CharField(
-        max_length=64, blank=True, help_text="8.7 Νούμερο εντός χωραφιού (προαιρετικό)"
-    )
-    design_lot_number = models.CharField(
-        max_length=64, blank=True, help_text="8.7 Αρ. οικοπέδου στον εγκεκριμένο σχεδιασμό"
-    )
-    tkx_lot_number = models.CharField(max_length=64, blank=True, help_text="8.7 Αρ. οικοπέδου ΤΚΧ")
-    kotsiani_number = models.CharField(
-        max_length=64, blank=True, help_text="8.7 Αριθμός κοτσιάνι (προαιρετικός)"
-    )
-    has_separate_title = models.CharField(
-        max_length=8,
-        choices=YesNo.choices,
-        blank=True,
-        help_text="8.8.1 Υπάρχει ξεχωριστός Τίτλος Ιδιοκτησίας;",
-    )
-    sheet_plan = models.CharField(
-        max_length=64, blank=True, help_text="8.8 Φύλλο/Σχέδιο (αδιάθετα οικόπεδα)"
-    )
-    final_area_sqm = models.DecimalField(
-        max_digits=12, decimal_places=2, null=True, blank=True, help_text="8.7 Τελικό εμβαδόν (τ.μ.)"
-    )
-    valuation_amount = models.DecimalField(
-        max_digits=14, decimal_places=2, null=True, blank=True, help_text="8.8 Αξία για υπολογισμό"
-    )
-    disposal_price = models.DecimalField(
-        max_digits=14,
-        decimal_places=2,
-        null=True,
-        blank=True,
-        help_text="8.8 Τιμή διάθεσης (αυτόματα 25% της αξίας)",
-    )
-    comments = models.TextField(blank=True, help_text="8.7 Σχόλια οικοπέδου")
-
-    class Meta:
-        ordering = ("id",)
-
-    def __str__(self):
-        return self.design_lot_number or self.tkx_lot_number or f"Οικόπεδο #{self.pk}"
-
-    @property
-    def row_label(self):
-        parts = [f"Οικόπεδο {self}"]
-        if self.field_id:
-            parts.append(f"χωράφι {self.field.code}")
-        if self.final_area_sqm is not None:
-            parts.append(f"{self.final_area_sqm} τ.μ.")
-        return " · ".join(parts)
-
-    @property
-    def is_valued(self):
-        """8.8.2 A plot counts as valued once it has both a value and a computed price."""
-        return self.valuation_amount is not None and self.disposal_price is not None
-
-    def save(self, *args, **kwargs):
-        if self.valuation_amount is None:
-            self.disposal_price = None
-        else:
-            self.disposal_price = (self.valuation_amount * self.DISPOSAL_PRICE_RATE).quantize(
-                Decimal("0.01")
-            )
-        return super().save(*args, **kwargs)
-
-
 class ValuationReferral(AuditedModel):
     case = models.ForeignKey(Case, on_delete=models.CASCADE, related_name="valuation_referrals")
     letter_date = models.DateField(
-        null=True, blank=True, help_text="8.8 Ημερομηνία επιστολής / αίτησης προς ΤΚΧ"
+        null=True, blank=True, help_text="8.2 Ημερομηνία επιστολής / αίτησης προς ΤΚΧ"
     )
     reference_number = models.CharField(
-        max_length=128, blank=True, help_text="8.8 Αριθμός φακέλου / αναφοράς"
+        max_length=128, blank=True, help_text="8.2 Αριθμός φακέλου / αναφοράς"
     )
-    response_date = models.DateField(null=True, blank=True, help_text="8.8 Ημερομηνία απάντησης ΤΚΧ")
-    comments = models.TextField(blank=True, help_text="8.8 Σχόλια")
+    response_date = models.DateField(null=True, blank=True, help_text="8.2 Ημερομηνία απάντησης ΤΚΧ")
+    comments = models.TextField(blank=True, help_text="8.2 Σχόλια")
 
     class Meta:
         ordering = ("-letter_date", "-id")
@@ -917,9 +1026,10 @@ class SubmissionCycle(AuditedModel):
 
     @property
     def available_parcels(self):
-        """9.1 Plots of the linked cases that cleared 8.8 (value and price recorded)."""
-        return Parcel.objects.filter(
+        """9.1 Plots of the linked cases that cleared 8.2 (value and price recorded)."""
+        return ApprovedDesignPlot.objects.filter(
             case__in=self.cases.all(),
+            plot_type=ApprovedDesignPlot.PlotType.DIVISION_PLOT,
             valuation_amount__isnull=False,
             disposal_price__isnull=False,
         )

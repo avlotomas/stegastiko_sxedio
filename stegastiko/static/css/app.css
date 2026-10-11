@@ -1,3 +1,27 @@
+.surveying-grid {
+    min-width: max-content;
+}
+
+.surveying-grid--numbering th:first-child,
+.surveying-grid--numbering td:first-child,
+.surveying-grid--mapping th:first-child,
+.surveying-grid--mapping td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--color-surface, #fff);
+    min-width: 12rem;
+}
+
+.surveying-grid--numbering th:nth-child(2),
+.surveying-grid--numbering td:nth-child(2),
+.surveying-grid--mapping th:nth-child(2),
+.surveying-grid--mapping td:nth-child(2) {
+    position: sticky;
+    left: 12rem;
+    z-index: 1;
+    background: var(--color-surface, #fff);
+}
 /* ——— Tokens ——— */
 :root {
     --color-bg: #eef2f6;
@@ -676,6 +700,103 @@ body.case-work .page {
 
 .modal--wide {
     width: min(52rem, calc(100vw - 2rem));
+}
+
+.approved-design-plots-fab {
+    position: fixed;
+    right: 1.5rem;
+    bottom: 1.5rem;
+    z-index: 90;
+    padding: 0.8rem 1.1rem;
+    border: 1px solid #fff;
+    border-radius: 999px;
+    background: var(--color-primary);
+    color: #fff;
+    font: inherit;
+    font-weight: 700;
+    box-shadow: var(--shadow-md);
+    cursor: pointer;
+}
+
+.approved-design-plots-fab:hover {
+    background: var(--color-primary-hover);
+}
+
+.approved-design-plots-fab:focus-visible {
+    outline: 3px solid #f4bd50;
+    outline-offset: 2px;
+}
+
+.modal--approved-design-plots {
+    width: min(96rem, calc(100vw - 2rem));
+    height: min(50rem, calc(100vh - 2rem));
+    max-height: calc(100vh - 2rem);
+    overflow: auto;
+}
+
+.approved-design-plots-workspace__header {
+    position: sticky;
+    top: -1.35rem;
+    z-index: 3;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin: -1.35rem -1.25rem 1rem;
+    padding: 1.35rem 1.25rem 0.9rem;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface);
+}
+
+.approved-design-plots-workspace__header p {
+    margin: 0.25rem 0 0;
+}
+
+.approved-design-plots-grid .data-table {
+    min-width: 96rem;
+}
+
+.data-table--inline-edit input,
+.data-table--inline-edit select {
+    min-width: 8rem;
+}
+
+.data-table--inline-edit input[type="number"] {
+    min-width: 7rem;
+}
+
+.data-table--inline-edit th:last-child,
+.data-table--inline-edit td:last-child {
+    position: sticky;
+    right: 0;
+    z-index: 2;
+    min-width: 8.5rem;
+    background: var(--color-surface);
+}
+
+.data-table--inline-edit th:last-child {
+    z-index: 3;
+    background: #edf3f8;
+}
+
+.data-table--inline-edit .errorlist {
+    min-width: 9rem;
+    margin: 0 0 0.25rem;
+}
+
+@media (max-width: 600px) {
+    .approved-design-plots-fab {
+        right: 0.75rem;
+        bottom: 0.75rem;
+    }
+
+    .modal--approved-design-plots {
+        width: calc(100vw - 1rem);
+        height: calc(100vh - 1rem);
+        max-height: calc(100vh - 1rem);
+        padding-right: 0.75rem;
+        padding-left: 0.75rem;
+    }
 }
 
 .detail-grid--compact {

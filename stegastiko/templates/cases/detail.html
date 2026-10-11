@@ -349,8 +349,6 @@
     {% case_detail_fields case "tpo_application_date" "tpo_application_number" "tpo_response" "tpo_response_date" %}
     {% include "cases/_attachment_list.html" with attachments=tpo_application_attachments %}
     {% case_detail_fields case "tpo_comments" %}
-    <h4 class="form-section-subtitle">Στοιχεία Εγκεκριμένου Σχεδιασμού Οικοπέδων</h4>
-    {% include "cases/_approved_design_plot_grid.html" with readonly=True %}
     <h3 class="form-section-title">{% case_subsection_heading "7.4" %}</h3>
     <h4 class="form-section-subtitle">Διαβουλεύσεις Κατασκευαστικών Σχεδίων</h4>
     {% include "cases/_consultation_grid.html" with readonly=True consultation_grid=division_consultation_grid %}
@@ -359,126 +357,19 @@
     {% case_detail_fields case "tender_announcement_date" "tender_award_date" "contractor_name" "contractor_phone" "contractor_email" "contract_duration_value" "tender_comments" %}
     <h3 class="form-section-title">{% case_subsection_heading "7.6" %}</h3>
     {% include "cases/_infrastructure_check_grid.html" with readonly=True %}
-    {% case_detail_fields case "section8_comments" %}
+    <h3 class="form-section-title">{% case_subsection_heading "7.7" %}</h3>
+    {% case_detail_fields case "dls_application_date" "dls_file_number" "dls_response_date" %}
+    {% include "cases/_attachment_list.html" with attachments=dls_application_attachments %}
+    {% case_detail_fields case "dls_comments" %}
+    {% case_detail_fields case "section7_comments" %}
 </section>
 {% endif %}
 {% endif %}
 
-{% if access.case_section_7_plots.view %}
+{% if access.case_section_9.view %}
 <section class="card">
-    <h2 class="card__title">{% case_section_heading "7-plots" %}</h2>
-    <h3 class="form-section-title">{% case_subsection_heading "7.8" %}</h3>
-    {% case_detail_fields case "dls_application_date" "dls_file_number" "dls_response_date" "dls_comments" %}
-    <h3 class="form-section-title">{% case_subsection_heading "7.8-parcels" %}</h3>
-    <div class="table-wrap">
-        <table class="data-table">
-            <thead><tr><th>Κωδικός</th><th>Περιγραφή</th></tr></thead>
-            <tbody>
-            {% for field in case.fields.all %}
-                <tr>
-                    <td>{{ field.code }}</td>
-                    <td>{{ field.description|default:"—" }}</td>
-                </tr>
-            {% empty %}
-                <tr><td colspan="2">Δεν έχουν καταχωριστεί χωράφια.</td></tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    <h3 class="form-section-title">{% case_subsection_heading "7.9.1" %}</h3>
-    <div class="table-wrap">
-        <table class="data-table">
-            <thead>
-            <tr>
-                <th>Ημ. επιστολής</th>
-                <th>Αρ. αναφοράς</th>
-                <th>Ημ. απάντησης</th>
-                <th>Σχόλια</th>
-            </tr>
-            </thead>
-            <tbody>
-            {% for referral in case.valuation_referrals.all %}
-                <tr>
-                    <td>{{ referral.letter_date|default:"—" }}</td>
-                    <td>{{ referral.reference_number|default:"—" }}</td>
-                    <td>{{ referral.response_date|default:"—" }}</td>
-                    <td>{{ referral.comments|default:"—"|linebreaksbr }}</td>
-                </tr>
-            {% empty %}
-                <tr><td colspan="4">Δεν έχουν καταχωριστεί παραπομπές.</td></tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    <h3 class="form-section-title">{% case_subsection_heading "7.8-7.9-mapping" %}</h3>
-    <div class="table-wrap">
-        <table class="data-table">
-            <thead>
-            <tr>
-                <th>Χωράφι</th>
-                <th>Νούμερο εντός χωραφιού</th>
-                <th>Αρ. σχεδιασμού</th>
-                <th>Αρ. ΤΚΧ</th>
-                <th>Κοτσιάνι</th>
-                <th>Τελικό εμβαδόν</th>
-                <th>Ξεχωριστός τίτλος (7.9.1)</th>
-                <th>Αξία</th>
-                <th>Τιμή διάθεσης (25%)</th>
-                <th>Σχόλια</th>
-            </tr>
-            </thead>
-            <tbody>
-            {% for parcel in parcels %}
-                <tr>
-                    <td>{{ parcel.field.code|default:"—" }}</td>
-                    <td>{{ parcel.lot_number_in_field|default:"—" }}</td>
-                    <td>{{ parcel.design_lot_number|default:"—" }}</td>
-                    <td>{{ parcel.tkx_lot_number|default:"—" }}</td>
-                    <td>{{ parcel.kotsiani_number|default:"—" }}</td>
-                    <td>{{ parcel.final_area_sqm|default:"—" }}</td>
-                    <td>
-                        {{ parcel.get_has_separate_title_display|default:"—" }}
-                        {% if parcel.valuation_referral %}
-                        <br><span class="text-muted">ΤΚΧ: {{ parcel.valuation_referral }}</span>
-                        {% endif %}
-                    </td>
-                    <td>{{ parcel.valuation_amount|default:"—" }}</td>
-                    <td>{{ parcel.disposal_price|default:"—" }}</td>
-                    <td>{{ parcel.comments|default:"—"|linebreaksbr }}</td>
-                </tr>
-            {% empty %}
-                <tr><td colspan="10">Δεν έχουν καταχωριστεί οικόπεδα.</td></tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
-
-    <h3 class="form-section-title">{% case_subsection_heading "7.9.2" %}</h3>
-    <dl class="detail-grid">
-        <div>
-            <dt>Οικόπεδα</dt>
-            <dd>{{ completion.parcels_count }}</dd>
-        </div>
-        <div>
-            <dt>Αξία σε όλα τα οικόπεδα</dt>
-            <dd>{% if completion.all_valued %}<span class="badge badge--pass">ΝΑΙ</span>{% else %}<span class="badge badge--fail">ΟΧΙ</span>{% endif %}</dd>
-        </div>
-        <div>
-            <dt>Υπολογισμένες τιμές</dt>
-            <dd>{% if completion.all_priced %}<span class="badge badge--pass">ΝΑΙ</span>{% else %}<span class="badge badge--fail">ΟΧΙ</span>{% endif %}</dd>
-        </div>
-        <div>
-            <dt>Ολοκλήρωση Ενότητας 7</dt>
-            <dd>{% if completion.is_complete %}<span class="badge badge--pass">ΝΑΙ</span>{% else %}<span class="badge badge--fail">ΟΧΙ</span>{% endif %}</dd>
-        </div>
-    </dl>
-</section>
-{% endif %}
-
-{% if access.case_section_8.view %}
-<section class="card">
-    <h2 class="card__title">{% case_section_heading "8" %}</h2>
-    <h3 class="form-section-title">{% case_subsection_heading "8.4" %}</h3>
+    <h2 class="card__title">{% case_section_heading "9" %}</h2>
+    <h3 class="form-section-title">{% case_subsection_heading "9.4" %}</h3>
     <dl class="detail-grid">
         {% for label, ready in readiness.rows %}
         <div>

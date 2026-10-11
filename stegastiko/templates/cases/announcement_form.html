@@ -26,7 +26,7 @@
 </div>
 
 <div class="card">
-    <h2 class="card__title">8.4 Έλεγχος ετοιμότητας — {{ case.case_number }}</h2>
+    <h2 class="card__title">{% case_subsection_heading "9.4" %} — {{ case.case_number }}</h2>
     <div class="table-wrap">
         <table class="data-table">
             <thead><tr><th>Προϋπόθεση</th><th>Αποτέλεσμα</th></tr></thead>
@@ -46,8 +46,8 @@
     </div>
     {% if not readiness.can_start %}
     <div class="alert alert--warning" style="margin-top: 1rem;">
-        Η γνωστοποίηση μπορεί να καταχωριστεί ως προσχέδιο, αλλά <strong>δεν εκδίδεται</strong>
-        μέχρι να πληρούνται όλες οι προϋποθέσεις της 8.4.
+        Η Ενότητα 9 <strong>δεν ανοίγει</strong>: νέα γνωστοποίηση καταχωρείται μόνο όταν
+        πληρούνται όλες οι προϋποθέσεις της 9.4 για κάθε υπόθεση που καλύπτει (§Β.2).
     </div>
     {% endif %}
 </div>
@@ -82,7 +82,7 @@
 </div>
 {% endif %}
 
-{% if access.case_section_8.create %}
+{% if access.case_section_9.create %}
 <div class="card">
 <h2 class="card__title">Νέα γνωστοποίηση</h2>
 <form method="post" class="app-form" novalidate>
@@ -93,7 +93,7 @@
     </div>
     {% endif %}
 
-    <h3 class="form-section-title">{% case_subsection_heading "8.1" %}</h3>
+    <h3 class="form-section-title">{% case_subsection_heading "9.1" %}</h3>
     <p class="form-readonly">
         Επαρχία {{ case.community.district }} · Κοινότητα/Δ.Δ. {{ case.community.name }} ·
         τύπος διαδικασίας {{ case.get_case_type_display }} ·

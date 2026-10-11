@@ -86,8 +86,8 @@
                     {% endif %}
                 </td>
                 <td>{{ item.latest_ministry_decision_display|default:"—" }}</td>
-                <td>{{ item.land_plots.count }}</td>
-                <td>{{ item.parcels.count }}</td>
+                <td>{{ item.land_plots_count }}</td>
+                <td>{{ item.approved_design_plots_count }}</td>
                 <td><a href="{% url 'cases:detail' item.pk %}" class="btn btn-ghost btn-sm">Άνοιγμα</a></td>
             </tr>
         {% empty %}
@@ -96,4 +96,15 @@
         </tbody>
     </table>
 </div>
+{% if page_obj.paginator.num_pages > 1 %}
+<nav class="pagination toolbar" aria-label="Σελίδες αποτελεσμάτων">
+    {% if page_obj.has_previous %}
+    <a href="?{% if filter_query %}{{ filter_query }}&amp;{% endif %}page={{ page_obj.previous_page_number }}" class="btn btn-ghost btn-sm" rel="prev">« Προηγούμενη</a>
+    {% endif %}
+    <span class="text-muted">Σελίδα {{ page_obj.number }} από {{ page_obj.paginator.num_pages }} · {{ page_obj.paginator.count }} αιτήσεις</span>
+    {% if page_obj.has_next %}
+    <a href="?{% if filter_query %}{{ filter_query }}&amp;{% endif %}page={{ page_obj.next_page_number }}" class="btn btn-ghost btn-sm" rel="next">Επόμενη »</a>
+    {% endif %}
+</nav>
+{% endif %}
 {% endblock %}

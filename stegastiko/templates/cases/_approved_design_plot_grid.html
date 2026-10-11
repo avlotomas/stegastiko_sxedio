@@ -1,10 +1,6 @@
-{% comment %}
-7.3 Στοιχεία Εγκεκριμένου Σχεδιασμού Οικοπέδων: one row per plot or space of the approved
-design. Columns sort on click; re-rendered after every modal add/edit/delete. `readonly` hides
-the actions (προβολή φακέλου).
-{% endcomment %}
+{% comment %}Persistent 7.3 grid: additions use dialogs; existing rows save inline.{% endcomment %}
 <div{% if not readonly %} data-approved-design-plot-container{% endif %}>
-{% if not readonly and access.case_section_7.edit %}
+{% if not readonly and can_edit_approved_design_plots %}
 <div class="form-actions form-span-all">
     <button type="button"
             class="btn btn-secondary"
@@ -18,8 +14,8 @@ the actions (προβολή φακέλου).
     </button>
 </div>
 {% endif %}
-<div class="table-wrap">
-    <table class="data-table" data-approved-design-plot-table>
+<div class="table-wrap approved-design-plots-grid">
+    <table class="data-table data-table--inline-edit" data-approved-design-plot-table>
         <thead>
         <tr>
             <th>
@@ -62,10 +58,61 @@ the actions (προβολή φακέλου).
                     Κατάσταση αρίθμησης
                 </button>
             </th>
-            {% if not readonly %}<th><span class="visually-hidden">Ενέργειες</span></th>{% endif %}
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-approved-design-plot-sort="valuation">
+                    Αξία τελευταίας γενικής εκτίμησης (€)
+                </button>
+            </th>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-approved-design-plot-sort="price">
+                    Τιμή διάθεσης (€)
+                </button>
+            </th>
+            {% if not readonly %}<th>Ενέργειες</th>{% endif %}
         </tr>
         </thead>
         <tbody>
+        {% if not readonly %}
+        {% for row in approved_design_plot_rows %}
+            {% with plot=row.plot form=row.form %}
+            <tr data-approved-design-plot-row>
+                <td data-sort-type="{{ plot.plot_type_display }}">
+                    <div data-other-group>
+                        {{ form.plot_type.errors }}{{ form.plot_type }}
+                        {{ form.plot_type_other.errors }}{{ form.plot_type_other }}
+                    </div>
+                </td>
+                <td data-sort-number="{{ plot.design_number }}">{{ form.design_number.errors }}{{ form.design_number }}</td>
+                <td data-sort-tkx="{{ plot.tkx_number }}">{{ form.tkx_number.errors }}{{ form.tkx_number }}</td>
+                <td data-sort-title="{{ plot.title_deed_number }}">{{ form.title_deed_number.errors }}{{ form.title_deed_number }}</td>
+                <td data-sort-parcel="{{ plot.parcel_number }}">{{ form.parcel_number.errors }}{{ form.parcel_number }}</td>
+                <td data-sort-sheet="{{ plot.sheet_plan }}">{{ form.sheet_plan.errors }}{{ form.sheet_plan }}</td>
+                <td data-sort-area="{{ plot.final_area_sqm|default_if_none:'' }}">{{ form.final_area_sqm.errors }}{{ form.final_area_sqm }}</td>
+                <td data-sort-status="{{ plot.get_numbering_status_display }}">{{ form.numbering_status.errors }}{{ form.numbering_status }}</td>
+                <td data-sort-valuation="{{ plot.valuation_amount|default_if_none:'' }}">{{ form.valuation_amount.errors }}{{ form.valuation_amount }}</td>
+                <td data-sort-price="{{ plot.disposal_price|default_if_none:'' }}">{{ plot.disposal_price|default_if_none:"—" }}</td>
+                <td class="data-table__actions">
+                    <form id="approved-design-plot-row-{{ plot.pk }}"
+                          method="post"
+                          action="{% url 'cases:approved_design_plot_inline_edit' case.pk plot.pk %}"
+                          data-approved-design-plot-inline-form>
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-primary btn-sm">Αποθήκευση εγγραφής</button>
+                    </form>
+                    {% if can_delete_approved_design_plots %}
+                    <button type="button" class="btn btn-danger btn-sm"
+                            data-approved-design-plot-delete="{% url 'cases:approved_design_plot_delete' case.pk plot.pk %}"
+                            data-approved-design-plot-label="{{ plot.row_label }}">
+                        Διαγραφή
+                    </button>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endwith %}
+        {% empty %}
+            <tr><td colspan="11">Δεν έχουν καταχωριστεί εγγραφές.</td></tr>
+        {% endfor %}
+        {% else %}
         {% for plot in approved_design_plots %}
             <tr data-approved-design-plot-row>
                 <td data-sort-type="{{ plot.plot_type_display }}">{{ plot.plot_type_display|default:"—" }}</td>
@@ -76,25 +123,13 @@ the actions (προβολή φακέλου).
                 <td data-sort-sheet="{{ plot.sheet_plan }}">{{ plot.sheet_plan|default:"—" }}</td>
                 <td data-sort-area="{{ plot.final_area_sqm|default_if_none:'' }}">{{ plot.final_area_sqm|default_if_none:"—" }}</td>
                 <td data-sort-status="{{ plot.get_numbering_status_display }}">{{ plot.get_numbering_status_display }}</td>
-                {% if not readonly %}
-                <td class="data-table__actions">
-                    {% if access.case_section_7.edit %}
-                    <button type="button" class="btn btn-secondary btn-sm"
-                            data-approved-design-plot-open="{% url 'cases:approved_design_plot_edit' case.pk plot.pk %}">
-                        Επεξεργασία
-                    </button>
-                    <button type="button" class="btn btn-danger btn-sm"
-                            data-approved-design-plot-delete="{% url 'cases:approved_design_plot_delete' case.pk plot.pk %}"
-                            data-approved-design-plot-label="{{ plot.row_label }}">
-                        Διαγραφή
-                    </button>
-                    {% endif %}
-                </td>
-                {% endif %}
+                <td data-sort-valuation="{{ plot.valuation_amount|default_if_none:'' }}">{{ plot.valuation_amount|default_if_none:"—" }}</td>
+                <td data-sort-price="{{ plot.disposal_price|default_if_none:'' }}">{{ plot.disposal_price|default_if_none:"—" }}</td>
             </tr>
         {% empty %}
-            <tr><td colspan="{% if readonly %}8{% else %}9{% endif %}">Δεν έχουν καταχωριστεί εγγραφές.</td></tr>
+            <tr><td colspan="10">Δεν έχουν καταχωριστεί εγγραφές.</td></tr>
         {% endfor %}
+        {% endif %}
         </tbody>
     </table>
 </div>
