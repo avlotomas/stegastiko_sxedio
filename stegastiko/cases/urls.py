@@ -61,6 +61,11 @@ urlpatterns = [
         name="land_plot_delete",
     ),
     path(
+        "<int:pk>/land-plots/<int:plot_id>/email/send/",
+        views.land_plot_email_send,
+        name="land_plot_email_send",
+    ),
+    path(
         "<int:pk>/land-plots/<int:plot_id>/evaluation/",
         views.land_plot_evaluation_form,
         name="land_plot_evaluation",
@@ -181,20 +186,5 @@ urlpatterns = [
         views.case_attachment_download,
         name="attachment_download",
     ),
-    path("<int:pk>/announcement/new/", views.announcement_create, name="announcement_create"),
-    path(
-        "<int:pk>/announcement/<int:cycle_id>/",
-        views.announcement_detail,
-        name="announcement_detail",
-    ),
-    path(
-        "<int:pk>/announcement/<int:cycle_id>/regenerate/",
-        views.announcement_regenerate,
-        name="announcement_regenerate",
-    ),
-    path(
-        "<int:pk>/announcement/<int:cycle_id>/publish/",
-        views.announcement_publish,
-        name="announcement_publish",
-    ),
+    path("<int:pk>/complete/", views.case_complete, name="complete"),
 ]

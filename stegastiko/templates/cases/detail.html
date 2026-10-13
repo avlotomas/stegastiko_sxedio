@@ -361,15 +361,19 @@
     {% case_detail_fields case "dls_application_date" "dls_file_number" "dls_response_date" %}
     {% include "cases/_attachment_list.html" with attachments=dls_application_attachments %}
     {% case_detail_fields case "dls_comments" %}
-    {% case_detail_fields case "section7_comments" %}
 </section>
 {% endif %}
 {% endif %}
 
-{% if access.case_section_9.view %}
-<section class="card">
-    <h2 class="card__title">{% case_section_heading "9" %}</h2>
-    <h3 class="form-section-title">{% case_subsection_heading "9.4" %}</h3>
+{% if access.case_completion.view %}
+<section class="card" id="completion">
+    <h2 class="card__title">Ολοκλήρωση αίτησης</h2>
+    <p class="text-muted">
+        Με την ολοκλήρωση (ενέργεια στη δεξιά πλοήγηση), κάθε «Υπό διαχωρισμό οικόπεδο» του 7.3
+        καταχωρείται στον πίνακα «Οικόπεδα». Αν η αίτηση ολοκληρωθεί ξανά μετά από αλλαγές, τα
+        υπάρχοντα οικόπεδα ενημερώνονται (εκτός όσων έχουν κατανομή) και δεν δημιουργούνται διπλά.
+    </p>
+    <h3 class="form-section-title">Έλεγχος ετοιμότητας (αυτόματο, ενημερωτικός)</h3>
     <dl class="detail-grid">
         {% for label, ready in readiness.rows %}
         <div>
@@ -378,46 +382,35 @@
         </div>
         {% endfor %}
         <div>
-            <dt>Δυνατότητα έναρξης</dt>
-            <dd>{% if readiness.can_start %}<span class="badge badge--pass">ΝΑΙ</span>{% else %}<span class="badge badge--fail">ΟΧΙ</span>{% endif %}</dd>
+            <dt>Συνολική ετοιμότητα</dt>
+            <dd>{% if readiness.ready %}<span class="badge badge--pass">ΝΑΙ</span>{% else %}<span class="badge badge--fail">ΟΧΙ</span>{% endif %}</dd>
         </div>
     </dl>
 
-    <h3 class="form-section-title">Καταχωρημένες γνωστοποιήσεις</h3>
-    <div class="table-wrap">
-        <table class="data-table">
-            <thead>
-            <tr>
-                <th>Ημ. γνωστοποίησης</th>
-                <th>Περίοδος υποβολής</th>
-                <th>Διαθέσιμα οικόπεδα</th>
-                <th>Υποθέσεις</th>
-                <th>Κατάσταση</th>
-                <th>Σχόλια</th>
-            </tr>
-            </thead>
-            <tbody>
-            {% for cycle in submission_cycles %}
-                <tr>
-                    <td>{{ cycle.announcement_date }}</td>
-                    <td>{{ cycle.submission_start_date }} – {{ cycle.submission_end_date }}</td>
-                    <td>{{ cycle.available_plots_count }}</td>
-                    <td>{% for linked in cycle.cases.all %}{{ linked.case_number }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
-                    <td>
-                        {% if cycle.is_published %}
-                        <span class="badge badge--pass">Εκδόθηκε</span>
-                        {% else %}
-                        <span class="badge badge--pending">Προσχέδιο</span>
-                        {% endif %}
-                    </td>
-                    <td>{{ cycle.comments|default:"—"|linebreaksbr }}</td>
-                </tr>
-            {% empty %}
-                <tr><td colspan="6">Δεν έχει καταχωριστεί γνωστοποίηση.</td></tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
+    <h3 class="form-section-title">Κατάσταση</h3>
+    <dl class="detail-grid">
+        <div>
+            <dt>Ολοκλήρωση</dt>
+            <dd>
+                {% if case.is_completed %}
+                <span class="badge badge--pass">Ολοκληρώθηκε {{ case.completed_at }}</span>
+                {% if case.completed_by %}<span class="text-muted">({{ case.completed_by.get_username }})</span>{% endif %}
+                {% else %}
+                <span class="badge badge--pending">Σε εξέλιξη</span>
+                {% endif %}
+            </dd>
+        </div>
+        <div>
+            <dt>Οικόπεδα που δημιουργήθηκαν</dt>
+            <dd>
+                {{ generated_plots_count }}
+                {% if generated_plots_count and access.plots.view %}
+                · <a href="{% url 'plots:list' %}?source_case={{ case.pk }}">Προβολή στα Οικόπεδα</a>
+                {% endif %}
+            </dd>
+        </div>
+    </dl>
+
 </section>
 {% endif %}
 

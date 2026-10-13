@@ -17,7 +17,6 @@ from cases.models import (
     Case,
     CompletenessCheck,
     Consultation,
-    Field,
     InfrastructureCheck,
     LandPlot,
     MinistryDecisionRound,
@@ -27,13 +26,13 @@ from cases.models import (
     YesNo,
 )
 from cases.services import (
-    announcement_readiness,
-    build_announcement_text,
     case_communications,
+    completion_readiness,
     deficiency_email_subject,
-    publish_announcement,
+    land_plot_communications,
     section8_completion,
     send_deficiency_email,
+    send_land_plot_email,
 )
 from cases.forms import CompletenessCheckForm
 from cases.views import section_screens_for
@@ -128,10 +127,10 @@ def test_same_community_holds_both_case_types(community):
 
 @pytest.mark.django_db
 def test_unallocated_case_skips_sections_2_to_7(community):
-    """§Α.3.3 An unallocated-plots case goes straight to announcement in section 9."""
+    """§Α.3.3 An unallocated-plots case only has section 1 (plots are entered in 7.3)."""
     unallocated = _make_case(community, case_type=Case.CaseType.UNALLOCATED_PLOTS)
-    assert unallocated.applicable_sections == ("1", "9")
-    for skipped in ("2", "3", "4", "5", "6", "7", "8"):
+    assert unallocated.applicable_sections == ("1",)
+    for skipped in ("2", "3", "4", "5", "6", "7", "8", "9"):
         assert skipped not in unallocated.applicable_sections
 
 
@@ -296,18 +295,18 @@ def test_section8_completion_requires_value_and_price_on_every_plot(community):
     assert completion["is_complete"]
 
 
-# --- Scenario 11: the 8.4 readiness check gates the announcement ---
+# --- Scenario 11: the (advisory) readiness check of «Ολοκλήρωση αίτησης» ---
 
 
 @pytest.mark.django_db
-def test_announcement_blocked_without_infrastructure_check(community):
+def test_completion_blocked_without_infrastructure_check(community):
     case = _make_case(community)
     case.dls_response_date = date(2027, 6, 1)
     case.save()
     _ready_parcel(case)
 
-    readiness = announcement_readiness(case)
-    assert not readiness["can_start"]
+    readiness = completion_readiness(case)
+    assert not readiness["ready"]
 
     InfrastructureCheck.objects.create(
         case=case,
@@ -316,7 +315,7 @@ def test_announcement_blocked_without_infrastructure_check(community):
         pavements_ready=True,
         asphalt_ready=False,
     )
-    assert not announcement_readiness(case)["can_start"]
+    assert not completion_readiness(case)["ready"]
 
     InfrastructureCheck.objects.create(
         case=case,
@@ -325,11 +324,11 @@ def test_announcement_blocked_without_infrastructure_check(community):
         pavements_ready=True,
         asphalt_ready=True,
     )
-    assert announcement_readiness(case)["can_start"]
+    assert completion_readiness(case)["ready"]
 
 
 @pytest.mark.django_db
-def test_announcement_blocked_without_values(community):
+def test_completion_blocked_without_values(community):
     case = _make_case(community)
     InfrastructureCheck.objects.create(
         case=case,
@@ -347,103 +346,7 @@ def test_announcement_blocked_without_values(community):
         final_area_sqm=Decimal("600"),
     )
 
-    assert not announcement_readiness(case)["can_start"]
-
-
-@pytest.mark.django_db
-def test_publish_is_refused_while_a_linked_case_is_not_ready(community):
-    ready = _make_case_ready_for_announcement(community, number="CASE-ABG-02")
-    not_ready = _make_case(community, number="CASE-ABG-03")
-
-    cycle = SubmissionCycle.objects.create(
-        community=community,
-        announcement_date=date(2027, 6, 1),
-        submission_start_date=date(2027, 6, 2),
-        submission_end_date=date(2027, 7, 1),
-    )
-    cycle.cases.add(ready, not_ready)
-    cycle.announcement_text = build_announcement_text(cycle)
-    cycle.save()
-
-    with pytest.raises(ValidationError):
-        publish_announcement(cycle)
-
-    cycle.cases.remove(not_ready)
-    publish_announcement(cycle)
-    cycle.refresh_from_db()
-    assert cycle.is_published
-
-
-# --- Scenario 2: one announcement mixing an old and a new split ---
-
-
-@pytest.mark.django_db
-def test_one_announcement_covers_old_and_new_split(community):
-    new_division = _make_case_ready_for_announcement(community, number="CASE-ABG-02")
-    field = Field.objects.create(case=new_division, code="FLD-ABG-02")
-    _ready_parcel(new_division, design_number="2", field=field)
-
-    unallocated = _make_case(
-        community, case_type=Case.CaseType.UNALLOCATED_PLOTS, number="CASE-ABG-01"
-    )
-    _ready_parcel(unallocated, design_number="U-1", valuation_amount=Decimal("80000"))
-
-    cycle = SubmissionCycle.objects.create(
-        community=community,
-        announcement_date=date(2027, 6, 1),
-        submission_start_date=date(2027, 6, 2),
-        submission_end_date=date(2027, 7, 1),
-    )
-    cycle.cases.add(new_division, unallocated)
-
-    # 8.1 available plots are counted across both cases of the community.
-    assert cycle.available_plots_count == 3
-    assert "Αριθμός διαθέσιμων οικοπέδων: 3" in build_announcement_text(cycle)
-    # Both cases reach the announcement from their own folder.
-    assert new_division.submission_cycles.count() == 1
-    assert unallocated.submission_cycles.count() == 1
-
-
-@pytest.mark.django_db
-def test_available_plots_exclude_unvalued_parcels(community):
-    case = _make_case_ready_for_announcement(community)
-    ApprovedDesignPlot.objects.create(
-        case=case,
-        plot_type=ApprovedDesignPlot.PlotType.DIVISION_PLOT,
-        design_number="pending",
-    )
-    cycle = SubmissionCycle.objects.create(
-        community=community,
-        announcement_date=date(2027, 6, 1),
-        submission_start_date=date(2027, 6, 2),
-        submission_end_date=date(2027, 7, 1),
-    )
-    cycle.cases.add(case)
-    assert case.approved_design_plots.count() == 2
-    assert cycle.available_plots_count == 1
-
-
-# --- §Β.1.3 history covers the many-to-many announcement link ---
-
-
-@pytest.mark.django_db
-def test_linking_a_case_to_an_announcement_is_audited(community):
-    case = _make_case(community)
-    cycle = SubmissionCycle.objects.create(
-        community=community,
-        announcement_date=date(2027, 6, 1),
-        submission_start_date=date(2027, 6, 2),
-        submission_end_date=date(2027, 7, 1),
-    )
-    cycle.cases.add(case)
-    assert ActionHistory.objects.filter(
-        entity_type="SubmissionCycle", field_name="cases", new_value=str(case.pk)
-    ).exists()
-
-    cycle.cases.remove(case)
-    assert ActionHistory.objects.filter(
-        entity_type="SubmissionCycle", field_name="cases", old_value=str(case.pk)
-    ).exists()
+    assert not completion_readiness(case)["ready"]
 
 
 @pytest.mark.django_db
@@ -494,9 +397,7 @@ def test_case_screens_render(community, staff_client):
     assert staff_client.get(reverse("cases:list")).status_code == 200
     assert staff_client.get(reverse("cases:create")).status_code == 200
     assert staff_client.get(reverse("cases:history", args=[case.pk])).status_code == 200
-    assert (
-        staff_client.get(reverse("cases:announcement_create", args=[case.pk])).status_code == 200
-    )
+    assert "Ολοκλήρωση αίτησης" in detail_html
     for section in section_screens_for(case):
         response = staff_client.get(reverse("cases:section_edit", args=[case.pk, section]))
         assert response.status_code == 200, f"Ενότητα {section} δεν ανοίγει"
@@ -604,7 +505,8 @@ def test_section_edit_shows_persistent_case_actions_sidebar(community, staff_cli
     assert "case-actions-nav" in html
     assert reverse("cases:section_edit", args=[case.pk, "1"]) in html
     assert reverse("cases:section_edit", args=[case.pk, "7"]) in html
-    assert reverse("cases:announcement_create", args=[case.pk]) in html
+    assert reverse("cases:complete", args=[case.pk]) in html
+    assert f"/cases/{case.pk}/announcement" not in html
     assert 'class="case-actions-nav__link is-active"' in html
     assert reverse("cases:section_edit", args=[case.pk, "4"]) in html
 
@@ -646,7 +548,7 @@ def test_case_detail_section_titles_come_from_settings(community, staff_client):
     assert '<h2 class="card__title">1. Βασικά στοιχεία και προτεραιότητα</h2>' in main
     assert '<h2 class="card__title">2. Πληρότητα αίτησης από ρυθμίσεις</h2>' in main
     assert '<h2 class="card__title">7. Διαχωρισμός από ρυθμίσεις</h2>' in main
-    assert '<h2 class="card__title">9. Γνωστοποίηση έναρξης αιτήσεων</h2>' in main
+    assert '<h2 class="card__title">9. Γνωστοποίηση έναρξης αιτήσεων</h2>' not in main
     assert main.count('<h2 class="card__title">') == 8
 
 
@@ -707,7 +609,7 @@ def test_stored_section_7_titles_move_tender_heading_to_7_5():
 def test_case_detail_unallocated_shows_only_applicable_sections(community, staff_client):
     case = _make_case(community, case_type=Case.CaseType.UNALLOCATED_PLOTS)
     main = _detail_main_html(staff_client, case)
-    assert main.count('<h2 class="card__title">') == 3
+    assert main.count('<h2 class="card__title">') == 2
     assert "2 Έλεγχος πληρότητας" not in main
 
 
@@ -917,20 +819,6 @@ def test_deficiency_email_send_rejected_for_unallocated_case(
 
 
 @pytest.mark.django_db
-def test_existing_announcements_open_from_section_9_screen(community, staff_client):
-    case = _make_case_ready_for_announcement(community)
-    cycle = SubmissionCycle.objects.create(
-        community=community,
-        announcement_date=date(2027, 6, 1),
-        submission_start_date=date(2027, 6, 2),
-        submission_end_date=date(2027, 7, 1),
-    )
-    cycle.cases.add(case)
-    html = staff_client.get(reverse("cases:announcement_create", args=[case.pk])).content.decode()
-    assert reverse("cases:announcement_detail", args=[case.pk, cycle.pk]) in html
-
-
-@pytest.mark.django_db
 def test_case_screens_require_login(community, client):
     case = _make_case(community)
     for url in (
@@ -995,17 +883,13 @@ def test_case_forms_use_greek_labels_without_section_prefix_on_fields(community,
 @pytest.mark.django_db
 def test_publication_rows_use_greek_labels(community, staff_client):
     """8.2 The publication formset is a separate model and needs labels too."""
-    case = _make_case_ready_for_announcement(community)
     cycle = SubmissionCycle.objects.create(
         community=community,
         announcement_date=date(2027, 6, 1),
         submission_start_date=date(2027, 6, 2),
         submission_end_date=date(2027, 7, 1),
     )
-    cycle.cases.add(case)
-    html = staff_client.get(
-        reverse("cases:announcement_detail", args=[case.pk, cycle.pk])
-    ).content.decode()
+    html = staff_client.get(reverse("announcements:detail", args=[cycle.pk])).content.decode()
     assert "Τρόπος δημοσίευσης" in html
     assert "Ημερομηνία δημοσίευσης" in html
     assert "8.2 Τρόπος δημοσίευσης" not in html
@@ -1032,17 +916,6 @@ def test_no_form_label_falls_back_to_english(community, staff_client):
             assert any(token in label for token in allowed_latin), (
                 f"Ενότητα {section}: μη ελληνική ετικέτα {label!r}"
             )
-
-
-@pytest.mark.django_db
-def test_announcement_case_choices_are_not_styled_as_text_inputs(community, staff_client):
-    case = _make_case_ready_for_announcement(community)
-    html = staff_client.get(
-        reverse("cases:announcement_create", args=[case.pk])
-    ).content.decode()
-    assert 'class="checkbox-list"' in html
-    assert 'type="checkbox" name="cases"' in html
-    assert 'name="cases" class="input"' not in html
 
 
 # --- Ενότητα 4: 4.1 grid ανά τεμάχιο της 3.1 (μόνο επεξεργασία σε modal), 4.2–4.5 ---
@@ -1494,6 +1367,7 @@ def _plot_values(**overrides):
         "inside_development_zone": YesNo.YES,
         "access": LandPlot.Access.PUBLIC_ROAD,
         "access_other": "",
+        "rejected": YesNo.NO,
         "comments": "",
     }
     values.update(overrides)
@@ -2237,18 +2111,19 @@ def test_section_7_5_and_7_6_close_the_section_7_screen(community, staff_client)
     assert html.index(heading_7_5) < html.index('name="tender_announcement_date"')
     assert html.index('name="tender_announcement_date"') < html.index(heading_7_6)
     assert html.index(heading_7_6) < html.index("data-infrastructure-check-table")
-    assert html.index("data-infrastructure-check-table") < html.index('name="section7_comments"')
-    assert html.index('name="section7_comments"') < html.rindex('class="form-actions form-span-all"')
+    assert html.index("data-infrastructure-check-table") < html.index("7.7 Αίτηση στο ΤΚΧ")
+    assert html.index("7.7 Αίτηση στο ΤΚΧ") < html.rindex('class="form-actions form-span-all"')
     for removed in (
         "7.7 Έλεγχος υποδομών",
         "infrastructure_checks-TOTAL_FORMS",
         'name="works_progress_stage"',
         'name="works_progress_updated_on"',
         'name="works_progress_comments"',
+        'name="section7_comments"',
         "Σχόλια / Παρατηρήσεις Ενότητας 8",
+        "Σχόλια / Παρατηρήσεις Ενότητας 7",
     ):
         assert removed not in html
-    assert "Σχόλια / Παρατηρήσεις Ενότητας 7" in html
 
     detail = staff_client.get(reverse("cases:detail", args=[case.pk])).content.decode()
     assert detail.index("7.4 Κατασκευαστικά Σχέδια και Διαβουλεύσεις") < detail.index(heading_7_5)
@@ -2258,6 +2133,7 @@ def test_section_7_5_and_7_6_close_the_section_7_screen(community, staff_client)
         "7.7 Αίτηση στο ΤΚΧ"
     )
     assert "7.7 Έλεγχος υποδομών" not in detail
+    assert "Σχόλια / Παρατηρήσεις Ενότητας 7" not in detail
     assert 'name="contract_duration_unit"' not in html
     tender_block = detail[detail.index(heading_7_5):detail.index(heading_7_6)]
     assert "Διάρκεια σύμβασης (μήνες)" in tender_block
@@ -2388,8 +2264,10 @@ def test_approved_design_plot_modal_is_scoped_to_its_case(community, staff_clien
     unallocated = _make_case(
         community, case_type=Case.CaseType.UNALLOCATED_PLOTS, number="CASE-ABG-03"
     )
-    url = reverse("cases:approved_design_plot_create", args=[unallocated.pk])
-    assert staff_client.get(url, **JSON).status_code == 404
+    edit_unallocated_url = reverse(
+        "cases:approved_design_plot_edit", args=[unallocated.pk, plot.pk]
+    )
+    assert staff_client.get(edit_unallocated_url, **JSON).status_code == 404
 
 
 @pytest.mark.django_db
@@ -2435,7 +2313,6 @@ def test_section_7_saves_7_7_dls_application_and_attachments(community, staff_cl
             "dls_file_number": "TKX-1234",
             "dls_response_date": "2027-04-15",
             "dls_comments": "Σχόλια ΤΚΧ 7.7",
-            "section7_comments": "Γενικά σχόλια 7",
             "new_dls_application_files": SimpleUploadedFile(
                 "aitisi_tkx.pdf", b"%PDF-tkx", content_type="application/pdf"
             ),
@@ -2447,7 +2324,6 @@ def test_section_7_saves_7_7_dls_application_and_attachments(community, staff_cl
     assert case.dls_file_number == "TKX-1234"
     assert str(case.dls_response_date) == "2027-04-15"
     assert case.dls_comments == "Σχόλια ΤΚΧ 7.7"
-    assert case.section7_comments == "Γενικά σχόλια 7"
     assert [a.filename for a in case.dls_application_attachments()] == ["aitisi_tkx.pdf"]
 
     detail = staff_client.get(reverse("cases:detail", args=[case.pk])).content.decode()
@@ -2455,6 +2331,7 @@ def test_section_7_saves_7_7_dls_application_and_attachments(community, staff_cl
     assert "TKX-1234" in detail
     assert "Σχόλια ΤΚΧ 7.7" in detail
     assert "aitisi_tkx.pdf" in detail
+    assert "Σχόλια / Παρατηρήσεις Ενότητας 7" not in detail
 
 
 @pytest.mark.django_db
@@ -2710,10 +2587,10 @@ def test_section_7_6_latest_check_drives_the_8_4_readiness(community, staff_clie
     ready = {"curbs_ready": "True", "pavements_ready": "True", "asphalt_ready": "True"}
 
     staff_client.post(url, _infrastructure_check_values(check_date="2027-03-01", **ready), **JSON)
-    assert announcement_readiness(case)["can_start"]
+    assert completion_readiness(case)["ready"]
 
     staff_client.post(url, _infrastructure_check_values(check_date="2027-04-01"), **JSON)
-    assert not announcement_readiness(case)["can_start"]
+    assert not completion_readiness(case)["ready"]
 
 
 def test_section_7_6_migration_keeps_old_comments_and_flat_fields():
@@ -2783,3 +2660,89 @@ def test_stored_7_7_title_is_removed_with_the_infrastructure_table():
     assert not SystemSetting.objects.filter(key="caseSubsectionLabel.7.7").exists()
     role.refresh_from_db()
     assert "υποδομές διαχωρισμού (7.1–7.6)" in role.description
+
+
+# --- 3.1 Rejected plots and emails per plot ---------------------------------------------
+
+
+@pytest.mark.django_db
+def test_rejected_land_plot_is_struck_out_in_the_grid(community, staff_client):
+    case = _make_case(community)
+    create_url = reverse("cases:land_plot_create", args=[case.pk])
+    staff_client.post(create_url, _plot_values(), **JSON)
+    plot = case.land_plots.get()
+    assert plot.rejected == YesNo.NO
+
+    edit_url = reverse("cases:land_plot_edit", args=[case.pk, plot.pk])
+    assert 'name="rejected"' in staff_client.get(edit_url, **JSON).json()["html"]
+    payload = staff_client.post(edit_url, _plot_values(rejected=YesNo.YES), **JSON).json()
+    plot.refresh_from_db()
+    assert plot.is_rejected
+    assert "data-table__row--rejected" in payload["grid_html"]
+
+    staff_client.post(edit_url, _plot_values(rejected=YesNo.NO), **JSON)
+    html = staff_client.get(reverse("cases:section_edit", args=[case.pk, "3"])).content.decode()
+    assert "data-table__row--rejected" not in html
+
+
+@pytest.mark.django_db
+def test_land_plot_email_is_sent_to_the_11_address_and_kept_in_history(
+    community, staff_client, smtp_configured
+):
+    case = _make_case(community)
+    plot = case.land_plots.create(parcel_number="123")
+    set_setting("landPlotEmailSubject", "Τεμάχιο {parcel_number} ({case_number})")
+
+    html = staff_client.get(reverse("cases:section_edit", args=[case.pk, "3"])).content.decode()
+    url = reverse("cases:land_plot_email_send", args=[case.pk, plot.pk])
+    assert url in html
+    assert f'data-email-subject="Τεμάχιο 123 ({case.case_number})"' in html
+    assert 'id="land-plot-email-dialog"' in html
+
+    response = staff_client.post(url, {"subject": "Τεμάχιο 123", "body": "Κείμενο."}, **JSON)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["ok"]
+    assert community.contact_email in data["message"]
+    assert "Απεστάλη" in data["log_html"]
+    assert len(mail.outbox) == 1
+    assert mail.outbox[0].to == [case.contact_email]
+
+    communication = land_plot_communications(case).get()
+    assert communication.content_object == plot
+    assert plot.sent_emails_count == 1
+    assert not case_communications(case).exists()
+    assert ActionHistory.objects.filter(
+        entity_type="Communication", case_id=case.pk, section_ref="3.1-email"
+    ).exists()
+
+    detail = staff_client.get(
+        reverse("cases:communication_detail", args=[case.pk, communication.pk]), **JSON
+    ).json()
+    assert detail["subject"] == "Τεμάχιο 123"
+    assert detail["check_label"] == plot.row_label
+
+    # A plot with sent emails keeps its history: it is rejected, not deleted.
+    response = staff_client.post(
+        reverse("cases:land_plot_delete", args=[case.pk, plot.pk]), **JSON
+    )
+    assert response.status_code == 409
+    assert case.land_plots.filter(pk=plot.pk).exists()
+
+
+@pytest.mark.django_db
+def test_land_plot_email_needs_send_access_and_smtp(community, client, make_user):
+    case = _make_case(community)
+    plot = case.land_plots.create(parcel_number="123")
+    url = reverse("cases:land_plot_email_send", args=[case.pk, plot.pk])
+
+    client.force_login(make_user("officer", "Προϊστάμενος ελέγχου"))
+    with pytest.raises(ValidationError):
+        send_land_plot_email(plot, "Θέμα", "Κείμενο")
+    response = client.post(url, {"subject": "Θέμα", "body": ""}, **JSON)
+    assert response.status_code == 400
+    assert not plot.communications.exists()
+
+    other_case = _make_case(community, number="CASE-ABG-02")
+    other_url = reverse("cases:land_plot_email_send", args=[other_case.pk, plot.pk])
+    assert client.post(other_url, {"subject": "Θέμα"}, **JSON).status_code == 404

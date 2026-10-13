@@ -9,7 +9,7 @@
         {% if check_form.instance.pk %}2.1 Επεξεργασία ελέγχου{% else %}2.1 Νέος έλεγχος{% endif %}
     </h2>
 
-    <div class="form-grid">
+    <div class="form-grid form-grid--align-inputs">
         {% for hidden in check_form.hidden_fields %}{{ hidden }}{% endfor %}
         {% include "includes/form_field.html" with field=check_form.check_date %}
         {% include "includes/form_field.html" with field=check_form.result %}

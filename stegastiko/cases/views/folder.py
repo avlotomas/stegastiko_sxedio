@@ -9,8 +9,8 @@ from cases import section_refs as refs
 from cases.forms import CaseCreateForm
 from cases.models import ApprovedDesignPlot, Case, Consultation
 from cases.services import (
-    announcement_readiness,
     case_communications,
+    completion_readiness,
     create_case,
     section8_completion,
     suitability_summary,
@@ -117,9 +117,9 @@ def case_detail(request, pk):
                 plot_type=ApprovedDesignPlot.PlotType.DIVISION_PLOT
             ).select_related("field", "valuation_referral", "owner"),
             "completion": section8_completion(case),
-            "readiness": announcement_readiness(case),
+            "readiness": completion_readiness(case),
+            "generated_plots_count": case.plots.count(),
             "communications": case_communications(case),
-            "submission_cycles": case.submission_cycles.all(),
             "ministry_decision_rounds": case.ministry_decision_rounds.prefetch_related(
                 "attachments"
             ),

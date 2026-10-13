@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block title %}Οικόπεδα{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Οικόπεδα</h1>
+    <p class="page-header__lead">
+        Ολοκληρωμένα οικόπεδα: δημιουργούνται με την ολοκλήρωση μιας αίτησης διαχωρισμού
+        (από τα «Υπό διαχωρισμό οικόπεδα» του 7.3) ή καταχωρίζονται χειροκίνητα.
+    </p>
+</div>
+
+{% if access.plots.create %}
+<div class="toolbar">
+    <a href="{% url 'plots:create' %}" class="btn btn-primary">Νέο οικόπεδο</a>
+</div>
+{% endif %}
+
+<div class="card">
+    <h2 class="card__title">Αναζήτηση</h2>
+    <form method="get" class="filter-form">
+        <div>
+            <label for="community_id">Κοινότητα</label>
+            <select name="community_id" id="community_id">
+                <option value="">Όλες</option>
+                {% for community in communities %}
+                    <option value="{{ community.id }}" {% if community_id == community.id|stringformat:"s" %}selected{% endif %}>
+                        {{ community.name }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="origin">Προέλευση</label>
+            <select name="origin" id="origin">
+                <option value="">Όλες</option>
+                {% for value, label in origins %}
+                    <option value="{{ value }}" {% if origin == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="q">Αρίθμηση / τεμάχιο / αρ. υπόθεσης</label>
+            <input type="text" name="q" id="q" value="{{ q }}">
+        </div>
+        {% if source_case %}<input type="hidden" name="source_case" value="{{ source_case }}">{% endif %}
+        <div>
+            <button type="submit" class="btn btn-primary">Αναζήτηση</button>
+        </div>
+    </form>
+    {% if source_case_obj %}
+    <p class="text-muted">
+        Οικόπεδα της αίτησης <strong>{{ source_case_obj.case_number }}</strong> ·
+        <a href="{% url 'plots:list' %}">όλα τα οικόπεδα</a>
+    </p>
+    {% endif %}
+</div>
+
+<div class="table-wrap">
+    <table class="data-table">
+        <thead>
+        <tr>
+            <th>Οικόπεδο</th>
+            <th>Κοινότητα</th>
+            <th>Προέλευση</th>
+            <th>Αρ. τεμαχίου</th>
+            <th>Φύλλο/Σχέδιο</th>
+            <th>Τελικό εμβαδόν (τ.μ.)</th>
+            <th>Αξία (€)</th>
+            <th>Τιμή διάθεσης (€)</th>
+            <th>Κατανομή</th>
+            <th></th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for plot in plots %}
+            <tr>
+                <td><a href="{% url 'plots:detail' plot.pk %}"><strong>{{ plot.row_label }}</strong></a></td>
+                <td>{{ plot.community.name }}</td>
+                <td>
+                    {% if plot.source_case %}
+                    <a href="{% url 'cases:detail' plot.source_case.pk %}">{{ plot.source_case.case_number }}</a>
+                    {% else %}
+                    <span class="text-muted">Χειροκίνητη καταχώριση</span>
+                    {% endif %}
+                </td>
+                <td>{{ plot.parcel_number|default:"—" }}</td>
+                <td>{{ plot.sheet_plan|default:"—" }}</td>
+                <td>{{ plot.final_area_sqm|default_if_none:"—" }}</td>
+                <td>{{ plot.valuation_amount|default_if_none:"—" }}</td>
+                <td>{{ plot.disposal_price|default_if_none:"—" }}</td>
+                <td>{% if plot.allocations.all %}<span class="badge badge--pass">ΝΑΙ</span>{% else %}—{% endif %}</td>
+                <td><a href="{% url 'plots:detail' plot.pk %}" class="btn btn-ghost btn-sm">Άνοιγμα</a></td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="10">Δεν υπάρχουν οικόπεδα.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% if page_obj.paginator.num_pages > 1 %}
+<nav class="pagination toolbar" aria-label="Σελίδες αποτελεσμάτων">
+    {% if page_obj.has_previous %}
+    <a href="?{% if filter_query %}{{ filter_query }}&amp;{% endif %}page={{ page_obj.previous_page_number }}" class="btn btn-ghost btn-sm" rel="prev">« Προηγούμενη</a>
+    {% endif %}
+    <span class="text-muted">Σελίδα {{ page_obj.number }} από {{ page_obj.paginator.num_pages }} · {{ page_obj.paginator.count }} οικόπεδα</span>
+    {% if page_obj.has_next %}
+    <a href="?{% if filter_query %}{{ filter_query }}&amp;{% endif %}page={{ page_obj.next_page_number }}" class="btn btn-ghost btn-sm" rel="next">Επόμενη »</a>
+    {% endif %}
+</nav>
+{% endif %}
+{% endblock %}

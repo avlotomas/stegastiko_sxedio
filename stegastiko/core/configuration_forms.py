@@ -21,7 +21,14 @@ from cases.subsection_labels import (
     get_case_subsection_label,
     save_case_subsection_label,
 )
-from cases.services import DEFICIENCY_EMAIL_SUBJECT_DEFAULT, DEFICIENCY_EMAIL_SUBJECT_KEY
+from cases.services import (
+    CASE_NUMBER_PREFIX_DEFAULT,
+    CASE_NUMBER_PREFIX_KEY,
+    DEFICIENCY_EMAIL_SUBJECT_DEFAULT,
+    DEFICIENCY_EMAIL_SUBJECT_KEY,
+    LAND_PLOT_EMAIL_SUBJECT_DEFAULT,
+    LAND_PLOT_EMAIL_SUBJECT_KEY,
+)
 from core.branding import APP_TITLE_DEFAULT, APP_TITLE_SETTING_KEY
 from core.menu_labels import MENU_LABEL_FIELDS, get_menu_labels, save_menu_label
 from core.reminders import (
@@ -36,11 +43,23 @@ BRANDING_SETTING_FIELDS = (
 WORKFLOW_SETTING_FIELDS = (
     ("applicationFolderPrefix", "Πρόθεμα Αρ. Φακέλου Αιτητή (10.1.1)"),
     ("folderSequenceDigits", "Πλήθος ψηφίων ακολουθίας ανά Κοινότητα"),
+    (CASE_NUMBER_PREFIX_KEY, "Πρόθεμα αριθμού υπόθεσης (1.1)"),
 )
+SETTING_FIELD_DEFAULTS = {
+    APP_TITLE_SETTING_KEY: APP_TITLE_DEFAULT,
+    CASE_NUMBER_PREFIX_KEY: CASE_NUMBER_PREFIX_DEFAULT,
+}
+SETTING_FIELD_HELP_TEXTS = {
+    CASE_NUMBER_PREFIX_KEY: (
+        "Ο αριθμός υπόθεσης σχηματίζεται αυτόματα ως "
+        "«πρόθεμα.αριθμός φακέλου Κοινότητας.αύξων αριθμός ανά Κοινότητα»."
+    ),
+}
 GENERAL_SETTING_FIELDS = (*BRANDING_SETTING_FIELDS, *WORKFLOW_SETTING_FIELDS)
 EMAIL_SETTING_DEFAULTS = {
     **SMTP_SETTING_DEFAULTS,
     DEFICIENCY_EMAIL_SUBJECT_KEY: DEFICIENCY_EMAIL_SUBJECT_DEFAULT,
+    LAND_PLOT_EMAIL_SUBJECT_KEY: LAND_PLOT_EMAIL_SUBJECT_DEFAULT,
 }
 
 
@@ -69,6 +88,14 @@ def _email_setting_fields():
             label="Θέμα email ελλείψεων (2.2)",
             max_length=255,
             help_text="Μπορεί να περιέχει {case_number} (αριθμός υπόθεσης) και {community} (Κοινότητα).",
+        ),
+        LAND_PLOT_EMAIL_SUBJECT_KEY: forms.CharField(
+            label="Θέμα email τεμαχίου (3.1)",
+            max_length=255,
+            help_text=(
+                "Μπορεί να περιέχει {parcel_number} (αρ. τεμαχίου), {case_number} "
+                "(αριθμός υπόθεσης) και {community} (Κοινότητα)."
+            ),
         ),
     }
 
@@ -198,6 +225,7 @@ class SystemWorkflowSettingsForm(forms.Form):
             self.fields[f"setting_{setting_key}"] = forms.CharField(
                 label=label,
                 max_length=512,
+                help_text=SETTING_FIELD_HELP_TEXTS.get(setting_key, ""),
                 widget=forms.TextInput(attrs={"class": "input"}),
             )
         self.fields[f"setting_{CONSULTATION_DUE_REMINDER_DAYS_KEY}"] = forms.IntegerField(
@@ -208,7 +236,9 @@ class SystemWorkflowSettingsForm(forms.Form):
         )
         if not self.is_bound:
             for setting_key, _ in WORKFLOW_SETTING_FIELDS:
-                self.fields[f"setting_{setting_key}"].initial = get_setting(setting_key, "")
+                self.fields[f"setting_{setting_key}"].initial = get_setting(
+                    setting_key, SETTING_FIELD_DEFAULTS.get(setting_key, "")
+                )
             self.fields[f"setting_{CONSULTATION_DUE_REMINDER_DAYS_KEY}"].initial = get_setting(
                 CONSULTATION_DUE_REMINDER_DAYS_KEY,
                 str(CONSULTATION_DUE_REMINDER_DAYS_DEFAULT),
@@ -308,6 +338,7 @@ class SystemConfigurationForm(forms.Form):
             self.fields[f"setting_{setting_key}"] = forms.CharField(
                 label=label,
                 max_length=512,
+                help_text=SETTING_FIELD_HELP_TEXTS.get(setting_key, ""),
                 widget=forms.TextInput(attrs={"class": "input"}),
             )
         self.fields[f"setting_{CONSULTATION_DUE_REMINDER_DAYS_KEY}"] = forms.IntegerField(
@@ -322,8 +353,9 @@ class SystemConfigurationForm(forms.Form):
         _add_income_limit_fields(self)
         if not self.is_bound:
             for setting_key, _ in GENERAL_SETTING_FIELDS:
-                default = APP_TITLE_DEFAULT if setting_key == APP_TITLE_SETTING_KEY else ""
-                self.fields[f"setting_{setting_key}"].initial = get_setting(setting_key, default)
+                self.fields[f"setting_{setting_key}"].initial = get_setting(
+                    setting_key, SETTING_FIELD_DEFAULTS.get(setting_key, "")
+                )
             self.fields[f"setting_{CONSULTATION_DUE_REMINDER_DAYS_KEY}"].initial = get_setting(
                 CONSULTATION_DUE_REMINDER_DAYS_KEY,
                 str(CONSULTATION_DUE_REMINDER_DAYS_DEFAULT),

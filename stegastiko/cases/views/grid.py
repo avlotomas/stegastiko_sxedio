@@ -19,7 +19,7 @@ from django.template.loader import render_to_string
 
 from cases.services import delete_with_attachments
 from cases.views.common import case_for_section, delete_action_for, wants_json
-from core.function_catalog import CREATE, EDIT
+from core.function_catalog import CREATE, EDIT, VIEW
 
 
 class GridEndpoint:
@@ -43,7 +43,9 @@ class GridEndpoint:
     # --- hooks -----------------------------------------------------------------------
 
     def action_for(self, kind, section):
-        """Access type needed for `kind` ("create", "edit" or "delete") on `section`."""
+        """Access type needed for `kind` ("view", "create", "edit" or "delete") on `section`."""
+        if kind == "view":
+            return VIEW
         if kind == "create":
             return self.create_action
         if kind == "edit":

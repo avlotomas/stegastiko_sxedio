@@ -148,7 +148,7 @@ class Communication(AuditedModel):
         model_ref = (self.content_type.app_label, self.content_type.model)
         if model_ref == ("cases", "case"):
             case_id = self.object_id
-        elif model_ref == ("cases", "completenesscheck"):
+        elif model_ref in (("cases", "completenesscheck"), ("cases", "landplot")):
             owner = self.content_object
             case_id = getattr(owner, "case_id", None)
         return case_id, None, getattr(self, "_section_ref", "")

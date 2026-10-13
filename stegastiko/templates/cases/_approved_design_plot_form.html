@@ -18,6 +18,9 @@
     <div class="form-grid">
         {% include "includes/choice_with_other_field.html" with field=plot_form.plot_type other=plot_form.plot_type_other wide=True %}
         {% include "includes/form_field.html" with field=plot_form.design_number %}
+        {% if plot_form.source_land_plots %}
+        {% include "includes/form_field.html" with field=plot_form.source_land_plots wide=True %}
+        {% endif %}
     </div>
 
     <div class="form-actions">

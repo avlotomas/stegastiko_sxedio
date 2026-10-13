@@ -1,6 +1,7 @@
 {% comment %}
-Table of sent deficiency emails (2.2). Rows open the read-only view modal.
-Requires: case, communications; optional empty_message (default Greek empty text).
+Table of sent emails (2.2 deficiency emails, 3.1 land plot emails). Rows open the read-only
+view modal. Requires: case, communications; optional owner_label (first column, default
+«Έλεγχος») and empty_message (default Greek empty text).
 {% endcomment %}
 <div class="table-wrap{% if table_class %} {{ table_class }}{% endif %}">
     <table class="data-table data-table--clickable-rows" data-communication-table>
@@ -8,7 +9,7 @@ Requires: case, communications; optional empty_message (default Greek empty text
         <tr>
             <th>
                 <button type="button" class="btn-link btn-link--table" data-communication-sort="check">
-                    Έλεγχος
+                    {{ owner_label|default:"Έλεγχος" }}
                 </button>
             </th>
             <th>

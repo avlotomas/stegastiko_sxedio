@@ -29,7 +29,7 @@ class Command(BaseCommand):
             community.is_active = True
             community.save()
 
-        case, _ = Case.objects.get_or_create(
+        Case.objects.get_or_create(
             community=community,
             case_number="DEMO-CASE-001",
             defaults={
@@ -57,7 +57,6 @@ class Command(BaseCommand):
                 published_at=timezone.now(),
             )
             self.stdout.write(self.style.SUCCESS("Created SubmissionCycle id=1"))
-        cycle.cases.add(case)
 
         SystemSetting.objects.update_or_create(
             key="applicationFolderPrefix",

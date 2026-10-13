@@ -36,14 +36,17 @@ from cases.models import (
     UtilityService,
 )
 from cases.services import (
+    LAND_PLOT_EMAIL_SUBJECT_DEFAULT,
+    LAND_PLOT_EMAIL_SUBJECT_KEY,
     approved_design_plot_section,
     approved_design_plot_section_ref,
+    land_plot_email_subject,
 )
 from cases.views.common import case_for_section, wants_json
 from cases.views.grid import GridEndpoint
 from core.function_catalog import CREATE, DELETE, EDIT, VIEW, case_section_function
 from core.permissions import has_access, require_access
-from core.services import smtp_is_configured
+from core.services import get_setting, smtp_is_configured
 
 # Ενότητα 5 and 7.4 share the consultation grid. Ενότητα 7 has no separate create access
 # type, so its rows are added with the edit permission (as the 7.3 grid does).
@@ -88,6 +91,19 @@ def completeness_check_grid_context(case):
         "completeness_checks": case.completeness_checks.all(),
         "smtp_ready": smtp_is_configured(),
     }
+
+
+def land_plot_grid_context(case):
+    plots = list(
+        case.land_plots.select_related("case__community").prefetch_related(
+            "attachments", "approved_design_plots", "communications"
+        )
+    )
+    # 3.1 Each row's «Αποστολή Email» opens the dialog with its own predefined subject.
+    subject_template = get_setting(LAND_PLOT_EMAIL_SUBJECT_KEY, LAND_PLOT_EMAIL_SUBJECT_DEFAULT)
+    for plot in plots:
+        plot.email_subject = land_plot_email_subject(plot, subject_template)
+    return {"land_plots": plots, "smtp_ready": smtp_is_configured()}
 
 
 # --- 2.1 Completeness checks ------------------------------------------------------------
@@ -139,7 +155,7 @@ class LandPlotGrid(GridEndpoint):
     delete_attachments = True
 
     def grid_context(self, request, case):
-        return {"land_plots": case.land_plots.prefetch_related("attachments")}
+        return land_plot_grid_context(case)
 
     def saved_message(self, instance, is_new):
         verb = "Προστέθηκε" if is_new else "Ενημερώθηκε"
@@ -152,6 +168,13 @@ class LandPlotGrid(GridEndpoint):
         return f"Διαγράφηκε το τεμάχιο {label}."
 
     def refuse_delete(self, request, case, instance):
+        # A parcel named as the origin of a 7.3 plot stays until that link is removed.
+        refusal = instance.deletion_refusal
+        if refusal:
+            return JsonResponse(
+                {"ok": False, "message": refusal, "grid_html": self.grid_html(request, case)},
+                status=409,
+            )
         # The grid may predate a 4.1 evaluation entered meanwhile, so the server checks again.
         if not instance.has_technical_evaluation or request.POST.get("confirm_evaluation") == "1":
             return None
@@ -301,13 +324,17 @@ class ApprovedDesignPlotGrid(GridEndpoint):
         section = approved_design_plot_section(case)
         function = case_section_function(section)
         can_edit = has_access(request.user, function, EDIT)
-        plots = list(case.approved_design_plots.prefetch_related("allocations").all())
+        plots = list(
+            case.approved_design_plots.select_related("plot").prefetch_related("source_land_plots")
+        )
         return {
             "approved_design_plots": plots,
             "approved_design_plot_rows": (
                 approved_design_plot_inline_rows(case, bound_form, plots) if can_edit else ()
             ),
             "plot_section": section,
+            # The «Τεμάχια προέλευσης» column appears once the case has 3.1 parcels.
+            "has_source_land_plots": case.land_plots.exists(),
             "can_edit_approved_design_plots": can_edit,
             "can_delete_approved_design_plots": has_access(
                 request.user, function, self.delete_action or DELETE
@@ -324,6 +351,22 @@ class ApprovedDesignPlotGrid(GridEndpoint):
 
     def form_context(self, request, case, form):
         return {"plot_form": form, "plot_section": approved_design_plot_section(case)}
+
+    def refuse_delete(self, request, case, instance):
+        # Β: a row that became a completed plot is removed from «Οικόπεδα» first.
+        if instance.generated_plot is None:
+            return None
+        return JsonResponse(
+            {
+                "ok": False,
+                "message": (
+                    "Η εγγραφή δεν διαγράφεται γιατί έχει ήδη καταχωριστεί στα Οικόπεδα με την "
+                    "ολοκλήρωση της αίτησης. Διαγράψτε πρώτα το οικόπεδο από τον πίνακα «Οικόπεδα»."
+                ),
+                "grid_html": self.grid_html(request, case),
+            },
+            status=409,
+        )
 
     def extra_payload(self, request, case):
         return {"reload": False}

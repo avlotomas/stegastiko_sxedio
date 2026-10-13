@@ -37,8 +37,6 @@ DEFAULT_CASE_SUBSECTION_LABELS: dict[str, str] = {
     "7.5": "Προκυρηξη και κατακυρωσης συμβασης",
     "7.6": "Παρακολουθηση κατασκευαστικων εργασιων",
     "7.7": "Αίτηση στο ΤΚΧ",
-    "9.1": "Βασικά στοιχεία",
-    "9.4": "Έλεγχος ετοιμότητας (αυτόματο)",
 }
 
 CASE_SUBSECTION_LABEL_KEYS = tuple(DEFAULT_CASE_SUBSECTION_LABELS.keys())

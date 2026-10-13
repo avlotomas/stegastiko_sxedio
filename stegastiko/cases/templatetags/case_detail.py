@@ -1,7 +1,7 @@
 from django import template
 
 from cases.detail_display import case_field_rows
-from cases.services import approved_design_plot_section
+from cases.services import approved_design_plot_section, completion_readiness
 from cases.section_labels import case_section_heading as build_case_section_heading
 from cases.subsection_labels import (
     case_subsection_heading as build_case_subsection_heading,
@@ -47,4 +47,22 @@ def approved_design_plot_workspace(context, case):
         "case": case,
         "plot_section": section,
         "can_edit_approved_design_plots": can_edit,
+    }
+
+
+@register.inclusion_tag("cases/_case_completion_panel.html", takes_context=True)
+def case_completion_panel(context, case):
+    """«Ολοκλήρωση αίτησης» in the case actions sidebar of every case screen."""
+    user = context["request"].user
+    if not has_access(user, "case_completion", VIEW):
+        return {"show_case_completion": False}
+    readiness = completion_readiness(case)
+    return {
+        "show_case_completion": True,
+        "case": case,
+        "readiness": readiness,
+        "missing": [label for label, ready in readiness["rows"] if not ready],
+        "can_complete": has_access(user, "case_completion", EDIT),
+        "plots_count": case.plots.count(),
+        "csrf_token": context.get("csrf_token"),
     }

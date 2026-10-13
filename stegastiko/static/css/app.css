@@ -421,6 +421,18 @@ body.case-work .page {
     color: var(--color-text-muted);
 }
 
+.case-actions-sidebar__completion {
+    margin-top: 1rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid var(--color-border);
+}
+
+.case-actions-sidebar__completion .text-muted,
+.case-actions-sidebar__completion .helptext {
+    font-size: 0.8rem;
+    margin: 0 0 0.5rem;
+}
+
 @media (max-width: 960px) {
     .case-work-layout {
         grid-template-columns: 1fr;
@@ -763,6 +775,46 @@ body.case-work .page {
 
 .data-table--inline-edit input[type="number"] {
     min-width: 7rem;
+}
+
+/* 7.3 «Τεμάχια προέλευσης»: checkboxes that open in place inside the table cell. */
+.multi-pick {
+    min-width: 10rem;
+}
+
+.multi-pick summary {
+    cursor: pointer;
+    padding: 0.4rem 0.55rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+    font-size: 0.9rem;
+    white-space: normal;
+}
+
+.multi-pick__options {
+    margin-top: 0.3rem;
+    max-height: 12rem;
+    overflow-y: auto;
+    padding: 0.4rem 0.55rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: #f9fbfd;
+}
+
+.multi-pick__options label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0.15rem 0;
+    font-size: 0.9rem;
+    white-space: nowrap;
+}
+
+.data-table--inline-edit .multi-pick input[type="checkbox"] {
+    min-width: 0;
+    width: auto;
+    margin: 0;
 }
 
 .data-table--inline-edit th:last-child,
@@ -1245,6 +1297,12 @@ input.checkbox-list {
 
 .data-table tbody tr:last-child td {
     border-bottom: none;
+}
+
+/* 3.1 A rejected plot stays in the grid, struck out; its actions remain usable. */
+.data-table__row--rejected td:not(.data-table__actions) {
+    text-decoration: line-through;
+    color: #64748b;
 }
 
 .badge {

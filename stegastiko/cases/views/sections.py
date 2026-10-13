@@ -19,6 +19,7 @@ from cases.section_labels import get_case_section_label
 from cases.services import (
     case_communications,
     deficiency_email_subject,
+    land_plot_communications,
     save_case_section,
     suitability_summary,
 )
@@ -29,7 +30,7 @@ from cases.views.common import (
     case_nav_items,
     disable_fields,
 )
-from cases.views.grids import case_utility_services, consultation_grid
+from cases.views.grids import case_utility_services, consultation_grid, land_plot_grid_context
 from core.function_catalog import EDIT, EXPORT, VIEW, case_section_function
 from core.permissions import has_access
 from core.services import smtp_is_configured
@@ -50,7 +51,13 @@ def _section_context(request, case, section, formsets):
             }
         )
     elif section == refs.SECTION_3:
-        context["land_plots"] = case.land_plots.prefetch_related("attachments")
+        context.update(land_plot_grid_context(case))
+        context.update(
+            {
+                "land_plot_communications": land_plot_communications(case),
+                "land_plot_email_form": DeficiencyEmailForm(initial={"body": ""}),
+            }
+        )
     elif section == refs.SECTION_4:
         context["land_plots"] = case.land_plots.all()
         context["utility_services"] = case_utility_services(case)

@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block title %}{% if is_create %}Νέο οικόπεδο{% else %}{{ plot.row_label }}{% endif %}{% endblock %}
+
+{% block content %}
+<nav class="breadcrumb" aria-label="Πλοήγηση">
+    <a href="{% url 'plots:list' %}">Οικόπεδα</a>
+    <span>/</span>
+    <span>{% if is_create %}Νέο οικόπεδο{% else %}{{ plot.row_label }}{% endif %}</span>
+</nav>
+
+<div class="page-header">
+    <h1>{% if is_create %}Νέο οικόπεδο{% else %}{{ plot.row_label }}{% endif %}</h1>
+    <p class="page-header__lead">
+        {% if is_create %}
+        Χειροκίνητη καταχώριση οικοπέδου που δεν προέρχεται από αίτηση διαχωρισμού.
+        {% elif plot.source_case %}
+        Προήλθε από την αίτηση διαχωρισμού
+        <a href="{% url 'cases:detail' plot.source_case.pk %}">{{ plot.source_case.case_number }}</a>.
+        {% else %}
+        Χειροκίνητη καταχώριση.
+        {% endif %}
+    </p>
+</div>
+
+{% if not is_create %}
+<div class="card">
+    <h2 class="card__title">Προέλευση</h2>
+    <dl class="detail-grid">
+        <div>
+            <dt>Αίτηση διαχωρισμού</dt>
+            <dd>{% if plot.source_case %}<a href="{% url 'cases:detail' plot.source_case.pk %}">{{ plot.source_case.case_number }}</a>{% else %}—{% endif %}</dd>
+        </div>
+        <div>
+            <dt>Γραμμή 7.3</dt>
+            <dd>{{ plot.source_design_plot|default:"—" }}</dd>
+        </div>
+        <div>
+            <dt>Χωράφι</dt>
+            <dd>{{ plot.field|default:"—" }}</dd>
+        </div>
+        <div>
+            <dt>Παραπομπή ΤΚΧ</dt>
+            <dd>{{ plot.valuation_referral|default:"—" }}</dd>
+        </div>
+        <div>
+            <dt>Τιμή διάθεσης (€)</dt>
+            <dd>{{ plot.disposal_price|default_if_none:"—" }} <span class="text-muted">(προεπιλογή: 25% της αξίας)</span></dd>
+        </div>
+        <div>
+            <dt>Γνωστοποιήσεις</dt>
+            <dd>
+                {% for cycle in submission_cycles %}
+                {% if access.announcements.view %}<a href="{% url 'announcements:detail' cycle.pk %}">{{ cycle }}</a>{% else %}{{ cycle }}{% endif %}<br>
+                {% empty %}—{% endfor %}
+            </dd>
+        </div>
+        <div>
+            <dt>Κατανομή</dt>
+            <dd>{% if allocations %}<span class="badge badge--pass">ΝΑΙ</span>{% else %}—{% endif %}</dd>
+        </div>
+    </dl>
+    {% if plot.source_case %}
+    <p class="helptext">
+        Αν η αίτηση ολοκληρωθεί ξανά, τα στοιχεία του οικοπέδου ενημερώνονται από τη γραμμή 7.3
+        (εκτός αν έχει κατανομή).
+    </p>
+    {% endif %}
+</div>
+{% endif %}
+
+<div class="card">
+<form method="post" class="app-form" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+    <div class="alert alert--error form-span-all">
+        {% for error in form.non_field_errors %}{{ error }}{% endfor %}
+    </div>
+    {% endif %}
+    <div class="form-grid">
+        {% for field in form.visible_fields %}
+            {% if field.name == "comments" %}
+            {% include "includes/form_field.html" with field=field wide=True %}
+            {% else %}
+            {% include "includes/form_field.html" with field=field %}
+            {% endif %}
+        {% endfor %}
+    </div>
+    <div class="form-actions form-span-all">
+        {% if is_create or can_edit %}
+        <button type="submit" class="btn btn-primary">Αποθήκευση</button>
+        {% endif %}
+        <a href="{% url 'plots:list' %}" class="btn btn-secondary">Πίσω στα Οικόπεδα</a>
+    </div>
+</form>
+</div>
+
+{% if not is_create and can_delete %}
+<div class="card">
+    <h2 class="card__title">Διαγραφή</h2>
+    <form method="post" action="{% url 'plots:delete' plot.pk %}" data-confirm="Διαγραφή του {{ plot.row_label }};">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Διαγραφή οικοπέδου</button>
+    </form>
+    <p class="helptext">
+        Δεν διαγράφεται οικόπεδο με κατανομή ή που περιλαμβάνεται σε εκδοθείσα γνωστοποίηση.
+        Μετά τη διαγραφή, η αντίστοιχη γραμμή 7.3 μπορεί να διαγραφεί ή να ξαναδημιουργήσει
+        οικόπεδο με νέα ολοκλήρωση της αίτησης.
+    </p>
+</div>
+{% endif %}
+{% endblock %}

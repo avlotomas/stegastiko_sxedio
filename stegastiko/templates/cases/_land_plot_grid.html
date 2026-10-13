@@ -1,5 +1,6 @@
 {% comment %}
-3.1 Land plot grid of the section 3 screen; re-rendered after every add/edit/delete.
+3.1 Land plot grid of the section 3 screen; re-rendered after every add/edit/delete/email.
+A rejected plot («Απορρίφθηκε» ΝΑΙ) stays listed but struck out.
 {% endcomment %}
 <div class="table-wrap" data-land-plot-grid>
     <table class="data-table">
@@ -15,12 +16,14 @@
             <th>Πρόσβαση</th>
             <th>Σχόλια / Παρατηρήσεις</th>
             <th>Αρχεία τεμαχίου</th>
+            <th>Απορρίφθηκε</th>
+            <th>Email</th>
             <th><span class="visually-hidden">Ενέργειες</span></th>
         </tr>
         </thead>
         <tbody>
         {% for plot in land_plots %}
-            <tr>
+            <tr{% if plot.is_rejected %} class="data-table__row--rejected" title="Το τεμάχιο απορρίφθηκε"{% endif %}>
                 <td><strong>{{ plot.parcel_number }}</strong></td>
                 <td>{{ plot.sheet_plan|default:"—" }}</td>
                 <td>{{ plot.location|default:"—" }}</td>
@@ -35,6 +38,8 @@
                     <a href="{% url 'cases:attachment_download' case.pk attachment.pk %}">{{ attachment.filename }}</a>{% if not forloop.last %}<br>{% endif %}
                     {% empty %}—{% endfor %}
                 </td>
+                <td>{{ plot.get_rejected_display }}</td>
+                <td>{{ plot.sent_emails_count }}</td>
                 <td class="data-table__actions">
                     {% if access.case_section_3.edit %}
                     <button type="button" class="btn btn-secondary btn-sm"
@@ -42,7 +47,23 @@
                         Επεξεργασία
                     </button>
                     {% endif %}
+                    {% if access.case_section_3.send %}
+                    <button type="button" class="btn btn-secondary btn-sm"
+                            data-dialog-open="land-plot-email-dialog"
+                            data-email-action="{% url 'cases:land_plot_email_send' case.pk plot.pk %}"
+                            data-email-subject="{{ plot.email_subject }}"
+                            data-check-label="{{ plot.row_label }}"
+                            {% if not case.contact_email or not smtp_ready %}disabled{% endif %}>
+                        Αποστολή Email
+                    </button>
+                    {% endif %}
                     {% if access.case_section_3.delete %}
+                    {% with refusal=plot.deletion_refusal %}
+                    {% if refusal %}
+                    <span title="{{ refusal }}">
+                        <button type="button" class="btn btn-danger btn-sm" disabled>Διαγραφή</button>
+                    </span>
+                    {% else %}
                     <button type="button" class="btn btn-danger btn-sm"
                             data-land-plot-delete="{% url 'cases:land_plot_delete' case.pk plot.pk %}"
                             data-land-plot-label="{{ plot.parcel_number }}"
@@ -50,10 +71,12 @@
                         Διαγραφή
                     </button>
                     {% endif %}
+                    {% endwith %}
+                    {% endif %}
                 </td>
             </tr>
         {% empty %}
-            <tr><td colspan="11">Δεν έχουν καταχωριστεί τεμάχια.</td></tr>
+            <tr><td colspan="13">Δεν έχουν καταχωριστεί τεμάχια.</td></tr>
         {% endfor %}
         </tbody>
     </table>

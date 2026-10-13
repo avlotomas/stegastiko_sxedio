@@ -85,26 +85,6 @@ def _make_case(community, case_type=Case.CaseType.NEW_DIVISION, number="CASE-ABG
     )
 
 
-def _make_ready_case(community, number="CASE-ABG-01"):
-    case = _make_case(community, number=number, dls_response_date=date(2027, 6, 1))
-    InfrastructureCheck.objects.create(
-        case=case,
-        check_date=date(2027, 5, 15),
-        curbs_ready=True,
-        pavements_ready=True,
-        asphalt_ready=True,
-    )
-    ApprovedDesignPlot.objects.create(
-        case=case,
-        plot_type=ApprovedDesignPlot.PlotType.DIVISION_PLOT,
-        design_number="1",
-        final_area_sqm=Decimal("600"),
-        has_separate_title=YesNo.YES,
-        valuation_amount=Decimal("70000"),
-    )
-    return case
-
-
 def _make_person(identity="ID-1"):
     return Person.objects.create(
         identity_number=identity,
@@ -119,7 +99,13 @@ def _make_person(identity="ID-1"):
 
 
 def _allocate(plot, community):
+    """Allocate the completed plot produced by a 7.3 row (created as completion would)."""
     from allocation.models import Allocation
+    from plots.models import Plot
+
+    completed = Plot(community=community, source_case=plot.case, source_design_plot=plot)
+    completed.copy_from(plot)
+    completed.save()
 
     cycle = SubmissionCycle.objects.create(
         community=community,
@@ -135,7 +121,7 @@ def _allocate(plot, community):
         family_type=Application.FamilyType.OTHER,
         applicant_email="a@example.org",
     )
-    return Allocation.objects.create(application=application, parcel=plot)
+    return Allocation.objects.create(application=application, parcel=completed)
 
 
 # --- 1. Case number: max sequence + retry, never a server error -----------------------------
@@ -155,32 +141,51 @@ def test_case_number_is_not_reused_after_a_deletion(community, staff_client):
     for _ in range(3):
         assert staff_client.post(reverse("cases:create"), _create_payload(community)).status_code == 302
     numbers = sorted(Case.objects.values_list("case_number", flat=True))
-    assert [n[-2:] for n in numbers] == ["01", "02", "03"]
+    assert numbers == ["CASE.001.1", "CASE.001.2", "CASE.001.3"]
     Case.objects.get(case_number=numbers[0]).delete()
 
     response = staff_client.post(reverse("cases:create"), _create_payload(community))
     assert response.status_code == 302
-    assert Case.objects.order_by("-id").first().case_number.endswith("-04")
+    assert Case.objects.order_by("-id").first().case_number == "CASE.001.4"
+
+
+@pytest.mark.django_db
+def test_case_number_is_prefix_folder_code_and_sequence_per_community(community):
+    other = Community.objects.create(
+        district="ΛΕΥΚΩΣΙΑΣ", name="ΔΕΖ", contact_email="dez@example.org", community_folder_code="002"
+    )
+    set_setting("caseNumberPrefix", "17")
+    first = services.create_case(Case(community=community, contact_email="a@example.org"))
+    other_first = services.create_case(Case(community=other, contact_email="b@example.org"))
+    second = services.create_case(Case(community=community, contact_email="a@example.org"))
+    assert first.case_number == "17.001.1"
+    assert other_first.case_number == "17.002.1"
+    assert second.case_number == "17.001.2"
+
+    # A later prefix change keeps counting the community's cases.
+    set_setting("caseNumberPrefix", "18")
+    third = services.create_case(Case(community=community, contact_email="a@example.org"))
+    assert third.case_number == "18.001.3"
 
 
 @pytest.mark.django_db
 def test_case_create_retries_when_a_concurrent_create_took_the_number(community, monkeypatch):
     real = services.generate_case_number
     year = date.today().year
-    _make_case(community, number=f"CASE-001-{year}-07")
+    _make_case(community, number="CASE.001.7")
     calls = []
 
     def racing(community, start_date=None):
         calls.append(1)
         # First attempt returns the number a concurrent request has just saved.
-        return f"CASE-001-{year}-07" if len(calls) == 1 else real(community, start_date)
+        return "CASE.001.7" if len(calls) == 1 else real(community, start_date)
 
     monkeypatch.setattr(services, "generate_case_number", racing)
     case = services.create_case(
         Case(community=community, contact_email="x@example.org", start_date=date(year, 2, 1))
     )
     assert len(calls) == 2
-    assert case.case_number == f"CASE-001-{year}-08"
+    assert case.case_number == "CASE.001.8"
 
 
 @pytest.mark.django_db
@@ -199,8 +204,8 @@ def test_case_create_shows_a_form_error_instead_of_500_when_numbers_keep_collidi
 # --- 2. Published announcements are locked ----------------------------------------------------
 
 
-def _cycle(community, case, published=False):
-    cycle = SubmissionCycle.objects.create(
+def _cycle(community, published=False):
+    return SubmissionCycle.objects.create(
         community=community,
         announcement_date=date(2027, 6, 1),
         submission_start_date=date(2027, 6, 2),
@@ -208,40 +213,75 @@ def _cycle(community, case, published=False):
         announcement_text="Αρχικό κείμενο",
         published_at="2027-06-01T10:00:00Z" if published else None,
     )
-    cycle.cases.add(case)
-    return cycle
 
 
 def _announcement_post(text):
     return {
+        "cycle-announcement_date": "2027-06-01",
+        "cycle-submission_start_date": "2027-06-02",
+        "cycle-submission_end_date": "2027-07-01",
+        "cycle-comments": "",
         "announcement_text": text,
-        "publications-TOTAL_FORMS": "1",
-        "publications-INITIAL_FORMS": "0",
-        "publications-MIN_NUM_FORMS": "0",
-        "publications-MAX_NUM_FORMS": "1000",
-        "publications-0-method": "community",
-        "publications-0-published_on": "2027-06-02",
-        "publications-0-notes": "",
     }
+
+
+PUBLICATION = {"method": "community", "published_on": "2027-06-02", "notes": ""}
 
 
 @pytest.mark.django_db
 def test_announcement_detail_post_saves_a_draft(community, staff_client):
-    case = _make_ready_case(community)
-    cycle = _cycle(community, case)
-    url = reverse("cases:announcement_detail", args=[case.pk, cycle.pk])
+    cycle = _cycle(community)
+    url = reverse("announcements:detail", args=[cycle.pk])
     response = staff_client.post(url, _announcement_post("Νέο κείμενο"))
     assert response.status_code == 302
     cycle.refresh_from_db()
     assert cycle.announcement_text == "Νέο κείμενο"
-    assert cycle.publications.count() == 1
+
+
+@pytest.mark.django_db
+def test_announcement_publications_are_a_grid(community, staff_client):
+    cycle = _cycle(community)
+    detail = staff_client.get(reverse("announcements:detail", args=[cycle.pk])).content.decode()
+    assert "data-publication-table" in detail
+    create_url = reverse("announcements:publication_create", args=[cycle.pk])
+    assert create_url in detail
+
+    for published_on in ("2027-06-02", "2027-06-03"):
+        response = staff_client.post(create_url, {**PUBLICATION, "published_on": published_on}, **JSON)
+        assert response.status_code == 200 and response.json()["ok"]
+    assert cycle.publications.count() == 2
+    first, second = cycle.publications.all()
+
+    edit_url = reverse("announcements:publication_edit", args=[cycle.pk, first.pk])
+    response = staff_client.post(edit_url, {**PUBLICATION, "method": "other", "notes": "Εφημερίδα"}, **JSON)
+    assert response.json()["ok"]
+    first.refresh_from_db()
+    assert first.method == "other" and first.notes == "Εφημερίδα"
+
+    response = staff_client.post(edit_url, {**PUBLICATION, "published_on": ""}, **JSON)
+    assert response.status_code == 400
+
+    delete_url = reverse("announcements:publication_delete", args=[cycle.pk, second.pk])
+    response = staff_client.post(delete_url, **JSON)
+    assert response.json()["ok"]
+    assert list(cycle.publications.all()) == [first]
+
+
+@pytest.mark.django_db
+def test_announcement_publications_are_locked_once_published(community, staff_client):
+    cycle = _cycle(community, published=True)
+    create_url = reverse("announcements:publication_create", args=[cycle.pk])
+    detail = staff_client.get(reverse("announcements:detail", args=[cycle.pk])).content.decode()
+    assert create_url not in detail
+    response = staff_client.post(create_url, PUBLICATION, **JSON)
+    assert response.status_code == 409
+    assert cycle.publications.count() == 0
 
 
 @pytest.mark.django_db
 def test_announcement_detail_post_is_refused_once_published(community, staff_client):
-    case = _make_ready_case(community)
-    cycle = _cycle(community, case, published=True)
-    url = reverse("cases:announcement_detail", args=[case.pk, cycle.pk])
+    cycle = _cycle(community, published=True)
+    url = reverse("announcements:detail", args=[cycle.pk])
     response = staff_client.post(url, _announcement_post("Αλλοιωμένο"))
     assert response.status_code == 409
     html = response.content.decode()
@@ -249,66 +289,14 @@ def test_announcement_detail_post_is_refused_once_published(community, staff_cli
     assert 'name="announcement_text"' in html and "disabled" in html
     cycle.refresh_from_db()
     assert cycle.announcement_text == "Αρχικό κείμενο"
-    assert cycle.publications.count() == 0
 
 
 @pytest.mark.django_db
 def test_announcement_detail_get_of_published_announcement_is_read_only(community, staff_client):
-    case = _make_ready_case(community)
-    cycle = _cycle(community, case, published=True)
-    html = staff_client.get(
-        reverse("cases:announcement_detail", args=[case.pk, cycle.pk])
-    ).content.decode()
+    cycle = _cycle(community, published=True)
+    html = staff_client.get(reverse("announcements:detail", args=[cycle.pk])).content.decode()
     assert "μόνο για ανάγνωση" in html
     assert ">Αποθήκευση<" not in html
-
-
-# --- 3. Ενότητα 9 does not open before the 9.4 readiness check passes (§Β.2) ---------------------
-
-
-def _create_announcement_payload(case):
-    return {
-        "cases": [case.pk],
-        "announcement_date": "2027-06-01",
-        "submission_start_date": "2027-06-02",
-        "submission_end_date": "2027-07-01",
-        "comments": "",
-    }
-
-
-@pytest.mark.django_db
-def test_announcement_create_is_blocked_when_a_case_is_not_ready(community, staff_client):
-    case = _make_case(community)
-    response = staff_client.post(
-        reverse("cases:announcement_create", args=[case.pk]), _create_announcement_payload(case)
-    )
-    assert response.status_code == 200
-    assert "Δεν πληρούται ο έλεγχος ετοιμότητας (9.4)" in response.content.decode()
-    assert not SubmissionCycle.objects.exists()
-
-
-@pytest.mark.django_db
-def test_announcement_create_is_blocked_by_another_selected_case(community, staff_client):
-    ready = _make_ready_case(community)
-    not_ready = _make_case(community, number="CASE-ABG-02")
-    payload = _create_announcement_payload(ready)
-    payload["cases"] = [ready.pk, not_ready.pk]
-    response = staff_client.post(reverse("cases:announcement_create", args=[ready.pk]), payload)
-    assert response.status_code == 200
-    assert "CASE-ABG-02" in response.content.decode()
-    assert not SubmissionCycle.objects.exists()
-
-
-@pytest.mark.django_db
-def test_announcement_create_succeeds_for_a_ready_case(community, staff_client):
-    case = _make_ready_case(community)
-    response = staff_client.post(
-        reverse("cases:announcement_create", args=[case.pk]), _create_announcement_payload(case)
-    )
-    assert response.status_code == 302
-    cycle = SubmissionCycle.objects.get()
-    assert list(cycle.cases.all()) == [case]
-    assert "ΑΝΑΚΟΙΝΩΣΗ" in cycle.announcement_text
 
 
 # --- 4. Deficiency email: record first, mark sent / failed, refuse double submits -------------------
@@ -520,6 +508,118 @@ def test_approved_design_plot_inline_save_updates_value_and_calculated_price(
     assert plot.disposal_price == Decimal("20000.00")
     assert "20000" in response.json()["grid_html"]
 
+    def post(valuation, price):
+        values = {
+            f"{prefix}-plot_type": ApprovedDesignPlot.PlotType.DIVISION_PLOT,
+            f"{prefix}-design_number": "4",
+            f"{prefix}-numbering_status": ApprovedDesignPlot.NumberingStatus.DESIGN,
+            f"{prefix}-valuation_amount": valuation,
+            f"{prefix}-disposal_price": price,
+        }
+        url = reverse("cases:approved_design_plot_inline_edit", args=[case.pk, plot.pk])
+        assert staff_client.post(url, values, **JSON).status_code == 200
+        plot.refresh_from_db()
+
+    # The price is editable: a typed price is kept, also when the value changes later.
+    post("80000", "18500")
+    assert plot.disposal_price == Decimal("18500")
+    post("90000", "18500")
+    assert plot.disposal_price == Decimal("18500")
+    # Cleared, it is calculated again from the value.
+    post("90000", "")
+    assert plot.disposal_price == Decimal("22500.00")
+    # Left as it was, it follows the value.
+    post("100000", "22500.00")
+    assert plot.disposal_price == Decimal("25000.00")
+
+
+@pytest.mark.django_db
+def test_approved_design_plot_links_optional_source_land_plots(community, staff_client):
+    case = _make_case(community)
+    first = case.land_plots.create(parcel_number="101", sheet_plan="30/12")
+    second = case.land_plots.create(parcel_number="102")
+    other_case = _make_case(community, number="CASE-ABG-02")
+    foreign = other_case.land_plots.create(parcel_number="999")
+
+    # New row from the dialog: two parcels of the case.
+    create_url = reverse("cases:approved_design_plot_create", args=[case.pk])
+    form_html = staff_client.get(create_url, **JSON).json()["html"]
+    assert "Τεμάχια προέλευσης" in form_html
+    assert "101 (Φ/Σχ 30/12)" in form_html
+    assert "999" not in form_html
+    response = staff_client.post(
+        create_url,
+        {
+            "plot_type": "division_plot",
+            "plot_type_other": "",
+            "design_number": "1",
+            "source_land_plots": [first.pk, second.pk],
+        },
+        **JSON,
+    )
+    assert response.status_code == 200
+    plot = case.approved_design_plots.get()
+    assert set(plot.source_land_plots.all()) == {first, second}
+    assert "101 (Φ/Σχ 30/12), 102" in response.json()["grid_html"]
+
+    # A parcel of another case is not a valid choice.
+    response = staff_client.post(
+        create_url,
+        {
+            "plot_type": "division_plot",
+            "plot_type_other": "",
+            "design_number": "2",
+            "source_land_plots": [foreign.pk],
+        },
+        **JSON,
+    )
+    assert response.status_code == 400
+
+    # The inline row save can clear the links: they are optional.
+    prefix = f"plot-{plot.pk}"
+    response = staff_client.post(
+        reverse("cases:approved_design_plot_inline_edit", args=[case.pk, plot.pk]),
+        {
+            f"{prefix}-plot_type": "division_plot",
+            f"{prefix}-plot_type_other": "",
+            f"{prefix}-design_number": "1",
+            f"{prefix}-numbering_status": ApprovedDesignPlot.NumberingStatus.DESIGN,
+            f"{prefix}-source_land_plots": [second.pk],
+        },
+        **JSON,
+    )
+    assert response.status_code == 200
+    assert list(plot.source_land_plots.all()) == [second]
+
+
+@pytest.mark.django_db
+def test_land_plot_linked_to_design_plot_cannot_be_deleted(community, staff_client):
+    case = _make_case(community)
+    linked = case.land_plots.create(parcel_number="101")
+    free = case.land_plots.create(parcel_number="102")
+    plot = ApprovedDesignPlot.objects.create(case=case, plot_type="division_plot", design_number="5")
+    plot.source_land_plots.add(linked)
+
+    html = staff_client.get(reverse("cases:section_edit", args=[case.pk, "3"])).content.decode()
+    assert reverse("cases:land_plot_delete", args=[case.pk, linked.pk]) not in html
+    assert reverse("cases:land_plot_delete", args=[case.pk, free.pk]) in html
+
+    refused = staff_client.post(
+        reverse("cases:land_plot_delete", args=[case.pk, linked.pk]),
+        {"confirm_evaluation": "1"},
+        **JSON,
+    )
+    assert refused.status_code == 409
+    assert "τεμάχιο 101 δεν διαγράφεται" in refused.json()["message"]
+    assert case.land_plots.filter(pk=linked.pk).exists()
+
+    # Once the plot no longer names it, the parcel can go.
+    plot.source_land_plots.clear()
+    deleted = staff_client.post(
+        reverse("cases:land_plot_delete", args=[case.pk, linked.pk]), **JSON
+    )
+    assert deleted.json()["ok"] is True
+
 
 # --- 7. An allocated plot keeps its type -------------------------------------------------------------
 
@@ -534,7 +634,7 @@ def test_allocated_plot_type_cannot_change(community, staff_client):
         url, {"plot_type": "green_space", "plot_type_other": "", "design_number": "1"}, **JSON
     )
     assert response.status_code == 400
-    assert "έχει ήδη κατανομή" in response.json()["html"]
+    assert "έχει ήδη καταχωριστεί στα Οικόπεδα" in response.json()["html"]
     plot.refresh_from_db()
     assert plot.plot_type == "division_plot"
     # The number can still be corrected.
@@ -802,11 +902,12 @@ def test_views_stay_importable_from_cases_views():
 
 
 @pytest.mark.django_db
-def test_section_7_comments_field_is_saved(community, staff_client):
+def test_section_7_comments_field_is_removed(community, staff_client):
     case = _make_case(community)
     html = staff_client.get(reverse("cases:section_edit", args=[case.pk, "7"])).content.decode()
-    assert 'name="section7_comments"' in html
+    assert 'name="section7_comments"' not in html
     assert 'name="section8_comments"' not in html
+    assert "Σχόλια / Παρατηρήσεις Ενότητας 7" not in html
 
 
 def test_consultation_help_texts_refer_to_7_4():

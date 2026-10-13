@@ -5,9 +5,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}{{ app_title }}{% endblock %}</title>
-    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=13">
+    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=15">
     <script src="{% static 'vendor/htmx.min.js' %}" defer></script>
-    <script src="{% static 'js/app.js' %}?v=10" defer></script>
+    <script src="{% static 'js/app.js' %}?v=12" defer></script>
     {% block extra_head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
@@ -38,6 +38,12 @@
                     {% endif %}
                 </div>
             </div>
+            {% endif %}
+            {% if access.plots.view %}
+            <a href="{% url 'plots:list' %}" class="site-nav__link{% if namespace == 'plots' %} is-active{% endif %}">{{ menu.plots }}</a>
+            {% endif %}
+            {% if access.announcements.view %}
+            <a href="{% url 'announcements:list' %}" class="site-nav__link{% if namespace == 'announcements' %} is-active{% endif %}">{{ menu.announcements }}</a>
             {% endif %}
             {% if access.reminders.view %}
             <a href="{% url 'reminders' %}" class="site-nav__link{% if request.resolver_match.url_name == 'reminders' %} is-active{% endif %}">{{ menu.reminders }}</a>

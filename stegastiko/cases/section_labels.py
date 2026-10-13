@@ -13,7 +13,6 @@ DEFAULT_CASE_SECTION_LABELS = {
     "5": "Διαβουλεύσεις καταλληλότητας",
     "6": "Απόφαση καταλληλότητας",
     "7": "Σχεδιασμός και υλοποίηση διαχωρισμού",
-    "9": "Γνωστοποίηση έναρξης αιτήσεων",
 }
 
 CASE_SECTION_LABEL_KEYS = tuple(DEFAULT_CASE_SECTION_LABELS.keys())

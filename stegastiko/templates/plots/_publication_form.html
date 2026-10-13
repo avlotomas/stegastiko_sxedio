@@ -1,0 +1,28 @@
+{% comment %}9.2 Modal form for one publication method of an announcement.{% endcomment %}
+<form method="post"
+      action="{% if publication_form.instance.pk %}{% url 'announcements:publication_edit' cycle.pk publication_form.instance.pk %}{% else %}{% url 'announcements:publication_create' cycle.pk %}{% endif %}"
+      class="app-form"
+      data-publication-form
+      novalidate>
+    {% csrf_token %}
+    <h2 class="card__title" id="publication-dialog-title">
+        {% if publication_form.instance.pk %}Επεξεργασία τρόπου δημοσίευσης{% else %}Νέος τρόπος δημοσίευσης{% endif %}
+    </h2>
+
+    {% if publication_form.non_field_errors %}
+    <div class="alert alert--error">
+        {% for error in publication_form.non_field_errors %}{{ error }}{% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="form-grid">
+        {% include "includes/form_field.html" with field=publication_form.method %}
+        {% include "includes/form_field.html" with field=publication_form.published_on %}
+        {% include "includes/form_field.html" with field=publication_form.notes wide=True %}
+    </div>
+
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Αποθήκευση</button>
+        <button type="button" class="btn btn-secondary" data-dialog-close>Άκυρο</button>
+    </div>
+</form>

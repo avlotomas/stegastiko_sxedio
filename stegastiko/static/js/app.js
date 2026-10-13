@@ -770,6 +770,15 @@ bindFilePickers(document);
 
             }
 
+            // 3.1 Each plot row carries its own predefined subject.
+            const subject = form.querySelector('[name="subject"]');
+
+            if (subject && button.dataset.emailSubject !== undefined) {
+
+                subject.value = button.dataset.emailSubject;
+
+            }
+
             const checkLabel = dialog.querySelector("[data-email-check-label]");
 
             if (checkLabel) {
@@ -838,15 +847,25 @@ bindFilePickers(document);
 
                         }
 
-                        replaceOuterHtml("[data-deficiency-email-log]", data.log_html);
+                        // 2.2 is the default; the 3.1 land plot dialog names its own targets.
+                        replaceOuterHtml(
+                            form.dataset.emailLogTarget || "[data-deficiency-email-log]",
+                            data.log_html
+                        );
 
                         if (data.grid_html) {
 
-                            replaceOuterHtml("[data-completeness-check-container]", data.grid_html);
+                            replaceOuterHtml(
+                                form.dataset.emailGridTarget || "[data-completeness-check-container]",
+                                data.grid_html
+                            );
 
                         }
 
-                        showStatusAlert("[data-completeness-check-status]", data.message);
+                        showStatusAlert(
+                            form.dataset.emailStatusTarget || "[data-completeness-check-status]",
+                            data.message
+                        );
 
                         dialog.close();
 
@@ -1188,6 +1207,14 @@ bindFilePickers(document);
                     if (result === null) {
                         return;
                     }
+                    if (!result.ok && result.message) {
+                        // Refused, e.g. the parcel is the origin of a 7.3 plot.
+                        if (result.grid_html) {
+                            ui.replaceGrid(result.grid_html);
+                        }
+                        ui.showStatus(result.message, "error");
+                        return;
+                    }
                     if (!result.ok) {
                         throw new Error("bad response");
                     }
@@ -1411,6 +1438,17 @@ bindFilePickers(document);
         deleteConfirm: "Διαγραφή του ελέγχου ",
         deleteErrorMessage: "Αποτυχία διαγραφής του ελέγχου.",
     });
+
+    // Publication methods grid of an announcement (9.2): add / edit / delete in a modal.
+    initGridModal({
+        name: "publication",
+        sort: collatorSort("publication"),
+        focusSelector: MODAL_FOCUS,
+        loadErrorMessage: "Αποτυχία φόρτωσης της φόρμας.",
+        deleteConfirm: "Διαγραφή του τρόπου δημοσίευσης ",
+        deleteErrorMessage: "Αποτυχία διαγραφής του τρόπου δημοσίευσης.",
+        serverDeleteErrors: true,
+    });
 })();
 
 // Role permission matrix: «Όλα» per row; any access implies «Προβολή» on the row and on the
@@ -1483,4 +1521,14 @@ bindFilePickers(document);
         syncAll();
     });
     syncAll();
+})();
+
+(function () {
+    // Plain POST forms that ask before an irreversible action: <form data-confirm="...">.
+    document.addEventListener("submit", function (event) {
+        const form = event.target.closest("form[data-confirm]");
+        if (form && !window.confirm(form.getAttribute("data-confirm"))) {
+            event.preventDefault();
+        }
+    });
 })();

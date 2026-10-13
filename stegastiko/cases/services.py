@@ -15,51 +15,57 @@ from cases.models import (
     Consultation,
     LandPlot,
     MinistryDecisionRound,
-    SubmissionCycle,
-    SubmissionCyclePublication,
 )
 from core.models import ActionHistory, Attachment, Communication
 from core.services import get_setting, require_smtp_configured, send_email
 
 DEFICIENCY_EMAIL_SUBJECT_KEY = "deficiencyEmailSubject"
 DEFICIENCY_EMAIL_SUBJECT_DEFAULT = "Ελλείψεις αίτησης Κ.Σ./Δ.Δ. — υπόθεση {case_number}"
-# 2.2 An identical email for the same check within this window is a double submit.
-DEFICIENCY_EMAIL_DEDUPE_SECONDS = 120
+LAND_PLOT_EMAIL_SUBJECT_KEY = "landPlotEmailSubject"
+LAND_PLOT_EMAIL_SUBJECT_DEFAULT = "Τεμάχιο {parcel_number} — υπόθεση {case_number}"
+# An identical email for the same row within this window is a double submit.
+EMAIL_DEDUPE_SECONDS = 120
 CASE_NUMBER_ATTEMPTS = 5
 
 
-def _case_number_base(community, year) -> str:
-    prefix = get_setting("caseNumberPrefix", "CASE")
-    return f"{prefix}-{community.community_folder_code}-{year}-"
+CASE_NUMBER_PREFIX_KEY = "caseNumberPrefix"
+CASE_NUMBER_PREFIX_DEFAULT = "CASE"
 
 
-def _sequence_suffix(case_number: str, base: str):
-    suffix = case_number[len(base):]
-    return int(suffix) if suffix.isdigit() else None
+def _case_number_base(community) -> str:
+    """1.1 `<prefix>.<communityFolderCode>.` — the prefix comes from the Settings."""
+    prefix = get_setting(CASE_NUMBER_PREFIX_KEY, CASE_NUMBER_PREFIX_DEFAULT).strip()
+    return f"{prefix}.{community.community_folder_code}."
+
+
+def _sequence_suffix(case_number: str, code: str):
+    """Sequence of a `<prefix>.<code>.<n>` number; None for any other format."""
+    head, sep, suffix = case_number.rpartition(".")
+    if not sep or not suffix.isdigit() or not head.endswith(f".{code}"):
+        return None
+    return int(suffix)
 
 
 @transaction.atomic
 def generate_case_number(community, start_date=None) -> str:
-    """1.1 Automatic case number, tied to district (through the community) and community.
+    """1.1 Automatic case number: `<prefix>.<communityFolderCode>.<sequence>`.
 
-    The sequence continues after the highest existing number of the community and year
-    (not the row count), so deleted cases never cause a number to be reused.
+    The sequence counts the cases of the community (whatever prefix was in force when
+    they were numbered) and continues after the highest existing number, not the row
+    count, so deleted cases never cause a number to be reused.
     """
     community = community.__class__.objects.select_for_update().get(pk=community.pk)
-    if not community.community_folder_code:
+    code = community.community_folder_code
+    if not code:
         raise ValidationError("Η Κοινότητα δεν έχει αριθμό φακέλου (communityFolderCode).")
 
-    digits = int(get_setting("caseSequenceDigits", "2"))
-    year = (start_date or timezone.localdate()).year
-    base = _case_number_base(community, year)
     existing = (
         Case.objects.select_for_update()
-        .filter(case_number__startswith=base)
+        .filter(community=community, case_number__contains=f".{code}.")
         .values_list("case_number", flat=True)
     )
-    numbers = [n for n in (_sequence_suffix(number, base) for number in existing) if n is not None]
-    sequence = str(max(numbers, default=0) + 1).zfill(digits)
-    return f"{base}{sequence}"
+    numbers = [n for n in (_sequence_suffix(number, code) for number in existing) if n is not None]
+    return f"{_case_number_base(community)}{max(numbers, default=0) + 1}"
 
 
 def create_case(case: Case) -> Case:
@@ -93,47 +99,59 @@ def deficiency_email_subject(case: Case) -> str:
     )
 
 
-def _record_deficiency_email(check: CompletenessCheck, subject: str, body: str) -> Communication:
-    """Create the 2.2 record before sending, refusing a duplicate (double submit)."""
-    case = check.case
-    check_type = ContentType.objects.get_for_model(CompletenessCheck)
+def land_plot_email_subject(plot: LandPlot, template: str | None = None) -> str:
+    """3.1 Predefined subject from the Settings; supports {parcel_number}, {case_number}, {community}.
+
+    Pass `template` when filling many rows so the setting is read once.
+    """
+    case = plot.case
+    if template is None:
+        template = get_setting(LAND_PLOT_EMAIL_SUBJECT_KEY, LAND_PLOT_EMAIL_SUBJECT_DEFAULT)
+    return (
+        template.replace("{parcel_number}", plot.parcel_number)
+        .replace("{case_number}", case.case_number)
+        .replace("{community}", case.community.name)
+    )
+
+
+def _record_email(owner, recipient, subject, body, section_ref, duplicate_message) -> Communication:
+    """Create the email record before sending, refusing a duplicate (double submit)."""
+    owner_type = ContentType.objects.get_for_model(owner)
     with transaction.atomic():
-        # Serialises concurrent submits for the same check where the database can lock.
-        CompletenessCheck.objects.select_for_update().filter(pk=check.pk).exists()
-        since = timezone.now() - timedelta(seconds=DEFICIENCY_EMAIL_DEDUPE_SECONDS)
+        # Serialises concurrent submits for the same row where the database can lock.
+        type(owner).objects.select_for_update().filter(pk=owner.pk).exists()
+        since = timezone.now() - timedelta(seconds=EMAIL_DEDUPE_SECONDS)
         duplicate = Communication.objects.filter(
-            content_type=check_type,
-            object_id=check.pk,
-            recipient=case.contact_email,
+            content_type=owner_type,
+            object_id=owner.pk,
+            recipient=recipient,
             subject=subject,
             body=body,
             status__in=(CommunicationStatus.SENDING, CommunicationStatus.SENT),
             created_at__gte=since,
         ).exists()
         if duplicate:
-            raise ValidationError(
-                "Το ίδιο email ελλείψεων έχει ήδη σταλεί για αυτόν τον έλεγχο πριν από λίγο."
-            )
+            raise ValidationError(duplicate_message)
         communication = Communication(
-            content_type=check_type,
-            object_id=check.pk,
-            recipient=case.contact_email,
+            content_type=owner_type,
+            object_id=owner.pk,
+            recipient=recipient,
             subject=subject,
             body=body,
             status=CommunicationStatus.SENDING,
         )
-        communication._section_ref = refs.REF_DEFICIENCY_EMAIL
+        communication._section_ref = section_ref
         communication.save()
     return communication
 
 
-def send_deficiency_email(check: CompletenessCheck, subject: str, body: str) -> Communication:
-    """2.2 Send the deficiencies to the 1.1 contact address and record the sending.
+def _send_case_email(owner, subject, body, section_ref, duplicate_message) -> Communication:
+    """Send an email about a case row to the 1.1 contact address and record the sending.
 
     The Communication is saved first (status «sending»), then the email is sent and the
     record is marked «sent» or «failed», so no email leaves without a trace.
     """
-    case = check.case
+    case = owner.case
     if not case.contact_email:
         raise ValidationError("Η υπόθεση δεν έχει ηλεκτρονική διεύθυνση επικοινωνίας (1.1).")
     if not subject.strip():
@@ -141,8 +159,10 @@ def send_deficiency_email(check: CompletenessCheck, subject: str, body: str) -> 
     # Nothing is recorded when sending cannot even start.
     require_smtp_configured()
 
-    communication = _record_deficiency_email(check, subject, body)
-    communication._section_ref = refs.REF_DEFICIENCY_EMAIL
+    communication = _record_email(
+        owner, case.contact_email, subject, body, section_ref, duplicate_message
+    )
+    communication._section_ref = section_ref
     try:
         send_email(case.contact_email, subject, body)
     except Exception:
@@ -153,6 +173,28 @@ def send_deficiency_email(check: CompletenessCheck, subject: str, body: str) -> 
     communication.sent_at = timezone.now()
     communication.save()
     return communication
+
+
+def send_deficiency_email(check: CompletenessCheck, subject: str, body: str) -> Communication:
+    """2.2 Send the deficiencies of a completeness check to the 1.1 contact address."""
+    return _send_case_email(
+        check,
+        subject,
+        body,
+        refs.REF_DEFICIENCY_EMAIL,
+        "Το ίδιο email ελλείψεων έχει ήδη σταλεί για αυτόν τον έλεγχο πριν από λίγο.",
+    )
+
+
+def send_land_plot_email(plot: LandPlot, subject: str, body: str) -> Communication:
+    """3.1 Send an email about one land plot to the 1.1 contact address of the Κ.Σ./Δ.Δ."""
+    return _send_case_email(
+        plot,
+        subject,
+        body,
+        refs.REF_LAND_PLOT_EMAIL,
+        "Το ίδιο email έχει ήδη σταλεί για αυτό το τεμάχιο πριν από λίγο.",
+    )
 
 
 def delete_with_attachments(instance, section_ref: str) -> None:
@@ -227,6 +269,7 @@ def attachment_owning_section(attachment) -> str:
 
 
 def case_communications(case: Case):
+    """2.2 deficiency emails (and any email recorded on the case itself)."""
     case_type = ContentType.objects.get_for_model(Case)
     check_type = ContentType.objects.get_for_model(CompletenessCheck)
     return Communication.objects.filter(
@@ -235,26 +278,24 @@ def case_communications(case: Case):
     ).order_by("-created_at", "-id")
 
 
-def case_history(case: Case):
-    """§Β.1.3 Aggregate history of the case folder, including its announcements.
+def land_plot_communications(case: Case):
+    """3.1 emails sent about the land plots of the case."""
+    return Communication.objects.filter(
+        content_type=ContentType.objects.get_for_model(LandPlot),
+        object_id__in=case.land_plots.values("pk"),
+    ).order_by("-created_at", "-id")
 
-    Announcements are shared between cases of the same community, so they carry no
-    single case id and have to be pulled in by entity instead.
-    """
-    cycles = list(case.submission_cycles.values_list("pk", flat=True))
-    queryset = ActionHistory.objects.filter(case_id=case.pk)
-    if cycles:
-        publications = SubmissionCyclePublication.objects.filter(
-            submission_cycle_id__in=cycles
-        ).values_list("pk", flat=True)
-        queryset = queryset | ActionHistory.objects.filter(
-            entity_type="SubmissionCycle", entity_id__in=[str(pk) for pk in cycles]
-        )
-        queryset = queryset | ActionHistory.objects.filter(
-            entity_type="SubmissionCyclePublication",
-            entity_id__in=[str(pk) for pk in publications],
-        )
-    return queryset.distinct().order_by("-timestamp", "-id")
+
+def communication_section(communication: Communication) -> str:
+    """Section whose access opens a sent email of the case."""
+    if communication.content_type.model_class() is LandPlot:
+        return refs.SECTION_3
+    return refs.SECTION_2
+
+
+def case_history(case: Case):
+    """§Β.1.3 Aggregate history of the case folder, including the plots it produced."""
+    return ActionHistory.objects.filter(case_id=case.pk).order_by("-timestamp", "-id")
 
 
 def suitability_summary(case: Case) -> dict:
@@ -292,8 +333,8 @@ def section8_completion(case: Case) -> dict:
     }
 
 
-def announcement_readiness(case: Case) -> dict:
-    """9.4 Automatic readiness check that gates the announcement of Ενότητα 9."""
+def completion_readiness(case: Case) -> dict:
+    """Automatic readiness check shown with «Ολοκλήρωση αίτησης» (formerly 9.4); advisory only."""
     completion = section8_completion(case)
     parcels = list(
         case.approved_design_plots.filter(
@@ -316,76 +357,4 @@ def announcement_readiness(case: Case) -> dict:
         ("Τελικά εμβαδά", final_areas),
         ("Καθορισμένη αξία / τιμή", completion["all_valued"] and completion["all_priced"]),
     ]
-    return {"rows": rows, "can_start": all(ready for _, ready in rows)}
-
-
-def cases_not_ready_for_announcement(cases) -> list:
-    """Case numbers whose 9.4 readiness check does not allow Ενότητα 9 to start."""
-    return [case.case_number for case in cases if not announcement_readiness(case)["can_start"]]
-
-
-def require_announcement_readiness(cases) -> None:
-    """§Β.2 stage gate: Ενότητα 9 does not open unless 9.4 gives «Δυνατότητα έναρξης = ΝΑΙ»."""
-    blocked = cases_not_ready_for_announcement(cases)
-    if blocked:
-        raise ValidationError(
-            "Δεν πληρούται ο έλεγχος ετοιμότητας (9.4) για: " + ", ".join(blocked)
-        )
-
-
-def create_announcement(form, case: Case) -> SubmissionCycle:
-    """9.1 Create the announcement of a valid SubmissionCycleForm, with its 9.3 draft.
-
-    Gated by the 9.4 readiness check of every case it covers (including `case`).
-    """
-    cases = list(form.cleaned_data.get("cases") or [])
-    if case not in cases:
-        cases.append(case)
-    require_announcement_readiness(cases)
-    with transaction.atomic():
-        cycle = form.save(commit=False)
-        cycle.community = case.community
-        cycle.save()
-        form.save_m2m()
-        cycle.cases.add(case)
-        cycle.announcement_text = build_announcement_text(cycle)
-        cycle.save()
-    return cycle
-
-
-def build_announcement_text(cycle: SubmissionCycle) -> str:
-    """9.3 Automatic draft from the case data and the submission period.
-
-    The exact approved wording is still pending (Ε-68), so this is a working draft
-    that the operator previews and edits before finalising.
-    """
-    community = cycle.community
-    case_numbers = ", ".join(case.case_number for case in cycle.cases.all()) or "—"
-    return (
-        "ΑΝΑΚΟΙΝΩΣΗ\n"
-        "Στεγαστικό Σχέδιο Διάθεσης Οικοπέδων\n\n"
-        f"Επαρχία: {community.district}\n"
-        f"Κοινότητα / Δ.Δ.: {community.name}\n"
-        f"Αρ. Φακέλου/ων υπόθεσης: {case_numbers}\n"
-        f"Αριθμός διαθέσιμων οικοπέδων: {cycle.available_plots_count}\n\n"
-        f"Ημερομηνία γνωστοποίησης: {cycle.announcement_date}\n"
-        f"Έναρξη υποβολής αιτήσεων: {cycle.submission_start_date}\n"
-        f"Λήξη υποβολής αιτήσεων: {cycle.submission_end_date}\n\n"
-        "Καλούνται οι ενδιαφερόμενες οικογένειες να υποβάλουν αίτηση (Παράρτημα 3) "
-        "εντός της ανωτέρω προθεσμίας, μαζί με τα απαιτούμενα δικαιολογητικά.\n"
-    )
-
-
-def publish_announcement(cycle: SubmissionCycle) -> SubmissionCycle:
-    """9.3 Finalise and issue the announcement, gated by the 9.4 readiness check."""
-    if cycle.is_published:
-        raise ValidationError("Η ανακοίνωση έχει ήδη οριστικοποιηθεί.")
-    if not cycle.announcement_text.strip():
-        raise ValidationError("Δεν υπάρχει κείμενο ανακοίνωσης (9.3).")
-    cases = list(cycle.cases.all())
-    if not cases:
-        raise ValidationError("Η γνωστοποίηση δεν έχει συνδεδεμένη υπόθεση (9.1).")
-    require_announcement_readiness(cases)
-    cycle.published_at = timezone.now()
-    cycle.save()
-    return cycle
+    return {"rows": rows, "ready": all(ready for _, ready in rows)}

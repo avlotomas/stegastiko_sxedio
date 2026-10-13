@@ -1,4 +1,4 @@
-"""2.2 Deficiency emails: sending and the read-only history modal."""
+"""2.2 deficiency emails, 3.1 land plot emails: sending and the read-only history modal."""
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -10,10 +10,16 @@ from django.utils import formats, timezone
 
 from cases import section_refs as refs
 from cases.forms import DeficiencyEmailForm
-from cases.models import Case, CommunicationStatus, CompletenessCheck
-from cases.services import case_communications, send_deficiency_email
+from cases.models import Case, CommunicationStatus, CompletenessCheck, LandPlot
+from cases.services import (
+    case_communications,
+    communication_section,
+    land_plot_communications,
+    send_deficiency_email,
+    send_land_plot_email,
+)
 from cases.views.common import case_for_section, wants_json
-from cases.views.grids import COMPLETENESS_CHECKS
+from cases.views.grids import COMPLETENESS_CHECKS, LAND_PLOTS
 from core.function_catalog import SEND, case_section_function
 from core.models import Communication
 from core.permissions import require_access
@@ -67,6 +73,43 @@ def case_deficiency_email_send(request, pk, check_id):
     return redirect("cases:section_edit", pk=case.pk, section=refs.SECTION_2)
 
 
+@login_required
+def land_plot_email_send(request, pk, plot_id):
+    """3.1 Send an email about one land plot to the Κ.Σ./Δ.Δ. contact address."""
+    if request.method != "POST" or not wants_json(request):
+        raise Http404("Επιτρέπεται μόνο POST.")
+    case = case_for_section(request, pk, refs.SECTION_3, SEND)
+    plot = get_object_or_404(LandPlot, pk=plot_id, case=case)
+
+    form = DeficiencyEmailForm(request.POST)
+    if not form.is_valid():
+        errors = [error for field_errors in form.errors.values() for error in field_errors]
+        return JsonResponse({"ok": False, "errors": errors}, status=400)
+    try:
+        communication = send_land_plot_email(
+            plot, form.cleaned_data["subject"], form.cleaned_data["body"]
+        )
+    except ValidationError as exc:
+        return JsonResponse({"ok": False, "errors": exc.messages}, status=400)
+
+    log_html = render_to_string(
+        "cases/_land_plot_email_log.html",
+        {"case": case, "land_plot_communications": land_plot_communications(case)},
+        request=request,
+    )
+    return JsonResponse(
+        {
+            "ok": True,
+            "message": (
+                f"Το email για το τεμάχιο {plot.parcel_number} στάλθηκε στο "
+                f"{communication.recipient}."
+            ),
+            "log_html": log_html,
+            "grid_html": LAND_PLOTS.grid_html(request, case),
+        }
+    )
+
+
 def _communication_detail_payload(communication: Communication) -> dict:
     sent_at = ""
     if communication.sent_at:
@@ -86,10 +129,13 @@ def _communication_detail_payload(communication: Communication) -> dict:
 
 @login_required
 def case_communication_detail(request, pk, communication_id):
-    """Return one sent email for the 2.2 history view modal."""
-    require_access(request.user, case_section_function(refs.SECTION_2))
+    """Return one sent email (2.2 or 3.1) for the history view modal."""
     case = get_object_or_404(Case, pk=pk)
-    communication = get_object_or_404(case_communications(case), pk=communication_id)
+    communication = (
+        case_communications(case).filter(pk=communication_id).first()
+        or get_object_or_404(land_plot_communications(case), pk=communication_id)
+    )
+    require_access(request.user, case_section_function(communication_section(communication)))
     if request.method != "GET":
         raise Http404("Επιτρέπεται μόνο GET.")
     if not wants_json(request):

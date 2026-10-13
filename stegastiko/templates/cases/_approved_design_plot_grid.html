@@ -28,6 +28,13 @@
                     Αρίθμηση
                 </button>
             </th>
+            {% if has_source_land_plots %}
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-approved-design-plot-sort="sources">
+                    Τεμάχια προέλευσης
+                </button>
+            </th>
+            {% endif %}
             <th>
                 <button type="button" class="btn-link btn-link--table" data-approved-design-plot-sort="tkx">
                     Αρίθμηση ΤΚΧ
@@ -83,6 +90,15 @@
                     </div>
                 </td>
                 <td data-sort-number="{{ plot.design_number }}">{{ form.design_number.errors }}{{ form.design_number }}</td>
+                {% if has_source_land_plots %}
+                <td data-sort-sources="{{ plot.source_land_plots_display }}">
+                    {{ form.source_land_plots.errors }}
+                    <details class="multi-pick">
+                        <summary>{{ plot.source_land_plots_display|default:"— Επιλογή —" }}</summary>
+                        <div class="multi-pick__options">{{ form.source_land_plots }}</div>
+                    </details>
+                </td>
+                {% endif %}
                 <td data-sort-tkx="{{ plot.tkx_number }}">{{ form.tkx_number.errors }}{{ form.tkx_number }}</td>
                 <td data-sort-title="{{ plot.title_deed_number }}">{{ form.title_deed_number.errors }}{{ form.title_deed_number }}</td>
                 <td data-sort-parcel="{{ plot.parcel_number }}">{{ form.parcel_number.errors }}{{ form.parcel_number }}</td>
@@ -90,7 +106,7 @@
                 <td data-sort-area="{{ plot.final_area_sqm|default_if_none:'' }}">{{ form.final_area_sqm.errors }}{{ form.final_area_sqm }}</td>
                 <td data-sort-status="{{ plot.get_numbering_status_display }}">{{ form.numbering_status.errors }}{{ form.numbering_status }}</td>
                 <td data-sort-valuation="{{ plot.valuation_amount|default_if_none:'' }}">{{ form.valuation_amount.errors }}{{ form.valuation_amount }}</td>
-                <td data-sort-price="{{ plot.disposal_price|default_if_none:'' }}">{{ plot.disposal_price|default_if_none:"—" }}</td>
+                <td data-sort-price="{{ plot.disposal_price|default_if_none:'' }}">{{ form.disposal_price.errors }}{{ form.disposal_price }}</td>
                 <td class="data-table__actions">
                     <form id="approved-design-plot-row-{{ plot.pk }}"
                           method="post"
@@ -99,7 +115,9 @@
                         {% csrf_token %}
                         <button type="submit" class="btn btn-primary btn-sm">Αποθήκευση εγγραφής</button>
                     </form>
-                    {% if can_delete_approved_design_plots %}
+                    {% if plot.generated_plot %}
+                    <span class="badge badge--pass" title="Καταχωρίστηκε στα Οικόπεδα με την ολοκλήρωση της αίτησης">Στα Οικόπεδα</span>
+                    {% elif can_delete_approved_design_plots %}
                     <button type="button" class="btn btn-danger btn-sm"
                             data-approved-design-plot-delete="{% url 'cases:approved_design_plot_delete' case.pk plot.pk %}"
                             data-approved-design-plot-label="{{ plot.row_label }}">
@@ -110,13 +128,16 @@
             </tr>
             {% endwith %}
         {% empty %}
-            <tr><td colspan="11">Δεν έχουν καταχωριστεί εγγραφές.</td></tr>
+            <tr><td colspan="{% if has_source_land_plots %}12{% else %}11{% endif %}">Δεν έχουν καταχωριστεί εγγραφές.</td></tr>
         {% endfor %}
         {% else %}
         {% for plot in approved_design_plots %}
             <tr data-approved-design-plot-row>
                 <td data-sort-type="{{ plot.plot_type_display }}">{{ plot.plot_type_display|default:"—" }}</td>
                 <td data-sort-number="{{ plot.design_number }}">{{ plot.design_number|default:"—" }}</td>
+                {% if has_source_land_plots %}
+                <td data-sort-sources="{{ plot.source_land_plots_display }}">{{ plot.source_land_plots_display|default:"—" }}</td>
+                {% endif %}
                 <td data-sort-tkx="{{ plot.tkx_number }}">{{ plot.tkx_number|default:"—" }}</td>
                 <td data-sort-title="{{ plot.title_deed_number }}">{{ plot.title_deed_number|default:"—" }}</td>
                 <td data-sort-parcel="{{ plot.parcel_number }}">{{ plot.parcel_number|default:"—" }}</td>
@@ -127,7 +148,7 @@
                 <td data-sort-price="{{ plot.disposal_price|default_if_none:'' }}">{{ plot.disposal_price|default_if_none:"—" }}</td>
             </tr>
         {% empty %}
-            <tr><td colspan="10">Δεν έχουν καταχωριστεί εγγραφές.</td></tr>
+            <tr><td colspan="{% if has_source_land_plots %}11{% else %}10{% endif %}">Δεν έχουν καταχωριστεί εγγραφές.</td></tr>
         {% endfor %}
         {% endif %}
         </tbody>

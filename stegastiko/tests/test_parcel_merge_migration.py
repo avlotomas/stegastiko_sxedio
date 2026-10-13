@@ -182,7 +182,8 @@ def test_forward_merges_parcels_into_existing_plots(restore_latest_schema):
     assert created_9.valuation_amount == Decimal("1000")
     assert division.get(design_number="").kotsiani_number == "K-5"
 
-    assert sorted(Allocation.objects.values_list("parcel_id", flat=True)) == sorted(
+    # allocation 0005-0007 moved allocations onto the plots.Plot made from these 7.3 rows.
+    assert sorted(Allocation.objects.values_list("parcel__source_design_plot_id", flat=True)) == sorted(
         [merged.pk, created_9.pk]
     )
     with pytest.raises(LookupError):

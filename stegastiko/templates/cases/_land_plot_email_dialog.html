@@ -1,0 +1,38 @@
+{% comment %}
+3.1 Email about one land plot to the Κ.Σ./Δ.Δ. contact address (1.1). Rendered outside the
+section form because forms cannot nest; the row button fills the action, subject and plot.
+{% endcomment %}
+<dialog id="land-plot-email-dialog" class="modal" aria-labelledby="land-plot-email-dialog-title">
+    <form method="post" action="" class="app-form" data-email-form novalidate
+          data-email-log-target="[data-land-plot-email-log]"
+          data-email-grid-target="[data-land-plot-grid]"
+          data-email-status-target="[data-land-plot-status]">
+        {% csrf_token %}
+        <h2 class="card__title" id="land-plot-email-dialog-title">3.1 Αποστολή email τεμαχίου</h2>
+        <p class="helptext" data-email-check-label></p>
+
+        {% if not smtp_ready %}
+        <div class="alert alert--warning">
+            Δεν έχει ρυθμιστεί ο διακομιστής SMTP. Ο Διαχειριστής τον ορίζει στις Ρυθμίσεις συστήματος.
+        </div>
+        {% endif %}
+        <div class="alert alert--error" data-email-errors hidden></div>
+
+        <div class="form-grid">
+            <div class="form-field form-field--wide">
+                <label>Προς (Κοινοτικό Συμβούλιο)</label>
+                <p class="form-readonly">{{ case.contact_email|default:"—" }}</p>
+            </div>
+            {% include "includes/form_field.html" with field=land_plot_email_form.subject wide=True %}
+            {% include "includes/form_field.html" with field=land_plot_email_form.body wide=True %}
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary"
+                    {% if not smtp_ready or not case.contact_email %}disabled{% endif %}>
+                Αποστολή
+            </button>
+            <button type="button" class="btn btn-secondary" data-dialog-close>Άκυρο</button>
+        </div>
+    </form>
+</dialog>

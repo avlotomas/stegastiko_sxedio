@@ -1,0 +1,61 @@
+{% comment %}
+9.2 Τρόποι δημοσίευσης / γνωστοποίησης: one row per method and date. Columns sort on click;
+re-rendered after every modal add/edit/delete. A published announcement shows it read-only.
+{% endcomment %}
+{% with editable=access.announcements.edit %}
+<div data-publication-container>
+{% if editable and not cycle.is_published %}
+<div class="form-actions form-span-all">
+    <button type="button"
+            class="btn btn-secondary"
+            data-publication-open="{% url 'announcements:publication_create' cycle.pk %}">
+        Προσθήκη τρόπου δημοσίευσης
+    </button>
+</div>
+{% endif %}
+<div class="table-wrap">
+    <table class="data-table" data-publication-table>
+        <thead>
+        <tr>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-publication-sort="method">
+                    Τρόπος δημοσίευσης
+                </button>
+            </th>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-publication-sort="date">
+                    Ημερομηνία δημοσίευσης
+                </button>
+            </th>
+            <th>Διευκρίνιση «Άλλο» / σημειώσεις</th>
+            {% if editable and not cycle.is_published %}<th><span class="visually-hidden">Ενέργειες</span></th>{% endif %}
+        </tr>
+        </thead>
+        <tbody>
+        {% for publication in publications %}
+            <tr data-publication-row>
+                <td data-sort-method="{{ publication.get_method_display }}">{{ publication.get_method_display }}</td>
+                <td data-sort-date="{{ publication.published_on|date:'Y-m-d' }}">{{ publication.published_on }}</td>
+                <td>{{ publication.notes|default:"—" }}</td>
+                {% if editable and not cycle.is_published %}
+                <td class="data-table__actions">
+                    <button type="button" class="btn btn-secondary btn-sm"
+                            data-publication-open="{% url 'announcements:publication_edit' cycle.pk publication.pk %}">
+                        Επεξεργασία
+                    </button>
+                    <button type="button" class="btn btn-danger btn-sm"
+                            data-publication-delete="{% url 'announcements:publication_delete' cycle.pk publication.pk %}"
+                            data-publication-label="{{ publication.row_label }}">
+                        Διαγραφή
+                    </button>
+                </td>
+                {% endif %}
+            </tr>
+        {% empty %}
+            <tr><td colspan="{% if editable and not cycle.is_published %}4{% else %}3{% endif %}">Δεν έχουν καταχωριστεί τρόποι δημοσίευσης.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+</div>
+{% endwith %}

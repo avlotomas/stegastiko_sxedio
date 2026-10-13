@@ -1,4 +1,4 @@
-"""Named section / subsection references of the Κ.Σ./Δ.Δ. application (Ενότητες 1–9).
+"""Named section / subsection references of the Κ.Σ./Δ.Δ. application (Ενότητες 1–7).
 
 `section_ref` values are written to the action history and to `Attachment.section_ref`,
 so changing a value here changes what is stored: keep them stable.
@@ -13,7 +13,6 @@ SECTION_5 = "5"
 SECTION_6 = "6"
 SECTION_7 = "7"
 SECTION_8 = "8"
-SECTION_9 = "9"
 
 # Ενότητα 2
 REF_COMPLETENESS_CHECKS = "2.1"
@@ -21,6 +20,7 @@ REF_DEFICIENCY_EMAIL = "2.2"
 
 # Ενότητα 3
 REF_LAND_PLOTS = "3.1"
+REF_LAND_PLOT_EMAIL = "3.1-email"
 
 # Ενότητα 4
 REF_PLOT_EVALUATION = "4.1"

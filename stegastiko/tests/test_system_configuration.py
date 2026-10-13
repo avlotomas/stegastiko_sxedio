@@ -71,6 +71,7 @@ def test_smtp_settings_are_saved_from_the_settings_screen(admin_client):
             email_smtpPassword="s3cret",
             email_smtpFromEmail="stegastiko@example.org",
             email_deficiencyEmailSubject="Ελλείψεις {case_number}",
+            email_landPlotEmailSubject="Τεμάχιο {parcel_number}",
         ),
     )
     assert response.status_code == 302
@@ -79,6 +80,7 @@ def test_smtp_settings_are_saved_from_the_settings_screen(admin_client):
     assert get_setting("smtpSecurity") == "ssl"
     assert get_setting("smtpPassword") == "s3cret"
     assert get_setting("deficiencyEmailSubject") == "Ελλείψεις {case_number}"
+    assert get_setting("landPlotEmailSubject") == "Τεμάχιο {parcel_number}"
     assert "s3cret" not in admin_client.get(url).content.decode()
 
 

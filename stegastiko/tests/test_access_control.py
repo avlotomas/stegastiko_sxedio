@@ -68,8 +68,11 @@ def test_default_roles_are_seeded_with_valid_grants():
 
     officer = set(roles["Λειτουργός καταχώρισης"].grants)
     supervisor = set(roles["Προϊστάμενος ελέγχου"].grants)
-    assert "case_section_9:publish" in supervisor
-    assert "case_section_9:publish" not in officer
+    assert "announcements:publish" in supervisor
+    assert "announcements:publish" not in officer
+    assert not any(key.startswith("case_section_9") for role in roles.values() for key in role.grants)
+    assert {"plots:view", "plots:create", "case_completion:edit"} <= supervisor
+    assert "plots:create" in officer and "case_completion:edit" not in officer
     assert not any(key.startswith("settings") for key in officer)
     admin = set(roles["Διαχειριστής συστήματος"].grants)
     assert {"settings_roles:edit", "settings_users:create"} <= admin
@@ -119,7 +122,7 @@ def test_read_only_role_sees_section_without_save_and_cannot_post(client, make_u
 
 @pytest.mark.django_db
 def test_publish_needs_publish_access_before_anything_else(client, make_user, case):
-    url = reverse("cases:announcement_publish", args=[case.pk, 999])
+    url = reverse("announcements:publish", args=[999])
     _login(client, make_user, "officer", "Λειτουργός καταχώρισης")
     assert client.post(url).status_code == 403
 

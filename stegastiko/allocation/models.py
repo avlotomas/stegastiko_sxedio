@@ -1,7 +1,7 @@
 from django.db import models
 
 from applications.models import Application
-from cases.models import ApprovedDesignPlot, SubmissionCycle
+from cases.models import SubmissionCycle
 from core.models import AuditedModel, Community
 
 
@@ -65,7 +65,7 @@ class Allocation(AuditedModel):
     )
     application = models.ForeignKey(Application, on_delete=models.PROTECT, related_name="allocations")
     parcel = models.ForeignKey(
-        ApprovedDesignPlot, on_delete=models.PROTECT, related_name="allocations"
+        "plots.Plot", on_delete=models.PROTECT, related_name="allocations"
     )
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.ACTIVE)
     cancellation_reason = models.TextField(blank=True)

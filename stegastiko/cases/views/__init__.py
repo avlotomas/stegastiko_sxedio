@@ -3,12 +3,6 @@
 Every view stays importable as `cases.views.<name>` (cases/urls.py and the tests use it).
 """
 
-from cases.views.announcements import (
-    announcement_create,
-    announcement_detail,
-    announcement_publish,
-    announcement_regenerate,
-)
 from cases.views.attachments import case_attachment_download
 from cases.views.common import (
     SECTION_ORDER,
@@ -16,7 +10,12 @@ from cases.views.common import (
     case_nav_items,
     section_screens_for,
 )
-from cases.views.communications import case_communication_detail, case_deficiency_email_send
+from cases.views.communications import (
+    case_communication_detail,
+    case_deficiency_email_send,
+    land_plot_email_send,
+)
+from cases.views.completion import case_complete
 from cases.views.folder import case_create, case_detail, case_history, case_list
 from cases.views.grids import (
     CONSULTATION_GRIDS,
@@ -45,10 +44,6 @@ __all__ = [
     "CONSULTATION_GRIDS",
     "SECTIONS",
     "SECTION_ORDER",
-    "announcement_create",
-    "announcement_detail",
-    "announcement_publish",
-    "announcement_regenerate",
     "approved_design_plot_bulk_create",
     "approved_design_plot_delete",
     "approved_design_plot_form",
@@ -56,6 +51,7 @@ __all__ = [
     "approved_design_plot_inline_edit",
     "case_attachment_download",
     "case_communication_detail",
+    "case_complete",
     "case_create",
     "case_deficiency_email_send",
     "case_detail",
@@ -70,6 +66,7 @@ __all__ = [
     "infrastructure_check_delete",
     "infrastructure_check_form",
     "land_plot_delete",
+    "land_plot_email_send",
     "land_plot_evaluation_form",
     "land_plot_form",
     "ministry_decision_round_delete",

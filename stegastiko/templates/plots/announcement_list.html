@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}Γνωστοποιήσεις{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Γνωστοποιήσεις</h1>
+    <p class="page-header__lead">
+        Ενότητα 9: γνωστοποίηση / ανακοίνωση έναρξης αιτήσεων ανά Κοινότητα. Κάθε γνωστοποίηση
+        προσφέρει διαθέσιμα οικόπεδα της Κοινότητας από τον πίνακα «Οικόπεδα».
+    </p>
+</div>
+
+{% if access.announcements.create %}
+<div class="toolbar">
+    <a href="{% url 'announcements:create' %}" class="btn btn-primary">Νέα γνωστοποίηση</a>
+</div>
+{% endif %}
+
+<div class="card">
+    <h2 class="card__title">Αναζήτηση</h2>
+    <form method="get" class="filter-form">
+        <div>
+            <label for="community_id">Κοινότητα</label>
+            <select name="community_id" id="community_id">
+                <option value="">Όλες</option>
+                {% for community in communities %}
+                    <option value="{{ community.id }}" {% if community_id == community.id|stringformat:"s" %}selected{% endif %}>
+                        {{ community.name }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <button type="submit" class="btn btn-primary">Αναζήτηση</button>
+        </div>
+    </form>
+</div>
+
+<div class="table-wrap">
+    <table class="data-table">
+        <thead>
+        <tr>
+            <th>Κοινότητα</th>
+            <th>Ημ. γνωστοποίησης</th>
+            <th>Περίοδος υποβολής</th>
+            <th>Οικόπεδα</th>
+            <th>Κατάσταση</th>
+            <th></th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for cycle in cycles %}
+            <tr>
+                <td>{{ cycle.community.name }}</td>
+                <td>{{ cycle.announcement_date }}</td>
+                <td>{{ cycle.submission_start_date }} – {{ cycle.submission_end_date }}</td>
+                <td>{{ cycle.plots.all|length }}</td>
+                <td>
+                    {% if cycle.is_published %}
+                    <span class="badge badge--pass">Εκδόθηκε</span>
+                    {% else %}
+                    <span class="badge badge--pending">Προσχέδιο</span>
+                    {% endif %}
+                </td>
+                <td><a href="{% url 'announcements:detail' cycle.pk %}" class="btn btn-ghost btn-sm">Άνοιγμα</a></td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="6">Δεν έχει καταχωριστεί γνωστοποίηση.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

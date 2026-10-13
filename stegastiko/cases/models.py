@@ -1,7 +1,9 @@
 from decimal import Decimal
 
 from django.apps import apps
+from django.conf import settings
 from django.contrib.contenttypes.fields import GenericRelation
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError, models, transaction
 from django.db.models import Count, OuterRef, Subquery
 from django.db.models.functions import Coalesce
@@ -16,7 +18,8 @@ class YesNo(models.TextChoices):
 
 
 # §Α.3.3 A new-division case runs every section; an unallocated-plots case has no
-# Αίτηση Α, so its plots are registered straight into 8.2 and announced in 9.
+# Αίτηση Α, so its plots are registered straight into the 7.3 grid. Announcements
+# (Ενότητα 9) are a separate flow over the completed plots, not a case section.
 SECTION_KEYS_NEW_DIVISION = (
     refs.SECTION_1,
     refs.SECTION_2,
@@ -25,9 +28,8 @@ SECTION_KEYS_NEW_DIVISION = (
     refs.SECTION_5,
     refs.SECTION_6,
     refs.SECTION_7,
-    refs.SECTION_9,
 )
-SECTION_KEYS_UNALLOCATED = (refs.SECTION_1, refs.SECTION_9)
+SECTION_KEYS_UNALLOCATED = (refs.SECTION_1,)
 
 class CommunicationStatus:
     """Values of `core.Communication.status` used by the 2.2 deficiency emails."""
@@ -173,6 +175,21 @@ class Case(AuditedModel):
     technical_visit_date = models.DateField(
         null=True, blank=True, help_text="4.6 Ημερομηνία επισκεψης"
     )
+    completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        editable=False,
+        help_text="Ολοκλήρωση αίτησης: δημιουργία των οικοπέδων στον πίνακα «Οικόπεδα»",
+    )
+    completed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        editable=False,
+        related_name="+",
+        help_text="Χρήστης που ολοκλήρωσε την αίτηση",
+    )
     # Case-level files are told apart by section_ref: 4.4 technical evaluation as a whole,
     # 7.2 division design, 7.3 ΤΠΟ application, 7.7 DLS application.
     attachments = GenericRelation(Attachment)
@@ -253,10 +270,6 @@ class Case(AuditedModel):
     )
     dls_comments = models.TextField(blank=True, help_text="7.7 Σχόλια")
 
-    section7_comments = models.TextField(
-        blank=True, help_text="7 Σχόλια / Παρατηρήσεις Ενότητας 7"
-    )
-
     objects = CaseManager()
 
     class Meta:
@@ -301,6 +314,10 @@ class Case(AuditedModel):
     @property
     def is_new_division(self):
         return self.case_type == self.CaseType.NEW_DIVISION
+
+    @property
+    def is_completed(self):
+        return self.completed_at is not None
 
     @property
     def latest_completeness_check(self):
@@ -470,7 +487,11 @@ class LandPlot(AuditedModel):
         max_length=255, blank=True, help_text="3.1 Διευκρίνιση άλλης πρόσβασης"
     )
     comments = models.TextField(blank=True, help_text="3.1 Σχόλια / Παρατηρήσεις")
+    rejected = models.CharField(
+        max_length=8, choices=YesNo.choices, default=YesNo.NO, help_text="3.1 Απορρίφθηκε"
+    )
     attachments = GenericRelation(Attachment)
+    communications = GenericRelation(Communication)
     morphology = models.CharField(
         max_length=16, choices=Morphology.choices, blank=True, help_text="4.1 Μορφολογία"
     )
@@ -553,6 +574,43 @@ class LandPlot(AuditedModel):
             f"{self.parcel_number}. Με τη διαγραφή του τεμαχίου θα διαγραφεί και η "
             f"τεχνική αξιολόγηση, καθώς και τα αρχεία του και η απόφαση καταλληλότητας (6.6)."
         )
+
+    @property
+    def short_label(self):
+        """How a 7.3 plot names this parcel as its origin."""
+        if self.sheet_plan:
+            return f"{self.parcel_number} (Φ/Σχ {self.sheet_plan})"
+        return self.parcel_number
+
+    @property
+    def is_rejected(self):
+        return self.rejected == YesNo.YES
+
+    @property
+    def sent_emails_count(self):
+        # Counted in Python so a prefetched `communications` serves the whole grid.
+        return sum(1 for c in self.communications.all() if c.status == CommunicationStatus.SENT)
+
+    def linked_design_plots(self):
+        """7.3 plots that name this parcel as their origin; while any exist it is not deleted."""
+        return list(self.approved_design_plots.all())
+
+    @property
+    def deletion_refusal(self):
+        plots = self.linked_design_plots()
+        if plots:
+            labels = ", ".join(plot.row_label for plot in plots)
+            return (
+                f"Το τεμάχιο {self.parcel_number} δεν διαγράφεται γιατί έχει οριστεί ως τεμάχιο "
+                f"προέλευσης στα οικόπεδα (7.3): {labels}. Αφαιρέστε πρώτα τη σύνδεση από τα οικόπεδα."
+            )
+        # Sent (or in-flight) emails stay with their plot for traceability, as in 2.1.
+        if any(c.status != CommunicationStatus.FAILED for c in self.communications.all()):
+            return (
+                f"Το τεμάχιο {self.parcel_number} δεν διαγράφεται γιατί έχουν σταλεί email "
+                f"για αυτό. Μπορείτε να το σημειώσετε ως «Απορρίφθηκε»."
+            )
+        return ""
 
     @property
     def row_label(self):
@@ -825,7 +883,45 @@ class MinistryDecisionRound(AuditedModel):
         return self.case_id, None, getattr(self, "_section_ref", refs.REF_MINISTRY_DECISIONS)
 
 
-class ApprovedDesignPlot(AuditedModel):
+class DisposalPriceMixin:
+    """8.2 «Τιμή διάθεσης»: editable, defaulting to 25% of «Αξία για υπολογισμό».
+
+    The price follows the value while it is the automatic one: it is recalculated when it
+    is empty, or when the value changes and the price was left at 25% of the old value.
+    A price of its own (entered by the user) is kept when the value changes.
+    """
+
+    DISPOSAL_PRICE_RATE = Decimal("0.25")
+
+    @classmethod
+    def disposal_price_for(cls, valuation_amount):
+        if valuation_amount is None:
+            return None
+        return (Decimal(valuation_amount) * cls.DISPOSAL_PRICE_RATE).quantize(Decimal("0.01"))
+
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        instance = super().from_db(db, field_names, values)
+        instance.remember_disposal_price_inputs()
+        return instance
+
+    def remember_disposal_price_inputs(self):
+        self._loaded_valuation_amount = self.__dict__.get("valuation_amount")
+        self._loaded_disposal_price = self.__dict__.get("disposal_price")
+
+    def apply_default_disposal_price(self):
+        loaded_valuation = getattr(self, "_loaded_valuation_amount", None)
+        loaded_price = getattr(self, "_loaded_disposal_price", None)
+        follows_value = (
+            self.valuation_amount != loaded_valuation
+            and self.disposal_price == loaded_price
+            and loaded_price == self.disposal_price_for(loaded_valuation)
+        )
+        if self.disposal_price is None or follows_value:
+            self.disposal_price = self.disposal_price_for(self.valuation_amount)
+
+
+class ApprovedDesignPlot(DisposalPriceMixin, AuditedModel):
     """7.3 Στοιχεία Εγκεκριμένου Σχεδιασμού Οικοπέδων: one row per plot or space of the design."""
 
     class PlotType(models.TextChoices):
@@ -840,8 +936,6 @@ class ApprovedDesignPlot(AuditedModel):
         TKX = "tkx", "Αρίθμηση ΤΚΧ"
         TITLE_DEED = "title_deed", "Αρίθμηση βάσει τίτλου ιδιοκτησίας"
 
-    DISPOSAL_PRICE_RATE = Decimal("0.25")
-
     case = models.ForeignKey(
         Case, on_delete=models.CASCADE, related_name="approved_design_plots"
     )
@@ -852,6 +946,13 @@ class ApprovedDesignPlot(AuditedModel):
         blank=True,
         related_name="approved_design_plots",
         help_text="8.2 Χωράφι προέλευσης (προαιρετικό)",
+    )
+    # A linked 3.1 parcel cannot be deleted (LandPlotGrid.refuse_delete).
+    source_land_plots = models.ManyToManyField(
+        LandPlot,
+        blank=True,
+        related_name="approved_design_plots",
+        help_text="7.3 Τεμάχια προέλευσης (3.1, προαιρετικά)",
     )
     valuation_referral = models.ForeignKey(
         "cases.ValuationReferral",
@@ -905,8 +1006,7 @@ class ApprovedDesignPlot(AuditedModel):
         decimal_places=2,
         null=True,
         blank=True,
-        editable=False,
-        help_text="8.2 Τιμή διάθεσης (αυτόματα 25% της αξίας)",
+        help_text="8.2 Τιμή διάθεσης (κενό: αυτόματα 25% της αξίας)",
     )
     comments = models.TextField(blank=True, help_text="8.2 Σχόλια οικοπέδου")
     numbering_status = models.CharField(
@@ -934,26 +1034,36 @@ class ApprovedDesignPlot(AuditedModel):
         return " ".join(part for part in (self.plot_type_display, number) if part) or "Νέα γραμμή"
 
     @property
+    def source_land_plots_display(self):
+        return ", ".join(land_plot.short_label for land_plot in self.source_land_plots.all())
+
+    @property
     def is_valued(self):
         return self.valuation_amount is not None and self.disposal_price is not None
 
     @property
-    def is_allocated(self):
-        """Whether an allocation (Ενότητα 10+) already points at this plot."""
+    def generated_plot(self):
+        """The completed plot (plots.Plot) this row produced when its case was completed."""
         if not self.pk:
-            return False
-        return self.allocations.exists()
+            return None
+        try:
+            return self.plot
+        except ObjectDoesNotExist:
+            return None
+
+    @property
+    def is_allocated(self):
+        """Whether an allocation (Ενότητα 10+) already points at the plot of this row."""
+        plot = self.generated_plot
+        return plot is not None and plot.is_allocated
 
     def save(self, *args, **kwargs):
-        if self.valuation_amount is None:
-            self.disposal_price = None
-        else:
-            self.disposal_price = (self.valuation_amount * self.DISPOSAL_PRICE_RATE).quantize(
-                Decimal("0.01")
-            )
+        self.apply_default_disposal_price()
         if kwargs.get("update_fields") is not None and "valuation_amount" in kwargs["update_fields"]:
             kwargs["update_fields"] = {*kwargs["update_fields"], "disposal_price"}
-        return super().save(*args, **kwargs)
+        result = super().save(*args, **kwargs)
+        self.remember_disposal_price_inputs()
+        return result
 
     def _audit_context(self):
         return self.case_id, None, getattr(self, "_section_ref", refs.REF_APPROVED_DESIGN_PLOTS)
@@ -993,15 +1103,16 @@ class ValuationReferral(AuditedModel):
 class SubmissionCycle(AuditedModel):
     """Ενότητα 9 Γνωστοποίηση / ανακοίνωση έναρξης αιτήσεων, ανά Κοινότητα.
 
-    One announcement may cover several cases of the same community, so the available
-    plots can mix an old split with a new one (§Α.3.2).
+    A separate flow from the division cases: it offers completed plots (plots.Plot) of its
+    community, whether they came from an old split, a new one or were entered by hand.
     """
 
     community = models.ForeignKey(Community, on_delete=models.PROTECT, related_name="submission_cycles")
-    cases = models.ManyToManyField(
-        Case,
+    plots = models.ManyToManyField(
+        "plots.Plot",
+        blank=True,
         related_name="submission_cycles",
-        help_text="9.1 Υποθέσεις της ίδιας Κοινότητας που καλύπτει η γνωστοποίηση",
+        help_text="9.1 Διαθέσιμα οικόπεδα της Κοινότητας που προσφέρει η γνωστοποίηση",
     )
     announcement_date = models.DateField(help_text="9.1 Ημερομηνία γνωστοποίησης")
     submission_start_date = models.DateField(help_text="9.1 Έναρξη υποβολής αιτήσεων")
@@ -1025,18 +1136,8 @@ class SubmissionCycle(AuditedModel):
         return self.published_at is not None
 
     @property
-    def available_parcels(self):
-        """9.1 Plots of the linked cases that cleared 8.2 (value and price recorded)."""
-        return ApprovedDesignPlot.objects.filter(
-            case__in=self.cases.all(),
-            plot_type=ApprovedDesignPlot.PlotType.DIVISION_PLOT,
-            valuation_amount__isnull=False,
-            disposal_price__isnull=False,
-        )
-
-    @property
     def available_plots_count(self):
-        return self.available_parcels.count()
+        return self.plots.count()
 
 
 class SubmissionCyclePublication(AuditedModel):
@@ -1060,3 +1161,7 @@ class SubmissionCyclePublication(AuditedModel):
 
     class Meta:
         ordering = ("published_on", "id")
+
+    @property
+    def row_label(self):
+        return f"{self.get_method_display()} — {self.published_on}"

@@ -83,8 +83,8 @@ FUNCTIONS = (
         "case_section_3",
         "3",
         "Ενότητα 3",
-        (VIEW, CREATE, EDIT, DELETE),
-        "3.1 τεμάχια και αρχεία τους, 3.2, 3.3.",
+        (VIEW, CREATE, EDIT, DELETE, SEND),
+        "3.1 τεμάχια και αρχεία τους, email ανά τεμάχιο, 3.2, 3.3.",
     ),
     _case_section(
         "case_section_4",
@@ -108,12 +108,24 @@ FUNCTIONS = (
         "6.1–6.5 σύνοψη, 6.6 απόφαση ανά τεμάχιο, 6.7 λήψη απόφασης από υπουργό, PDF πινάκων αξιολόγησης (επιλογή υποενοτήτων 6.1–6.6).",
     ),
     _case_section("case_section_7", "7", "Ενότητα 7", (VIEW, EDIT, DELETE), "7.1–7.7."),
-    _case_section(
-        "case_section_9",
-        "9",
-        "Ενότητα 9",
+    AppFunction(
+        "case_completion",
+        "Ολοκλήρωση αίτησης",
+        (VIEW, EDIT),
+        parent="cases",
+        description="Έλεγχος ετοιμότητας και ολοκλήρωση αίτησης: δημιουργία οικοπέδων.",
+    ),
+    AppFunction(
+        "plots",
+        "Οικόπεδα",
+        (VIEW, CREATE, EDIT, DELETE),
+        description="Πίνακας ολοκληρωμένων οικοπέδων και χειροκίνητη καταχώριση.",
+    ),
+    AppFunction(
+        "announcements",
+        "Γνωστοποιήσεις",
         (VIEW, CREATE, EDIT, PUBLISH),
-        "9.1 νέα γνωστοποίηση, επεξεργασία, οριστικοποίηση και έκδοση ανακοίνωσης.",
+        description="9.1 νέα γνωστοποίηση, επεξεργασία, οριστικοποίηση και έκδοση ανακοίνωσης.",
     ),
     AppFunction(
         "applications",

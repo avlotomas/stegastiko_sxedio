@@ -11,8 +11,6 @@ from cases.models import (
     Field,
     InfrastructureCheck,
     LandPlot,
-    SubmissionCycle,
-    SubmissionCyclePublication,
     UtilityService,
     MinistryDecisionRound,
     UtilityServiceType,
@@ -475,7 +473,6 @@ class Section7Form(AttachmentSlotsMixin, StyledFormMixin, forms.ModelForm):
             "dls_file_number",
             "dls_response_date",
             "dls_comments",
-            "section7_comments",
         ]
         widgets = {
             "survey_assignment_date": IsoDateInput(),
@@ -492,7 +489,6 @@ class Section7Form(AttachmentSlotsMixin, StyledFormMixin, forms.ModelForm):
             "construction_plans_stage": forms.Textarea(attrs={"rows": 3}),
             "tender_comments": forms.Textarea(attrs={"rows": 2}),
             "dls_comments": forms.Textarea(attrs={"rows": 2}),
-            "section7_comments": forms.Textarea(attrs={"rows": 3}),
         }
 
     def clean(self):
@@ -515,25 +511,39 @@ class ApprovedDesignPlotForm(OtherChoiceFieldsMixin, StyledFormMixin, forms.Mode
             "plot_type",
             "plot_type_other",
             "design_number",
+            "source_land_plots",
         ]
         widgets = {
             "plot_type_other": forms.TextInput(
                 attrs={"placeholder": "Περιγραφή τύπου", "data-other-input": ""}
             ),
+            "source_land_plots": forms.CheckboxSelectMultiple,
         }
 
     PLOT_TYPE_LOCKED_MESSAGE = (
-        "Το οικόπεδο έχει ήδη κατανομή· ο τύπος του δεν μπορεί να αλλάξει (7.3)."
+        "Το οικόπεδο έχει ήδη καταχωριστεί στα Οικόπεδα με την ολοκλήρωση της αίτησης· "
+        "ο τύπος του δεν μπορεί να αλλάξει (7.3)."
     )
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, land_plots=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["plot_type"].choices = [
             ("", "— Επιλέξτε τύπο —"),
             *ApprovedDesignPlot.PlotType.choices,
         ]
-        # An allocated plot must stay an allocatable "division plot" (Ενότητα 10+).
-        self.plot_type_locked = self.instance.is_allocated
+        # Only the parcels of the same case (3.1) can be the origin; none, one or many.
+        # The grid passes `land_plots` once for all its rows.
+        if land_plots is None:
+            land_plots = list(self.instance.case.land_plots.all()) if self.instance.case_id else []
+        if land_plots:
+            field = self.fields["source_land_plots"]
+            field.queryset = LandPlot.objects.filter(case_id=self.instance.case_id)
+            field.choices = [(plot.pk, plot.short_label) for plot in land_plots]
+            field.help_text = ""
+        else:
+            del self.fields["source_land_plots"]
+        # A row that already became a completed plot must stay a "division plot".
+        self.plot_type_locked = self.instance.generated_plot is not None
         if self.plot_type_locked:
             self.fields["plot_type"].help_text = self.PLOT_TYPE_LOCKED_MESSAGE
 
@@ -560,19 +570,23 @@ class ApprovedDesignPlotInlineForm(ApprovedDesignPlotForm):
             "final_area_sqm",
             "numbering_status",
             "valuation_amount",
+            "disposal_price",
+            "source_land_plots",
         ]
         widgets = {
             **ApprovedDesignPlotForm.Meta.widgets,
             "final_area_sqm": forms.NumberInput(attrs={"step": "0.01"}),
             "valuation_amount": forms.NumberInput(attrs={"step": "0.01"}),
+            "disposal_price": forms.NumberInput(attrs={"step": "0.01"}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         form_id = f"approved-design-plot-row-{self.instance.pk}"
-        for field in self.fields.values():
+        for name, field in self.fields.items():
             field.widget.attrs["form"] = form_id
-            field.widget.attrs.setdefault("aria-label", field.label)
+            if name != "source_land_plots":  # each checkbox has its own label
+                field.widget.attrs.setdefault("aria-label", field.label)
 
     def clean(self):
         cleaned_data = super().clean()
@@ -590,13 +604,18 @@ def approved_design_plot_inline_rows(case, bound_form=None, plots=None):
     plot_rows = (
         plots
         if plots is not None
-        else case.approved_design_plots.prefetch_related("allocations").all()
+        else case.approved_design_plots.select_related("plot").prefetch_related(
+            "source_land_plots"
+        )
     )
+    land_plots = list(case.land_plots.all())
     for plot in plot_rows:
         form = (
             bound_form
             if bound_form is not None and bound_form.instance.pk == plot.pk
-            else ApprovedDesignPlotInlineForm(instance=plot, prefix=f"plot-{plot.pk}")
+            else ApprovedDesignPlotInlineForm(
+                instance=plot, prefix=f"plot-{plot.pk}", land_plots=land_plots
+            )
         )
         rows.append({"plot": plot, "form": form})
     return rows
@@ -756,6 +775,7 @@ class LandPlotForm(OtherChoiceFieldsMixin, StyledFormMixin, AttachmentsFormMixin
             "inside_development_zone",
             "access",
             "access_other",
+            "rejected",
             "comments",
         ]
         widgets = {
@@ -1025,67 +1045,6 @@ class BasePlotFormSet(forms.BaseInlineFormSet):
             )
 
 
-class SubmissionCycleForm(StyledFormMixin, forms.ModelForm):
-    """9.1 Announcement of the submission period, at community level."""
-
-    class Meta:
-        model = SubmissionCycle
-        fields = [
-            "cases",
-            "announcement_date",
-            "submission_start_date",
-            "submission_end_date",
-            "comments",
-        ]
-        widgets = {
-            "cases": forms.CheckboxSelectMultiple(),
-            "announcement_date": IsoDateInput(),
-            "submission_start_date": IsoDateInput(),
-            "submission_end_date": IsoDateInput(),
-            "comments": forms.Textarea(attrs={"rows": 3}),
-        }
-
-    def __init__(self, *args, community=None, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.community = community or getattr(self.instance, "community", None)
-        # 9.1 An announcement may only group cases of its own community.
-        self.fields["cases"].queryset = Case.objects.filter(community=self.community)
-        self.fields["cases"].label = "Υποθέσεις της γνωστοποίησης (9.1)"
-
-    def clean(self):
-        cleaned_data = super().clean()
-        start = cleaned_data.get("submission_start_date")
-        end = cleaned_data.get("submission_end_date")
-        if start and end and end < start:
-            self.add_error(
-                "submission_end_date", "Η λήξη υποβολής δεν μπορεί να προηγείται της έναρξης."
-            )
-        return cleaned_data
-
-
-class AnnouncementTextForm(StyledFormMixin, forms.ModelForm):
-    """9.3 Preview and edit the generated announcement before finalising it."""
-
-    class Meta:
-        model = SubmissionCycle
-        fields = ["announcement_text"]
-        widgets = {"announcement_text": forms.Textarea(attrs={"rows": 18})}
-
-
-class SubmissionCyclePublicationForm(StyledFormMixin, forms.ModelForm):
-    class Meta:
-        model = SubmissionCyclePublication
-        fields = ["method", "published_on", "notes"]
-        widgets = {"published_on": IsoDateInput()}
-
-
-SubmissionCyclePublicationFormSet = forms.inlineformset_factory(
-    SubmissionCycle,
-    SubmissionCyclePublication,
-    form=SubmissionCyclePublicationForm,
-    extra=1,
-    can_delete=True,
-)
 LandPlotDecisionFormSet = forms.inlineformset_factory(
     Case, LandPlot, form=LandPlotDecisionForm, extra=0, can_delete=False
 )

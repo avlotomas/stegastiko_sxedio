@@ -29,7 +29,6 @@ def seed_application_cycle(db=None):
         submission_end_date=date(2026, 7, 1),
         published_at="2026-06-01T10:00:00Z",
     )
-    cycle.cases.add(case)
     SystemSetting.objects.update_or_create(
         key="applicationFolderPrefix",
         defaults={"value": "12", "description": "prefix"},

@@ -83,13 +83,6 @@ SECTIONS = {
 
 SECTION_ORDER = list(SECTIONS)
 
-SECTION_9_NAV = {
-    "key": refs.SECTION_9,
-    "action": "Γνωστοποίηση έναρξης αιτήσεων",
-    "summary": "Ενότητα 9: περίοδος υποβολής, δημοσίευση και έκδοση ανακοίνωσης.",
-    "title": "Ενότητα 9 — Γνωστοποίηση έναρξης αιτήσεων",
-}
-
 
 def wants_json(request):
     return "application/json" in request.headers.get("Accept", "")
@@ -132,18 +125,14 @@ def build_formsets(section_key, case, data=None, files=None):
 
 
 def section_screens_for(case):
-    """Sections of this case that are edited through the generic section screen.
-
-    Ενότητα 9 is applicable too, but it is handled by the dedicated announcement
-    screens because it lives on SubmissionCycle rather than on the Case.
-    """
+    """Sections of this case that are edited through the generic section screen."""
     applicable = case.applicable_sections
     return [key for key in SECTION_ORDER if key in applicable]
 
 
 def case_nav_items(case, user, active_key=None):
-    """Sidebar navigation for case work screens (sections 1–9) the user may view."""
-    items = [
+    """Sidebar navigation for case work screens (sections 1–7) the user may view."""
+    return [
         {
             "key": key,
             "action": case_section_heading(key),
@@ -154,16 +143,3 @@ def case_nav_items(case, user, active_key=None):
         for key in section_screens_for(case)
         if has_access(user, case_section_function(key))
     ]
-    if refs.SECTION_9 in case.applicable_sections and has_access(
-        user, case_section_function(refs.SECTION_9)
-    ):
-        items.append(
-            {
-                "key": refs.SECTION_9,
-                "action": case_section_heading(refs.SECTION_9),
-                "summary": SECTION_9_NAV["summary"],
-                "title": case_section_heading(refs.SECTION_9),
-                "is_active": active_key == refs.SECTION_9,
-            }
-        )
-    return items

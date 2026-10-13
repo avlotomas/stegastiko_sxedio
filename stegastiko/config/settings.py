@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'cases',
     'applications',
     'allocation',
+    'plots',
 ]
 
 MIDDLEWARE = [
