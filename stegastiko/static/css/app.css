@@ -1552,6 +1552,43 @@ code {
     color: var(--color-success);
 }
 
+/* ΑΔΤ με εικονίδιο αναζήτησης μέσα στο πεδίο (αίτηση Παραρτήματος 3) */
+.input-search {
+    position: relative;
+}
+
+.input-search .input {
+    padding-right: 2.6rem;
+}
+
+.input-search__button {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 2.4rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    background: transparent;
+    color: var(--color-primary);
+    cursor: pointer;
+}
+
+.input-search__button:hover,
+.input-search__button:focus-visible {
+    background: var(--color-primary-soft);
+    outline: none;
+}
+
+/* Ένδειξη υποχρεωτικού πεδίου (φόρμες με required_css_class) */
+label.required::after {
+    content: " *";
+    color: var(--color-danger, #b42318);
+}
+
 .input[readonly] {
     background: #f4f7fa;
     color: var(--color-text-muted);

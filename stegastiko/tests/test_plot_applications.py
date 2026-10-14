@@ -92,7 +92,7 @@ def _application(cycle, *, couple=True, income=Decimal("30000"), **extra):
     if couple:
         ApplicationParty.objects.create(
             application=application, role=ApplicationParty.Role.SPOUSE,
-            citizenship=ApplicationParty.Citizenship.EU,
+            citizenship=ApplicationParty.Citizenship.OTHER, citizenship_other="Πολίτης ΕΕ",
         )
     IncomeDeclaration.objects.create(
         application=application, member=IncomeDeclaration.Member.APPLICANT, gross_annual_income=income
@@ -153,7 +153,7 @@ class TestRules:
     def test_citizenship_needs_one_cypriot(self, cycle):
         application = _application(cycle)
         party = application.applicant_party
-        party.citizenship = ApplicationParty.Citizenship.EU
+        party.citizenship = ApplicationParty.Citizenship.OTHER
         party.save()
         assert _results(application)["citizenship"] == "fail"
 
@@ -163,17 +163,14 @@ class TestRules:
         SystemSetting.objects.create(key="incomeLimitUpTo2Members", value="50000")
         assert _results(application)["income"] == "pass"
 
-    def test_neighbouring_distance(self, cycle):
+    def test_neighbouring_community_is_free_text_without_distance_check(self, cycle):
         application = _application(
-            cycle, residence_category=ResidenceCategory.NEIGHBOURING,
-            neighbouring_subcategory=ResidenceCategory.AUTOCHTHON, neighbouring_distance_km=Decimal("15.5"),
+            cycle, residence_category=ResidenceCategory.NEIGHBOURING, residence_community="Γειτονικό Χωριό",
         )
-        assert _results(application)["residence"] == "fail"
-        application.neighbouring_distance_km = Decimal("15")
         assert _results(application)["residence"] == "pass"
-        assert evaluate(application)["priority_primary"] == 51
-        SystemSetting.objects.create(key="plotApp.maxNeighbourKm", value="10")
-        assert _results(application)["residence"] == "fail"
+        assert evaluate(application)["priority_primary"] == 5
+        application.residence_community = " "
+        assert _results(application)["residence"] == "pending"
 
     def test_repatriated_years(self, cycle):
         application = _application(
@@ -234,6 +231,7 @@ def _post_data(cycle, **overrides):
         "applicant-parents_birth_place": "Λευκωσία",
         "applicant-parents_birth_country": "Κύπρος",
         "applicant_party-citizenship": "cypriot",
+        "applicant_party-mobile_phone": "99123456",
         "spouse-identity_number": "900002",
         "spouse-first_name": "Ελένη",
         "spouse-last_name": "Ανδρέου",
@@ -242,15 +240,15 @@ def _post_data(cycle, **overrides):
         "spouse-birth_country": "Ελλάδα",
         "spouse-parents_birth_place": "Αθήνα",
         "spouse-parents_birth_country": "Ελλάδα",
-        "spouse_party-citizenship": "eu",
+        "spouse_party-citizenship": "other",
+        "spouse_party-mobile_phone": "99654321",
+        "spouse_party-citizenship_other": "Ελλάδα",
         "children-TOTAL_FORMS": "1",
         "children-INITIAL_FORMS": "0",
         "children-0-first_name": "Νίκος",
         "children-0-last_name": "Ανδρέου",
         "children-0-date_of_birth": "2020-01-01",
         "children-0-status": "minor",
-        "interruptions-TOTAL_FORMS": "0",
-        "interruptions-INITIAL_FORMS": "0",
         "income_applicant-employment_type": "employee",
         "income_applicant-gross_annual_income": "28000",
         "income_spouse-employment_type": "employee",
@@ -303,6 +301,95 @@ class TestViews:
         assert application.applicant == existing
         assert application.spouse is None
         assert not application.incomes.filter(member="spouse").exists()
+
+    @pytest.mark.parametrize("category", ["autochthon", "displaced", "repatriated"])
+    def test_residence_community_locked_to_application_community(
+        self, staff_client, cycle, available_plot, category
+    ):
+        data = _post_data(cycle, **{"main-residence_category": category, "main-residence_community": "ΛΑΘΟΣ"})
+        response = staff_client.post(reverse("plot_applications:create"), data)
+        assert response.status_code == 302
+        assert PlotApplication.objects.get().residence_community == "ΑΒΓ"
+
+    def test_internal_emigrant_community_is_free_text(self, staff_client, cycle, available_plot):
+        data = _post_data(
+            cycle, **{"main-residence_category": "internal_emigrant", "main-residence_community": "ΕΛΕΥΘΕΡΟ ΚΕΙΜΕΝΟ"}
+        )
+        response = staff_client.post(reverse("plot_applications:create"), data)
+        assert response.status_code == 302
+        assert PlotApplication.objects.get().residence_community == "ΕΛΕΥΘΕΡΟ ΚΕΙΜΕΝΟ"
+
+    def test_internal_emigrant_requires_community_text(self, staff_client, cycle, available_plot):
+        data = _post_data(cycle, **{"main-residence_category": "internal_emigrant", "main-residence_community": " "})
+        response = staff_client.post(reverse("plot_applications:create"), data)
+        assert response.status_code == 200
+        assert "residence_community" in response.context["forms"].main.errors
+
+    def test_neighbouring_community_comes_from_appendix1(self, staff_client, cycle, available_plot):
+        data = _post_data(
+            cycle, **{"main-residence_category": "neighbouring", "main-neighbouring_community": "ΠΕΔΟΥΛΑΣ"}
+        )
+        response = staff_client.post(reverse("plot_applications:create"), data)
+        assert response.status_code == 302
+        assert PlotApplication.objects.get().residence_community == "ΠΕΔΟΥΛΑΣ"
+
+    @pytest.mark.parametrize("value", ["", "ΔΕΝ ΥΠΑΡΧΕΙ ΣΤΟ ΠΑΡΑΡΤΗΜΑ"])
+    def test_neighbouring_community_must_be_listed(self, staff_client, cycle, available_plot, value):
+        data = _post_data(
+            cycle, **{"main-residence_category": "neighbouring", "main-neighbouring_community": value}
+        )
+        response = staff_client.post(reverse("plot_applications:create"), data)
+        assert response.status_code == 200
+        assert "neighbouring_community" in response.context["forms"].main.errors
+        assert not PlotApplication.objects.exists()
+
+    def test_citizenship_other_requires_free_text(self, staff_client, cycle, available_plot):
+        data = _post_data(cycle, **{"applicant_party-citizenship": "other", "applicant_party-citizenship_other": " "})
+        response = staff_client.post(reverse("plot_applications:create"), data)
+        assert response.status_code == 200
+        assert "citizenship_other" in response.context["forms"].applicant_party.errors
+
+    def test_citizenship_other_text_saved_and_cleared_for_cypriot(self, staff_client, cycle, available_plot):
+        data = _post_data(
+            cycle, **{"applicant_party-citizenship": "other", "applicant_party-citizenship_other": "Ελληνική"}
+        )
+        assert staff_client.post(reverse("plot_applications:create"), data).status_code == 302
+        assert PlotApplication.objects.get().applicant_party.citizenship_other == "Ελληνική"
+        PlotApplication.objects.all().delete()
+        data = _post_data(
+            cycle, **{"applicant_party-citizenship": "cypriot", "applicant_party-citizenship_other": "Ελληνική"}
+        )
+        assert staff_client.post(reverse("plot_applications:create"), data).status_code == 302
+        assert PlotApplication.objects.get().applicant_party.citizenship_other == ""
+
+    @pytest.mark.parametrize(
+        ("field", "error_form"),
+        [
+            ("applicant_party-mobile_phone", "applicant_party"),
+            ("spouse_party-mobile_phone", "spouse_party"),
+            ("main-email", "main"),
+            ("spouse-first_name", "spouse"),
+        ],
+    )
+    def test_required_fields(self, staff_client, cycle, available_plot, field, error_form):
+        response = staff_client.post(reverse("plot_applications:create"), _post_data(cycle, **{field: ""}))
+        assert response.status_code == 200
+        assert field.split("-", 1)[1] in getattr(response.context["forms"], error_form if error_form != "main" else "main").errors
+        assert not PlotApplication.objects.exists()
+
+    def test_required_labels_are_marked(self, staff_client):
+        html = staff_client.get(reverse("plot_applications:create")).content.decode()
+        for name in ("applicant-first_name", "applicant-last_name", "applicant-date_of_birth",
+                     "applicant_party-mobile_phone", "main-email"):
+            assert f'class="required" for="id_{name}"' in html or f'for="id_{name}" class="required"' in html, name
+
+    def test_appendix1_covers_all_districts(self):
+        from core.appendix1 import appendix1_choices, appendix1_communities
+
+        districts = {entry["district"] for entry in appendix1_communities()}
+        assert districts == {"ΛΕΥΚΩΣΙΑΣ", "ΛΕΜΕΣΟΥ", "ΛΑΡΝΑΚΑΣ", "ΠΑΦΟΥ", "ΑΜΜΟΧΩΣΤΟΥ"}
+        assert len(appendix1_communities()) == 380
+        assert len(appendix1_choices()) == 1 + len(districts)
 
     def test_community_list_has_only_communities_with_available_plots(self, staff_client, community):
         empty = Community.objects.create(

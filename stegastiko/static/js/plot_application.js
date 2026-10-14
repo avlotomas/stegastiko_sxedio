@@ -29,6 +29,24 @@
         });
     }
 
+    // Ενότ. 11 (Ι, ΙΙ, ΙV): Αυτόχθονας / Εκτοπισθείς / Επαναπατρισθείς διαμένουν στην Κοινότητα της αίτησης,
+    // οπότε η Κοινότητα διαμονής κλειδώνει σε αυτήν· για τους υπόλοιπους παραμένει ελεύθερη.
+    const LOCKED_CATEGORIES = ["autochthon", "displaced", "repatriated"];
+    const communityNamesEl = document.getElementById("community-names");
+    const communityNames = communityNamesEl ? JSON.parse(communityNamesEl.textContent) : {};
+
+    function syncResidenceCommunity() {
+        const input = form.querySelector('[name="main-residence_community"]');
+        if (!input) return;
+        if (LOCKED_CATEGORIES.includes(fieldValue("main-residence_category"))) {
+            input.value = communityNames[fieldValue("main-community")] || "";
+            input.readOnly = true;
+        } else if (input.readOnly) {
+            input.readOnly = false;
+            input.value = "";
+        }
+    }
+
     function toNumber(input) {
         const value = parseFloat((input && input.value) || "0");
         return Number.isFinite(value) ? value : 0;
@@ -62,10 +80,12 @@
     });
 
     form.addEventListener("change", () => {
+        syncResidenceCommunity();
         refreshVisibility();
         refreshIncomeTotals();
     });
     form.addEventListener("input", refreshIncomeTotals);
+    syncResidenceCommunity();
     refreshVisibility();
     refreshIncomeTotals();
 })();

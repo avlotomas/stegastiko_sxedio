@@ -57,7 +57,7 @@
         <div><dt>Τόπος / χώρα γέννησης</dt><dd>{{ application.applicant.birth_place }}, {{ application.applicant.birth_country }}</dd></div>
         <div><dt>Τόπος / χώρα γέννησης γονέων</dt><dd>{{ application.applicant.parents_birth_place }}, {{ application.applicant.parents_birth_country }}</dd></div>
         {% if ap %}
-        <div><dt>Υπηκοότητα</dt><dd>{{ ap.get_citizenship_display }}</dd></div>
+        <div><dt>Υπηκοότητα</dt><dd>{{ ap.get_citizenship_display }}{% if ap.citizenship_other %}: {{ ap.citizenship_other }}{% endif %}</dd></div>
         <div><dt>Αρ. Κοιν. Ασφαλίσεων</dt><dd>{{ ap.social_insurance_number|default:"—" }}</dd></div>
         <div><dt>Αρ. Προσφυγικής Ταυτότητας</dt><dd>{{ ap.refugee_identity_number|default:"—" }}</dd></div>
         <div><dt>Τηλέφωνα</dt><dd>{{ ap.mobile_phone|default:"—" }} / {{ ap.landline_phone|default:"—" }}</dd></div>
@@ -71,16 +71,12 @@
 <div class="card">
     <h2 class="card__title">2. Τόπος διαμονής</h2>
     <dl class="detail-grid">
-        <div><dt>Κατηγορία</dt><dd>{{ application.get_residence_category_display }}{% if application.neighbouring_subcategory %} — {{ application.get_neighbouring_subcategory_display }}{% endif %}</dd></div>
+        <div><dt>Κατηγορία</dt><dd>{{ application.get_residence_category_display }}</dd></div>
         <div><dt>Διεύθυνση</dt><dd>{{ application.residence_street }} {{ application.residence_number }}{% if application.residence_apartment %}, {{ application.residence_apartment }}{% endif %}, {{ application.residence_postal_code }} {{ application.residence_community }}</dd></div>
-        {% if application.neighbouring_distance_km is not None %}<div><dt>Απόσταση (ΤΚΧ)</dt><dd>{{ application.neighbouring_distance_km }} km</dd></div>{% endif %}
         {% if application.origin_parent_description %}<div><dt>Καταγωγή ως προς γονέα</dt><dd>{{ application.origin_parent_description|linebreaksbr }}</dd></div>{% endif %}
         {% if application.previous_residence_from %}<div><dt>Προηγούμενη μόνιμη κατοίκηση</dt><dd>{{ application.previous_residence_address }} ({{ application.previous_residence_from|date:"d/m/Y" }} – {{ application.previous_residence_to|date:"d/m/Y" }})</dd></div>{% endif %}
         {% if application.community_residence_since %}<div><dt>Διαμονή στην Κοινότητα από</dt><dd>{{ application.community_residence_since|date:"d/m/Y" }}</dd></div>{% endif %}
         {% if application.abroad_from %}<div><dt>Παραμονή στο εξωτερικό</dt><dd>{{ application.abroad_from|date:"d/m/Y" }} – {{ application.abroad_to|date:"d/m/Y" }}</dd></div>{% endif %}
-        {% for i in application.residence_interruptions.all %}
-        <div><dt>Διακοπή διαμονής</dt><dd>{{ i.get_reason_display }}: {{ i.date_from|date:"d/m/Y" }} – {{ i.date_to|date:"d/m/Y" }}</dd></div>
-        {% endfor %}
         {% if application.residence_notes %}<div><dt>Περιγραφή</dt><dd>{{ application.residence_notes|linebreaksbr }}</dd></div>{% endif %}
     </dl>
 </div>

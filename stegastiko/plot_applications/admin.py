@@ -5,7 +5,6 @@ from plot_applications.models import (
     ApplicationParty,
     IncomeDeclaration,
     PlotApplication,
-    ResidenceInterruption,
 )
 
 
@@ -19,11 +18,6 @@ class ChildInline(admin.TabularInline):
     extra = 0
 
 
-class InterruptionInline(admin.TabularInline):
-    model = ResidenceInterruption
-    extra = 0
-
-
 class IncomeInline(admin.StackedInline):
     model = IncomeDeclaration
     extra = 0
@@ -34,4 +28,4 @@ class PlotApplicationAdmin(admin.ModelAdmin):
     list_display = ("protocol_number", "community", "applicant", "spouse", "submitted_on", "eligibility_result")
     list_filter = ("eligibility_result", "residence_category", "family_status")
     search_fields = ("protocol_number", "applicant__identity_number", "applicant__last_name")
-    inlines = (PartyInline, ChildInline, InterruptionInline, IncomeInline)
+    inlines = (PartyInline, ChildInline, IncomeInline)

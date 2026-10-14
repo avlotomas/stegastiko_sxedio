@@ -3,6 +3,7 @@ from django.db.models import Count, Q
 
 from applications.models import Person
 from applications.person_identity import PERSON_FIELD_LABELS
+from core.appendix1 import appendix1_choices
 from core.forms import IsoDateInput
 from core.models import Community
 from plot_applications.documents import DOCUMENT_CHOICES
@@ -13,7 +14,13 @@ from plot_applications.models import (
     IncomeDeclaration,
     PlotApplication,
     ResidenceCategory,
-    ResidenceInterruption,
+)
+
+# Ενότ. 11 (Ι, ΙΙ, ΙV): η διαμονή είναι στην Κοινότητα της αίτησης, άρα η Κοινότητα διαμονής κλειδώνει σε αυτήν.
+COMMUNITY_LOCKED_CATEGORIES = (
+    ResidenceCategory.AUTOCHTHON,
+    ResidenceCategory.DISPLACED,
+    ResidenceCategory.REPATRIATED,
 )
 
 YES_NO_CHOICES = (("True", "Ναι"), ("False", "Όχι"))
@@ -42,6 +49,8 @@ def yes_no_field(label):
 
 class PersonIdentityForm(forms.Form):
     """Σταθερά στοιχεία προσώπου (μητρώο «Άτομα»). Για υπάρχον ΑΔΤ συμπληρώνονται από το μητρώο."""
+
+    required_css_class = "required"
 
     FIXED_FIELDS = (
         "first_name",
@@ -119,6 +128,8 @@ class PersonIdentityForm(forms.Form):
 
 
 class PlotApplicationForm(forms.ModelForm):
+    required_css_class = "required"
+
     has_dwelling = yes_no_field(
         "(α) Έχετε εγγεγραμμένη στο όνομά σας (περιλ. συζύγου/συμβίου) κατοικία "
         "(περιλ. κατοικίας σε οικόπεδο αυτοστέγασης, Ενότ. 10.Δ);"
@@ -137,6 +148,11 @@ class PlotApplicationForm(forms.ModelForm):
         "Έχετε εσείς ή ο/η σύζυγος/συμβίος σας επωφεληθεί στο παρελθόν από οικονομική ενίσχυση ή άλλο "
         "όφελος για στεγαστικούς σκοπούς στο πλαίσιο Κρατικού Στεγαστικού Σχεδίου (εξαιρείται "
         "αποκλειστικά επιδότηση ενοικίου ή επιτοκίου στεγαστικού δανείου);"
+    )
+    neighbouring_community = forms.ChoiceField(
+        label="Γειτονική Κοινότητα διαμονής (Παράρτημα 1)",
+        choices=appendix1_choices,
+        required=False,
     )
     attached_documents = forms.MultipleChoiceField(
         label="Επισυναπτόμενα δικαιολογητικά",
@@ -166,8 +182,6 @@ class PlotApplicationForm(forms.ModelForm):
             "residence_apartment",
             "residence_postal_code",
             "residence_community",
-            "neighbouring_distance_km",
-            "neighbouring_subcategory",
             "origin_parent_description",
             "previous_residence_address",
             "previous_residence_from",
@@ -221,8 +235,6 @@ class PlotApplicationForm(forms.ModelForm):
             "residence_apartment": "Αρ. κατοικίας / διαμερίσματος",
             "residence_postal_code": "Ταχ. Κωδ.",
             "residence_community": "Κοινότητα / Δημοτικό Διαμέρισμα διαμονής",
-            "neighbouring_distance_km": "Απόσταση από τα όρια της Κοινότητας (km, μέτρηση ΤΚΧ)",
-            "neighbouring_subcategory": "Ιδιότητα σε σχέση με τη Γειτονική Κοινότητα",
             "origin_parent_description": "Καταγωγή από την Κοινότητα ως προς ποιο γονέα",
             "previous_residence_address": "Διεύθυνση στην Κοινότητα κατά την περίοδο μόνιμης κατοίκησης",
             "previous_residence_from": "Περίοδος μόνιμης κατοίκησης από",
@@ -291,6 +303,12 @@ class PlotApplicationForm(forms.ModelForm):
         community_field.label_from_instance = lambda community: (
             f"{community.name} ({community.available_plots})"
         )
+        self.community_names = {str(c.pk): c.name for c in communities}
+        # Η απαιτούμενη τιμή κατά κατηγορία ελέγχεται στο clean().
+        self.fields["residence_community"].required = False
+        self.fields["residence_community"].help_text = ""
+        if self.instance.pk and self.instance.residence_category == ResidenceCategory.NEIGHBOURING:
+            self.initial.setdefault("neighbouring_community", self.instance.residence_community)
         self.fields["received_at"].input_formats = ["%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M"]
         for name in ("residence_category", "family_status"):
             self.fields[name].choices = [c for c in self.fields[name].choices if c[0]]
@@ -314,15 +332,7 @@ class PlotApplicationForm(forms.ModelForm):
         else:
             cleaned["single_parent_status"] = ""
             cleaned["single_parent_other"] = ""
-        if cleaned.get("residence_category") == ResidenceCategory.NEIGHBOURING:
-            if not cleaned.get("neighbouring_subcategory"):
-                self.add_error(
-                    "neighbouring_subcategory",
-                    "Δηλώστε την ιδιότητα σε σχέση με τη Γειτονική Κοινότητα (Ενότ. 11.V).",
-                )
-        else:
-            cleaned["neighbouring_subcategory"] = ""
-            cleaned["neighbouring_distance_km"] = None
+        self._clean_residence_community(cleaned)
         for start, end in (
             ("previous_residence_from", "previous_residence_to"),
             ("abroad_from", "abroad_to"),
@@ -331,8 +341,23 @@ class PlotApplicationForm(forms.ModelForm):
                 self.add_error(end, "Η ημερομηνία λήξης είναι πριν την έναρξη.")
         return cleaned
 
+    def _clean_residence_community(self, cleaned):
+        category = cleaned.get("residence_category")
+        if category in COMMUNITY_LOCKED_CATEGORIES:
+            community = cleaned.get("community")
+            cleaned["residence_community"] = community.name if community else ""
+        elif category == ResidenceCategory.NEIGHBOURING:
+            chosen = cleaned.get("neighbouring_community") or ""
+            if not chosen and "neighbouring_community" not in self.errors:
+                self.add_error("neighbouring_community", "Επιλέξτε τη Γειτονική Κοινότητα από τον κατάλογο.")
+            cleaned["residence_community"] = chosen
+        elif category and not (cleaned.get("residence_community") or "").strip():
+            self.add_error("residence_community", "Συμπληρώστε την Κοινότητα / Δημοτικό Διαμέρισμα διαμονής.")
+
 
 class ApplicationPartyForm(forms.ModelForm):
+    required_css_class = "required"
+
     class Meta:
         model = ApplicationParty
         fields = [
@@ -355,7 +380,7 @@ class ApplicationPartyForm(forms.ModelForm):
             "refugee_identity_number": "Αρ. Προσφυγικής Ταυτότητας (για εκτοπισθέντες)",
             "alien_registration_number": "Alien Registration Certificate (όπου εφαρμόζεται)",
             "citizenship": "Υπηκοότητα / Ιδιότητα",
-            "citizenship_other": "Άλλη υπηκοότητα",
+            "citizenship_other": "Άλλο (περιγραφή)",
             "mobile_phone": "Τηλέφωνο Κινητό",
             "landline_phone": "Τηλέφωνο Σταθερό",
             "email": "Ηλεκτρονικό Ταχυδρομείο",
@@ -375,27 +400,29 @@ class ApplicationPartyForm(forms.ModelForm):
         self.role = role
         choices = [c for c in self.fields["citizenship"].choices if c[0]]
         if role == ApplicationParty.Role.APPLICANT:
-            # Παράρτημα 3, Ενότητα 1: ο/η αιτητής/τρια δηλώνει Κύπριος Πολίτης ή Επαναπατρισθείς.
-            choices = [c for c in choices if c[0] in ApplicationParty.CYPRIOT_CITIZENSHIPS]
-            for name in ("alien_registration_number", "citizenship_other", "email"):
+            for name in ("alien_registration_number", "email"):
                 self.fields.pop(name)
         else:
             self.fields["email"].help_text = (
                 "Για την επίσημη αλληλογραφία χρησιμοποιείται το email του Αιτητή/Αιτήτριας."
             )
         self.fields["citizenship"].choices = choices
+        self.fields["mobile_phone"].required = True
         _style(self)
 
     def clean(self):
         cleaned = super().clean()
-        if cleaned.get("citizenship") == ApplicationParty.Citizenship.OTHER and not cleaned.get(
-            "citizenship_other"
-        ):
-            self.add_error("citizenship_other", "Συμπληρώστε την υπηκοότητα.")
+        if cleaned.get("citizenship") == ApplicationParty.Citizenship.OTHER:
+            if not (cleaned.get("citizenship_other") or "").strip():
+                self.add_error("citizenship_other", "Συμπληρώστε την υπηκοότητα / ιδιότητα.")
+        else:
+            cleaned["citizenship_other"] = ""
         return cleaned
 
 
 class ApplicationChildForm(forms.ModelForm):
+    required_css_class = "required"
+
     class Meta:
         model = ApplicationChild
         fields = ["first_name", "last_name", "date_of_birth", "identity_number", "sex", "status"]
@@ -420,29 +447,8 @@ class ApplicationChildForm(forms.ModelForm):
         return cleaned
 
 
-class ResidenceInterruptionForm(forms.ModelForm):
-    class Meta:
-        model = ResidenceInterruption
-        fields = ["reason", "date_from", "date_to"]
-        labels = {"reason": "Λόγος διακοπής", "date_from": "Από", "date_to": "Μέχρι"}
-        widgets = {"date_from": IsoDateInput(), "date_to": IsoDateInput()}
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        _style(self)
-
-    def clean(self):
-        cleaned = super().clean()
-        if cleaned.get("date_from") and cleaned.get("date_to") and cleaned["date_to"] < cleaned["date_from"]:
-            self.add_error("date_to", "Η ημερομηνία λήξης είναι πριν την έναρξη.")
-        return cleaned
-
-
 ChildFormSet = forms.inlineformset_factory(
     PlotApplication, ApplicationChild, form=ApplicationChildForm, extra=0, can_delete=True
-)
-InterruptionFormSet = forms.inlineformset_factory(
-    PlotApplication, ResidenceInterruption, form=ResidenceInterruptionForm, extra=0, can_delete=True
 )
 
 

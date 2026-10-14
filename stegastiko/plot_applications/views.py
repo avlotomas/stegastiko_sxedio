@@ -1,18 +1,22 @@
 from django.contrib import messages
-from django.core.exceptions import ValidationError
+from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Q
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 
+from applications.models import Person
+from applications.person_forms import PersonForm
 from core.function_catalog import CREATE, EDIT
 from core.models import Community
-from core.permissions import access_required
+from core.permissions import access_required, has_access, has_any_access
 from plot_applications.documents import DOCUMENT_GROUPS, DOCUMENT_LABELS
 from plot_applications.forms import (
     ApplicationPartyForm,
     ChildFormSet,
     IncomeDeclarationForm,
-    InterruptionFormSet,
     PersonIdentityForm,
     PlotApplicationForm,
 )
@@ -54,7 +58,7 @@ class ApplicationForms:
         self.spouse = PersonIdentityForm(
             data,
             prefix="spouse",
-            required=bound and self.is_couple,
+            required=True,
             initial=self._person_initial(instance.spouse if instance.pk else None),
         )
         self.applicant_party = ApplicationPartyForm(
@@ -67,7 +71,6 @@ class ApplicationForms:
             use_required_attribute=False,
         )
         self.children = ChildFormSet(data, instance=instance, prefix="children")
-        self.interruptions = InterruptionFormSet(data, instance=instance, prefix="interruptions")
         incomes = {income.member: income for income in instance.incomes.all()} if instance.pk else {}
         self.incomes = [
             (member, IncomeDeclarationForm(data, prefix=prefix, member=member, instance=incomes.get(member)))
@@ -84,7 +87,7 @@ class ApplicationForms:
         }
 
     def _active_forms(self):
-        forms = [self.main, self.applicant, self.applicant_party, self.children, self.interruptions]
+        forms = [self.main, self.applicant, self.applicant_party, self.children]
         forms.append(self.incomes[0][1])
         forms.append(self.incomes[2][1])
         if self.is_couple:
@@ -124,9 +127,8 @@ class ApplicationForms:
         else:
             application.parties.filter(role=ApplicationParty.Role.SPOUSE).delete()
 
-        for formset in (self.children, self.interruptions):
-            formset.instance = application
-            formset.save()
+        self.children.instance = application
+        self.children.save()
 
         for member, form in self.incomes:
             skip = (member == IncomeDeclaration.Member.SPOUSE and not self.is_couple) or (
@@ -166,6 +168,51 @@ def _render_form(request, forms: ApplicationForms, application=None):
                 for title, items in DOCUMENT_GROUPS
             ],
         },
+    )
+
+
+def _person_payload(request, person: Person) -> dict:
+    fields = {name: getattr(person, name) for name in ("identity_number", *PersonIdentityForm.FIXED_FIELDS)}
+    fields["date_of_birth"] = person.date_of_birth.isoformat()
+    return {
+        "found": True,
+        "person": fields,
+        "can_edit": has_access(request.user, "persons", EDIT),
+        "edit_url": reverse("plot_applications:person_edit", args=[person.pk]),
+    }
+
+
+@login_required
+def person_lookup(request):
+    """Υπάρχον Άτομο με ακριβές ΑΔΤ, για συμπλήρωση των σταθερών στοιχείων στη φόρμα αίτησης."""
+    if not has_any_access(request.user, FUNCTION, (CREATE, EDIT)):
+        raise PermissionDenied("Δεν έχετε πρόσβαση σε αυτή τη λειτουργία.")
+    identity = (request.GET.get("identity") or "").strip()
+    person = Person.objects.filter(identity_number=identity).first() if identity else None
+    if person is None:
+        return JsonResponse({"found": False})
+    return JsonResponse(_person_payload(request, person))
+
+
+@access_required("persons", EDIT)
+def person_edit(request, pk):
+    """Modal επεξεργασίας των σταθερών στοιχείων ατόμου· επιστρέφει τη φόρμα ή, μετά την αποθήκευση, JSON."""
+    person = get_object_or_404(Person, pk=pk)
+    status = 200
+    if request.method == "POST":
+        form = PersonForm(request.POST, instance=person)
+        if form.is_valid():
+            with transaction.atomic():
+                person = form.save()
+            return JsonResponse({**_person_payload(request, person), "saved": True})
+        status = 422
+    else:
+        form = PersonForm(instance=person)
+    return render(
+        request,
+        "plot_applications/_person_edit_dialog.html",
+        {"form": form, "person": person},
+        status=status,
     )
 
 
@@ -214,7 +261,7 @@ def plot_application_detail(request, pk):
     application = get_object_or_404(
         PlotApplication.objects.select_related(
             "community", "applicant", "spouse"
-        ).prefetch_related("parties", "children", "residence_interruptions", "incomes"),
+        ).prefetch_related("parties", "children", "incomes"),
         pk=pk,
     )
     outcome = evaluate(application)

@@ -85,19 +85,6 @@ class PlotApplication(AuditedModel):
     residence_community = models.CharField(
         max_length=255, help_text="Κοινότητα / Δ.Δ. διαμονής (για (Δ): η Γειτονική Κοινότητα)"
     )
-    neighbouring_distance_km = models.DecimalField(
-        max_digits=6,
-        decimal_places=2,
-        null=True,
-        blank=True,
-        help_text="(Δ) Απόσταση από τα όρια της Κοινότητας, κατά μετρήσεις ΤΚΧ (Ενότ. 10.Γ)",
-    )
-    neighbouring_subcategory = models.CharField(
-        max_length=32,
-        choices=[c for c in ResidenceCategory.choices if c[0] != ResidenceCategory.NEIGHBOURING],
-        blank=True,
-        help_text="(Δ) Ιδιότητα σε σχέση με τη Γειτονική Κοινότητα (Ενότ. 11.V — κατ' αναλογία)",
-    )
     origin_parent_description = models.TextField(
         blank=True, help_text="(Β) Καταγωγή από την Κοινότητα ως προς ποιο γονέα"
     )
@@ -197,11 +184,7 @@ class ApplicationParty(AuditedModel):
 
     class Citizenship(models.TextChoices):
         CYPRIOT = "cypriot", "Κύπριος Πολίτης"
-        REPATRIATED = "repatriated", "Επαναπατρισθείς/είσα Κύπριος/α"
-        EU = "eu", "Πολίτης Κράτους μέλους ΕΕ"
-        OTHER = "other", "Άλλη"
-
-    CYPRIOT_CITIZENSHIPS = (Citizenship.CYPRIOT, Citizenship.REPATRIATED)
+        OTHER = "other", "Άλλο"
 
     application = models.ForeignKey(PlotApplication, on_delete=models.CASCADE, related_name="parties")
     role = models.CharField(max_length=16, choices=Role.choices)
@@ -225,7 +208,7 @@ class ApplicationParty(AuditedModel):
 
     @property
     def is_cypriot(self) -> bool:
-        return self.citizenship in self.CYPRIOT_CITIZENSHIPS
+        return self.citizenship == self.Citizenship.CYPRIOT
 
 
 class ApplicationChild(AuditedModel):
@@ -256,25 +239,6 @@ class ApplicationChild(AuditedModel):
 
     class Meta:
         ordering = ("date_of_birth", "id")
-
-
-class ResidenceInterruption(AuditedModel):
-    """Διακοπή μόνιμης διαμονής που δεν τη διακόπτει (Ενότ. 11.I–II): ΕΦ, φοίτηση, νοσηλεία."""
-
-    class Reason(models.TextChoices):
-        NATIONAL_GUARD = "national_guard", "Θητεία στην Εθνική Φρουρά"
-        TERTIARY_EDUCATION = "tertiary_education", "Φοίτηση στην τριτοβάθμια εκπαίδευση"
-        HOSPITALISATION = "hospitalisation", "Ιατρικό πρόβλημα με νοσηλεία"
-
-    application = models.ForeignKey(
-        PlotApplication, on_delete=models.CASCADE, related_name="residence_interruptions"
-    )
-    reason = models.CharField(max_length=32, choices=Reason.choices)
-    date_from = models.DateField()
-    date_to = models.DateField()
-
-    class Meta:
-        ordering = ("date_from", "id")
 
 
 class IncomeDeclaration(AuditedModel):

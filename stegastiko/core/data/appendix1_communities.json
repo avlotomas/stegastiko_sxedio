@@ -1,0 +1,1902 @@
+[
+ {
+  "district": "ΑΜΜΟΧΩΣΤΟΥ",
+  "municipality": "ΔΗΜΟΣ ΑΓΙΑΣ ΝΑΠΑΣ",
+  "name": "ΆΧΝΑ"
+ },
+ {
+  "district": "ΑΜΜΟΧΩΣΤΟΥ",
+  "municipality": "ΔΗΜΟΣ ΑΓΙΑΣ ΝΑΠΑΣ",
+  "name": "ΑΥΓΟΡΟΥ"
+ },
+ {
+  "district": "ΑΜΜΟΧΩΣΤΟΥ",
+  "municipality": "ΔΗΜΟΣ ΠΑΡΑΛΙΜΝΙΟΥ-ΔΕΡΥΝΕΙΑΣ",
+  "name": "ΑΧΕΡΙΤΟΥ"
+ },
+ {
+  "district": "ΑΜΜΟΧΩΣΤΟΥ",
+  "municipality": "ΔΗΜΟΣ ΑΓΙΑΣ ΝΑΠΑΣ",
+  "name": "ΛΙΟΠΕΤΡΙ"
+ },
+ {
+  "district": "ΑΜΜΟΧΩΣΤΟΥ",
+  "municipality": "ΔΗΜΟΣ ΠΑΡΑΛΙΜΝΙΟΥ-ΔΕΡΥΝΕΙΑΣ",
+  "name": "ΦΡΕΝΑΡΟΣ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "ΔΗΜΟΣ ΑΘΗΕΝΟΥ",
+  "name": "ΑΒΔΕΛΛΕΡΟ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "",
+  "name": "ΑΓΓΛΙΣΙΔΕΣ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "",
+  "name": "ΑΓΙΑ ΑΝΝΑ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "",
+  "name": "ΑΓΙΟΙ ΒΑΒΑΤΣΙΝΙΑΣ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "",
+  "name": "ΑΓΙΟΣ ΘΕΟΔΩΡΟΣ (ΛΑΡΝΑΚΑΣ)"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "",
+  "name": "ΑΛΑΜΙΝΟΣ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "",
+  "name": "ΑΛΕΘΡΙΚΟ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "",
+  "name": "ΑΝΑΦΩΤΙΔΑ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "",
+  "name": "ΑΠΛΑΝΤΑ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "",
+  "name": "ΒΑΒΑΤΣΙΝΙΑ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "ΔΗΜΟΣ ΛΕΥΚΑΡΩΝ",
+  "name": "ΒΑΒΛΑ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "ΔΗΜΟΣ ΛΑΡΝΑΚΑΣ",
+  "name": "ΒΟΡΟΚΛΗΝΗ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "ΔΗΜΟΣ ΛΕΥΚΑΡΩΝ",
+  "name": "ΔΕΛΙΚΗΠΟΣ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "",
+  "name": "ΖΥΓΙ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "",
+  "name": "ΚΑΛΑΒΑΣΟΣ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "",
+  "name": "ΚΑΛΟ ΧΩΡΙΟ (ΛΑΡΝΑΚΑΣ)"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "",
+  "name": "ΚΑΤΩ ΔΡΥΣ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "ΔΗΜΟΣ ΛΕΥΚΑΡΩΝ",
+  "name": "ΚΑΤΩ ΛΕΥΚΑΡΑ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "ΔΗΜΟΣ ΑΡΑΔΙΠΠΟΥ",
+  "name": "ΚΕΛΛΙΑ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "",
+  "name": "ΚΙΒΙΣΙΛΙ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "ΔΗΜΟΣ ΔΡΟΜΟΛΑΞΙΑΣ-ΜΕΝΕΟΥ",
+  "name": "ΚΙΤΙ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "",
+  "name": "ΚΛΑΥΔΙΑ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "ΔΗΜΟΣ ΛΕΥΚΑΡΩΝ",
+  "name": "ΚΟΡΝΟΣ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "",
+  "name": "ΚΟΦΙΝΟΥ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "ΔΗΜΟΣ ΛΕΥΚΑΡΩΝ",
+  "name": "ΛΑΓΙΑ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "",
+  "name": "ΜΑΖΩΤΟΣ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "",
+  "name": "ΜΑΡΙ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "",
+  "name": "ΜΑΡΩΝΙ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "",
+  "name": "ΜΕΛΙΝΗ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "",
+  "name": "ΜΕΝΟΓΕΙΑ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "",
+  "name": "ΜΟΣΦΙΛΩΤΗ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "",
+  "name": "ΞΥΛΟΤΥΜΒΟΥ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "",
+  "name": "ΞΥΛΟΦΑΓΟΥ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "",
+  "name": "ΟΔΟΥ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "",
+  "name": "ΟΡΑ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "",
+  "name": "ΟΡΜΙΔΕΙΑ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "ΔΗΜΟΣ ΔΡΟΜΟΛΑΞΙΑΣ-ΜΕΝΕΟΥ",
+  "name": "ΠΕΡΙΒΟΛΙΑ (ΛΑΡΝΑΚΑΣ)"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "",
+  "name": "ΠΥΛΑ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "",
+  "name": "ΠΥΡΓΑ (ΛΑΡΝΑΚΑΣ)"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "ΔΗΜΟΣ ΛΕΥΚΑΡΩΝ",
+  "name": "ΣΚΑΡΙΝΟΥ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "",
+  "name": "ΣΟΦΤΑΔΕΣ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "ΔΗΜΟΣ ΔΡΟΜΟΛΑΞΙΑΣ-ΜΕΝΕΟΥ",
+  "name": "ΤΕΡΣΕΦΑΝΟΥ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "",
+  "name": "ΤΟΧΝΗ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "ΔΗΜΟΣ ΑΡΑΔΙΠΠΟΥ",
+  "name": "ΤΡΟΥΛΛΟΙ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "",
+  "name": "ΧΟΙΡΟΚΟΙΤΙΑ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "",
+  "name": "ΨΕΜΑΤΙΣΜΕΝΟΣ"
+ },
+ {
+  "district": "ΛΑΡΝΑΚΑΣ",
+  "municipality": "",
+  "name": "ΨΕΥΔΑΣ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "ΔΗΜΟΣ ΑΜΑΘΟΥΝΤΑΣ",
+  "name": "ΆΓΙΟΣ ΤΥΧΩΝΑΣ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "ΔΗΜΟΣ ΠΟΛΕΜΙΔΙΩΝ",
+  "name": "ΆΝΩ ΠΟΛΕΜΙΔΙΑ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΑΓΙΟΣ ΑΜΒΡΟΣΙΟΣ (ΛΕΜΕΣΟΥ)"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΑΓΙΟΣ ΓΕΩΡΓΙΟΣ (ΛΕΜΕΣΟΥ)"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΑΓΙΟΣ ΔΗΜΗΤΡΙΟΣ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΑΓΙΟΣ ΘΕΟΔΩΡΟΣ (ΛΕΜΕΣΟΥ)"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΑΓΙΟΣ ΘΕΡΑΠΩΝ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΑΓΙΟΣ ΘΩΜΑΣ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΑΓΙΟΣ ΙΩΑΝΝΗΣ (ΛΕΜΕΣΟΥ)"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΑΓΙΟΣ ΚΩΝΣΤΑΝΤΙΝΟΣ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΑΓΙΟΣ ΜΑΜΑΣ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΑΓΙΟΣ ΠΑΥΛΟΣ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΑΓΡΙΔΙΑ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΑΓΡΟΣ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΑΚΑΠΝΟΥ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "ΔΗΜΟΣ ΑΜΑΘΟΥΝΤΑΣ",
+  "name": "ΑΚΡΟΥΝΤΑ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "ΔΗΜΟΣ ΚΟΥΡΙΟΥ",
+  "name": "ΑΚΡΩΤΗΡΙ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΑΛΑΣΣΑ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΑΛΕΚΤΟΡΑ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΑΜΙΑΝΤΟΣ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΑΝΩΓΥΡΑ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΑΠΑΙΣΙΑ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΑΡΑΚΑΠΑΣ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "ΔΗΜΟΣ ΑΜΑΘΟΥΝΤΑΣ",
+  "name": "ΑΡΜΕΝΟΧΩΡΙ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΑΡΣΟΣ (ΛΕΜΕΣΟΥ)"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΑΣΓΑΤΑ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "ΔΗΜΟΣ ΚΟΥΡΙΟΥ",
+  "name": "ΑΣΩΜΑΤΟΣ (ΛΕΜΕΣΟΥ)"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΑΥΔΗΜΟΥ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΑΨΙΟΥ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΒΑΣΑ (ΚΕΛΛΑΚΙΟΥ)"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΒΑΣΑ (ΚΟΙΛΑΝΙΟΥ)"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΒΙΚΛΑ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΒΟΥΝΙ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΓΕΡΑΣΑ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΓΕΡΟΒΑΣΑ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΔΙΕΡΩΝΑ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΔΟΡΑ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΔΥΜΕΣ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΔΩΡΟΣ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "ΔΗΜΟΣ ΚΟΥΡΙΟΥ",
+  "name": "ΕΠΙΣΚΟΠΗ (ΛΕΜΕΣΟΥ)"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΕΠΤΑΓΩΝΕΙΑ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "ΔΗΜΟΣ ΚΟΥΡΙΟΥ",
+  "name": "ΕΡΗΜΗ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΖΩΟΠΗΓΗ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΚΑΛΟ ΧΩΡΙΟ (ΛΕΜΕΣΟΥ)"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΚΑΜΙΝΑΡΙΑ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "ΔΗΜΟΣ ΚΟΥΡΙΟΥ",
+  "name": "ΚΑΝΤΟΥ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΚΑΠΗΛΕΙΟ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΚΑΤΩ ΚΙΒΙΔΕΣ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΚΑΤΩ ΜΥΛΟΣ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΚΑΤΩ ΠΛΑΤΡΕΣ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΚΕΛΛΑΚΙ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΚΙΣΣΟΥΣΑ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΚΛΩΝΑΡΙ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΚΟΙΛΑΝΙ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "ΔΗΜΟΣ ΚΟΥΡΙΟΥ",
+  "name": "ΚΟΛΟΣΣΙ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΚΟΡΦΗ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΚΟΥΚΑ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΚΥΠΕΡΟΥΝΤΑ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΛΑΝΕΙΑ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΛΕΜΙΘΟΥ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΛΙΜΝΑΤΗΣ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΛΟΥΒΑΡΑΣ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΛΟΦΟΥ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "ΔΗΜΟΣ ΑΜΑΘΟΥΝΤΑΣ",
+  "name": "ΜΑΘΙΚΟΛΩΝΗ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΜΑΛΙΑ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΜΑΝΔΡΙΑ (ΛΕΜΕΣΟΥ)"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΜΟΝΑΓΡΙ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΜΟΝΑΓΡΟΥΛΛΙ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΜΟΝΗ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΜΟΝΙΑΤΗΣ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "ΔΗΜΟΣ ΑΜΑΘΟΥΝΤΑΣ",
+  "name": "ΜΟΥΤΤΑΓΙΑΚΑ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΟΜΟΔΟΣ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΠΑΛΑΙΟΜΥΛΟΣ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΠΑΛΟΔΕΙΑ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΠΑΝΩ ΚΙΒΙΔΕΣ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΠΑΝΩ ΠΛΑΤΡΕΣ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΠΑΡΑΜΑΛΙ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΠΑΡΑΜΥΘΑ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΠΑΡΕΚΚΛΗΣΙΑ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΠΑΧΝΑ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΠΕΛΕΝΔΡΙ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΠΕΝΤΑΚΩΜΟ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΠΕΡΑ ΠΕΔΙ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΠΙΣΣΟΥΡΙ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΠΛΑΤΑΝΙΣΤΕΙΑ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΠΟΤΑΜΙΟΥ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΠΟΤΑΜΙΤΙΣΣΑ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΠΡΑΣΤΙΟ (ΑΥΔΗΜΟΥ)"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΠΡΑΣΤΙΟ (ΚΕΛΛΑΚΙΟΥ)"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΠΡΟΔΡΟΜΟΣ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΠΥΡΓΟΣ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΣΑΝΙΔΑ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΣΙΛΙΚΟΥ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΣΟΥΝΙ ΖΑΝΑΚΙΑ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΣΠΙΤΑΛΙ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΣΥΚΟΠΕΤΡΑ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "ΔΗΜΟΣ ΚΟΥΡΙΟΥ",
+  "name": "ΣΩΤΗΡΑ (ΛΕΜΕΣΟΥ)"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "ΔΗΜΟΣ ΚΟΥΡΙΟΥ",
+  "name": "ΤΡΑΧΩΝΙ (ΛΕΜΕΣΟΥ)"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΤΡΕΙΣ ΕΛΙΕΣ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΤΡΙΜΗΚΛΗΝΗ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΤΡΟΟΔΟΣ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "ΔΗΜΟΣ ΛΕΜΕΣΟΥ",
+  "name": "ΤΣΕΡΚΕΖΟΙ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΦΑΣΟΥΛΑ (ΛΕΜΕΣΟΥ)"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΦΟΙΝΙ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "ΔΗΜΟΣ ΑΜΑΘΟΥΝΤΑΣ",
+  "name": "ΦΟΙΝΙΚΑΡΙΑ"
+ },
+ {
+  "district": "ΛΕΜΕΣΟΥ",
+  "municipality": "",
+  "name": "ΧΑΝΔΡΙΑ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΑΓΙΑ ΒΑΡΒΑΡΑ (ΛΕΥΚΩΣΙΑΣ)"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΑΓΙΑ ΕΙΡΗΝΗ (ΛΕΥΚΩΣΙΑΣ)"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΑΓΙΑ ΜΑΡΙΝΑ (ΞΥΛΙΑΤΟΥ)"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΑΓΙΟΙ ΗΛΙΟΦΩΤΟΙ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΑΓΙΟΙ ΤΡΙΜΙΘΙΑΣ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΑΓΙΟΣ ΓΕΩΡΓΙΟΣ ΚΑΥΚΑΛΟΥ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΑΓΙΟΣ ΕΠΙΦΑΝΙΟΣ (ΟΡΕΙΝΗΣ)"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΑΓΙΟΣ ΕΠΙΦΑΝΙΟΣ (ΣΟΛΕΑΣ)"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΑΓΙΟΣ ΘΕΟΔΩΡΟΣ (ΣΟΛΕΑΣ)"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΑΓΙΟΣ ΘΕΟΔΩΡΟΣ ΤΗΛΛΥΡΙΑΣ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΑΓΙΟΣ ΙΩΑΝΝΗΣ (ΛΕΥΚΩΣΙΑΣ)"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΑΓΡΟΚΗΠΙΑ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΑΚΑΚΙ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "ΔΗΜΟΣ ΝΟΤΙΑΣ ΛΕΥΚΩΣΙΑΣ-ΙΔΑΛΙΟΥ",
+  "name": "ΑΛΑΜΠΡΑ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΑΛΕΥΓΑ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΑΛΗΘΙΝΟΥ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΑΛΩΝΑ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΑΝΑΓΕΙΑ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΑΝΑΛΙΟΝΤΑΣ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΑΠΛΙΚΙ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΑΡΕΔΙΟΥ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΑΣΚΑΣ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΑΣΤΡΟΜΕΡΙΤΗΣ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΒΥΖΑΚΙΑ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΓΑΛΑΤΑ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΓΕΡΑΚΙΕΣ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΓΟΥΡΡΗ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΔΕΝΕΙΑ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΕΠΙΣΚΟΠΕΙΟ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΕΡΓΑΤΕΣ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΕΥΡΥΧΟΥ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΚΑΚΟΠΕΤΡΙΑ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΚΑΛΙΑΝΑ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΚΑΛΟ ΧΩΡΙΟ (ΟΡΕΙΝΗΣ)"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΚΑΛΟΠΑΝΑΓΙΩΤΗΣ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΚΑΜΠΙ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΚΑΜΠΙΑ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΚΑΜΠΟΣ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΚΑΝΝΑΒΙΑ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΚΑΠΕΔΕΣ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΚΑΤΑΛΙΟΝΤΑΣ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΚΑΤΥΔΑΤΑ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΚΑΤΩ ΔΕΥΤΕΡΑ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΚΑΤΩ ΚΟΥΤΡΑΦΑΣ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΚΑΤΩ ΜΟΝΗ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΚΑΤΩ ΠΥΡΓΟΣ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΚΛΗΡΟΥ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "ΔΗΜΟΣ ΛΑΚΑΤΑΜΕΙΑΣ",
+  "name": "ΚΟΙΝΟΤ. ΣΥΝΟΙΚΙΣΜΟΣ ΑΝΘΟΥΠΟΛΗΣ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΚΟΚΚΙΝΟΤΡΙΜΙΘΙΑ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΚΟΡΑΚΟΥ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΚΟΤΣΙΑΤΗΣ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΚΟΥΡΔΑΛΙ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΛΑΓΟΥΔΕΡΑ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΛΑΖΑΝΙΑΣ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΛΗΝΟΥ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΛΙΒΑΔΙΑ (ΛΕΥΚΩΣΙΑΣ)"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΛΥΘΡΟΔΟΝΤΑΣ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "ΔΗΜΟΣ ΝΟΤΙΑΣ ΛΕΥΚΩΣΙΑΣ-ΙΔΑΛΙΟΥ",
+  "name": "ΛΥΜΠΙΑ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΜΑΘΙΑΤΗΣ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΜΑΛΟΥΝΤΑ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΜΑΜΜΑΡΗ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΜΑΡΓΙ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΜΕΝΙΚΟ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΜΗΛΙΚΟΥΡΙ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΜΙΤΣΕΡΟ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΜΟΣΦΙΛΙ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΜΟΥΤΟΥΛΛΑΣ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "ΔΗΜΟΣ ΝΟΤΙΑΣ ΛΕΥΚΩΣΙΑΣ-ΙΔΑΛΙΟΥ",
+  "name": "ΝΗΣΟΥ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΝΙΚΗΤΑΡΙ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΞΥΛΙΑΤΟΣ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΟΙΚΟΣ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΟΡΟΥΝΤΑ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΠΑΛΑΙΟΜΕΤΟΧΟ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΠΑΛΑΙΧΩΡΙ (ΜΟΡΦΟΥ)"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΠΑΛΑΙΧΩΡΙ (ΟΡΕΙΝΗΣ)"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΠΑΝΩ ΔΕΥΤΕΡΑ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΠΑΝΩ ΚΟΥΤΡΑΦΑΣ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΠΑΝΩ ΠΥΡΓΟΣ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΠΑΧΥΑΜΜΟΣ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΠΕΔΟΥΛΑΣ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΠΕΡΑ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "ΔΗΜΟΣ ΝΟΤΙΑΣ ΛΕΥΚΩΣΙΑΣ-ΙΔΑΛΙΟΥ",
+  "name": "ΠΕΡΑ ΧΩΡΙΟ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΠΕΡΙΣΤΕΡΩΝΑ (ΛΕΥΚΩΣΙΑΣ)"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΠΗΓΕΝΙΑ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΠΛΑΤΑΝΙΣΤΑΣΑ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΠΟΛΙΤΙΚΟ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΠΟΛΥΣΤΥΠΟΣ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΠΟΤΑΜΙ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "ΔΗΜΟΣ ΝΟΤΙΑΣ ΛΕΥΚΩΣΙΑΣ-ΙΔΑΛΙΟΥ",
+  "name": "ΠΟΤΑΜΙΑ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΣΑΡΑΝΤΙ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΣΕΛΛΑΔΙ ΤΟΥ ΑΠΠΗ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΣΙΑ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΣΙΝΑΟΡΟΣ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΣΚΟΥΡΙΩΤΙΣΣΑ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΣΠΗΛΙΑ (ΑΓΙΟΣ ΑΝΤΩΝΙΟΣ)"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΤΕΜΒΡΙΑ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΤΣΑΚΙΣΤΡΑ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΦΑΡΜΑΚΑΣ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΦΙΚΑΡΔΟΥ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΦΛΑΣΟΥ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΦΤΕΡΙΚΟΥΔΙ"
+ },
+ {
+  "district": "ΛΕΥΚΩΣΙΑΣ",
+  "municipality": "",
+  "name": "ΨΙΜΟΛΟΦΟΥ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "ΔΗΜΟΣ ΑΚΑΜΑ",
+  "name": "ΊΝΕΙΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΑΓΙΑ ΒΑΡΒΑΡΑ (ΠΑΦΟΥ)"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΑΓΙΑ ΜΑΡΙΝΑ (ΚΕΛΟΚΕΔΑΡΩΝ)"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "ΔΗΜΟΣ ΙΕΡΟΚΗΠΙΑΣ",
+  "name": "ΑΓΙΑ ΜΑΡΙΝΟΥΔΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "ΔΗΜΟΣ ΠΟΛΗΣ ΧΡΥΣΟΧΟΥΣ",
+  "name": "ΑΓΙΑΣ ΜΑΡΙΝΑ (ΧΡΥΣΟΧΟΥΣ)"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΑΓΙΟΣ ΓΕΩΡΓΙΟΣ (ΠΑΦΟΥ)"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΑΓΙΟΣ ΔΗΜΗΤΡΙΑΝΟΣ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΑΓΙΟΣ ΙΣΙΔΩΡΟΣ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΑΓΙΟΣ ΙΩΑΝΝΗΣ (ΠΑΦΟΥ)"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΑΓΙΟΣ ΝΙΚΟΛΑΟΣ (ΠΑΦΟΥ)"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "ΔΗΜΟΣ ΑΚΑΜΑ",
+  "name": "ΑΚΟΥΡΣΟΣ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΑΜΑΡΓΕΤΗ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΑΝΑΔΙΟΥ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΑΝΑΡΙΤΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "ΔΗΜΟΣ ΠΟΛΗΣ ΧΡΥΣΟΧΟΥΣ",
+  "name": "ΑΝΔΡΟΛΙΚΟΥ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΑΞΥΛΟΥ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "ΔΗΜΟΣ ΠΟΛΗΣ ΧΡΥΣΟΧΟΥΣ",
+  "name": "ΑΡΓΑΚΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΑΡΜΙΝΟΥ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΑΡΜΟΥ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΑΣΠΡΟΓΙΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "ΔΗΜΟΣ ΙΕΡΟΚΗΠΙΑΣ",
+  "name": "ΑΧΕΛΕΙΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΒΡΕΤΣΙΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΓΑΛΑΤΑΡΙΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "ΔΗΜΟΣ ΠΟΛΗΣ ΧΡΥΣΟΧΟΥΣ",
+  "name": "ΓΙΑΛΙΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΓΙΟΛΟΥ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΓΟΥΔΙ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΔΗΜΟΤΙΚΑ ΔΙΑΜΕΡΙΣΜΑΤΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "ΔΗΜΟΣ ΠΟΛΗΣ ΧΡΥΣΟΧΟΥΣ",
+  "name": "ΔΡΟΥΣΕΙΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΔΡΥΜΟΥ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΔΡΥΝΙΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΕΛΕΔΙΟ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΕΜΠΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΕΠΙΣΚΟΠΗ (ΠΑΦΟΥ)"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΕΥΡΕΤΟΥ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΖΑΧΑΡΙΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΘΕΛΕΤΡΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "ΔΗΜΟΣ ΑΚΑΜΑ",
+  "name": "ΚΑΘΙΚΑΣ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΚΑΛΛΕΠΕΙΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΚΑΝΝΑΒΙΟΥ – ΜΕΛΑΜΙΟΥ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΚΑΡΑΜΟΥΛΛΗΔΕΣ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΚΑΤΩ ΑΚΟΥΡΔΑΛΕΙΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "ΔΗΜΟΣ ΑΚΑΜΑ",
+  "name": "ΚΑΤΩ ΑΡΟΔΕΣ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΚΕΔΑΡΕΣ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΚΕΛΟΚΕΔΑΡΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΚΙΔΑΣΙ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΚΙΟΣ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "ΔΗΜΟΣ ΑΚΑΜΑ",
+  "name": "ΚΙΣΣΟΝΕΡΓΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΚΟΙΛΗ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΚΟΙΛΙΝΕΙΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "ΔΗΜΟΣ ΙΕΡΟΚΗΠΙΑΣ",
+  "name": "ΚΟΝΙΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΚΟΥΚΛΙΑ (ΠΑΦΟΥ)"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΚΟΥΡΔΑΚΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΚΡΙΤΟΥ ΜΑΡΟΤΤΟΥ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "ΔΗΜΟΣ ΠΟΛΗΣ ΧΡΥΣΟΧΟΥΣ",
+  "name": "ΚΡΙΤΟΥ ΤΕΡΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΚΥΝΟΥΣΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΛΑΠΗΘΙΟΥ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΛΑΣΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΛΕΜΠΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΛΕΜΩΝΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΛΕΤΥΜΒΟΥ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΛΙΒΑΔΙ ΠΑΦΟΥ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΛΟΥΚΡΟΥΝΟΥ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΛΥΣΟΣ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "ΔΗΜΟΣ ΠΟΛΗΣ ΧΡΥΣΟΧΟΥΣ",
+  "name": "ΜΑΚΟΥΝΤΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΜΑΜΟΥΝΤΑΛΗ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΜΑΜΩΝΙΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΜΑΝΔΡΙΑ (ΠΑΦΟΥ)"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΜΑΡΑΘΟΥΝΤΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΜΑΡΩΝΑΣ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΜΕΛΑΔΕΙΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΜΕΛΑΝΔΡΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΜΕΣΑ ΧΩΡΙΟ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΜΕΣΑΝΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΜΕΣΟΓΗ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΜΗΛΙΑ (ΠΑΦΟΥ)"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΜΗΛΙΟΥ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΜΟΥΣΕΡΕ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΝΑΤΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "ΔΗΜΟΣ ΠΟΛΗΣ ΧΡΥΣΟΧΟΥΣ",
+  "name": "ΝΕΑ ΔΗΜΜΑΤΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "ΔΗΜΟΣ ΠΟΛΗΣ ΧΡΥΣΟΧΟΥΣ",
+  "name": "ΝΕΟ ΧΩΡΙΟ (ΠΑΦΟΥ)"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΝΙΚΟΚΛΕΙΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΠΑΝΩ ΑΚΟΥΡΔΑΛΕΙΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "ΔΗΜΟΣ ΑΚΑΜΑ",
+  "name": "ΠΑΝΩ ΑΡΟΔΕΣ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΠΑΝΩ ΑΡΧΙΜΑΝΔΡΙΤΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΠΑΝΩ ΠΑΝΑΓΙΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "ΔΗΜΟΣ ΠΟΛΗΣ ΧΡΥΣΟΧΟΥΣ",
+  "name": "ΠΕΛΑΘΟΥΣΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΠΕΝΤΑΛΙΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΠΕΡΙΣΤΕΡΩΝΑ (ΠΑΦΟΥ)"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΠΙΤΑΡΓΟΥ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΠΟΛΕΜΙ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "ΔΗΜΟΣ ΠΟΛΗΣ ΧΡΥΣΟΧΟΥΣ",
+  "name": "ΠΟΜΟΣ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΠΡΑΙΤΩΡΙ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΠΡΑΣΤΙΟ (ΠΑΦΟΥ)"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΣΑΛΑΜΙΟΥ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΣΑΡΑΜΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΣΙΜΟΥ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΣΚΟΥΛΛΗ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΣΟΥΣΚΙΟΥ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΣΤΑΤΟΣ – ΑΓΙΟΣ ΦΩΤΙΟΣ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΣΤΑΥΡΟΚΟΝΝΟΥ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΣΤΕΝΗ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΣΤΡΟΥΜΠΙ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΤΑΛΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "ΔΗΜΟΣ ΠΟΛΗΣ ΧΡΥΣΟΧΟΥΣ",
+  "name": "ΤΕΡΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "ΔΗΜΟΣ ΙΕΡΟΚΗΠΙΑΣ",
+  "name": "ΤΙΜΗ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΤΡΑΧΥΠΕΔΟΥΛΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΤΡΕΜΙΘΟΥΣΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΤΡΙΜΙΘΟΥΣΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΤΣΑΔΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΦΑΛΕΙΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΦΑΣΟΥΛΑ (ΠΑΦΟΥ)"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΦΙΛΟΥΣΑ (ΚΕΛΟΚΕΔΑΡΩΝ)"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΦΙΛΟΥΣΑ (ΧΡΥΣΟΧΟΥΣ)"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΦΥΤΗ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΧΛΩΡΑΚΑΣ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΧΟΛΕΤΡΙΑ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΧΟΛΗ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΧΟΥΛΟΥ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "ΔΗΜΟΣ ΠΟΛΗΣ ΧΡΥΣΟΧΟΥΣ",
+  "name": "ΧΡΥΣΟΧΟΥ"
+ },
+ {
+  "district": "ΠΑΦΟΥ",
+  "municipality": "",
+  "name": "ΨΑΘΙ"
+ }
+]

@@ -1,0 +1,16 @@
+{% comment %}Περιεχόμενο του modal επεξεργασίας ατόμου (φορτώνεται από τον server).{% endcomment %}
+<form method="post" action="{% url 'plot_applications:person_edit' person.pk %}" class="app-form" data-person-edit-form novalidate>
+    {% csrf_token %}
+    <h2 class="card__title">Επεξεργασία στοιχείων: {{ person.first_name }} {{ person.last_name }}</h2>
+    <p class="helptext">Οι αλλαγές αποθηκεύονται στο μητρώο «Άτομα» και ισχύουν για όλες τις αιτήσεις του ατόμου.</p>
+    {% if form.non_field_errors %}
+    <div class="alert alert--error">{% for error in form.non_field_errors %}{{ error }} {% endfor %}</div>
+    {% endif %}
+    <div class="form-grid">
+        {% for field in form.visible_fields %}{% include "includes/form_field.html" %}{% endfor %}
+    </div>
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Αποθήκευση</button>
+        <button type="button" class="btn btn-secondary" data-dialog-close>Ακύρωση</button>
+    </div>
+</form>

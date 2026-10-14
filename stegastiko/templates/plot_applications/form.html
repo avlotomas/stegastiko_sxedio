@@ -22,7 +22,8 @@
 </div>
 
 <div class="card">
-<form method="post" class="app-form plot-application-form" novalidate data-plot-application-form>
+<form method="post" class="app-form plot-application-form" novalidate data-plot-application-form
+      data-person-lookup-url="{% url 'plot_applications:person_lookup' %}">
     {% csrf_token %}
     {% if form.non_field_errors %}
     <div class="alert alert--error form-span-all">{% for error in form.non_field_errors %}{{ error }} {% endfor %}</div>
@@ -38,11 +39,14 @@
     {# ───────────── 1 ───────────── #}
     <h3 class="form-section-title">1. Προσωπικά στοιχεία αιτητή/αιτήτριας</h3>
     <div class="form-grid">
-        {% for field in forms.applicant %}{% include "plot_applications/_field.html" %}{% endfor %}
+        {% include "plot_applications/_person_fields.html" with person_form=forms.applicant %}
         {% with p=forms.applicant_party %}
         {% include "plot_applications/_field.html" with field=p.social_insurance_number %}
         {% include "plot_applications/_field.html" with field=p.refugee_identity_number %}
         {% include "plot_applications/_field.html" with field=p.citizenship %}
+        <div data-show-when="applicant_party-citizenship=other" hidden>
+            {% include "plot_applications/_field.html" with field=p.citizenship_other %}
+        </div>
         {% include "plot_applications/_field.html" with field=p.mobile_phone %}
         {% include "plot_applications/_field.html" with field=p.landline_phone %}
         {% endwith %}
@@ -64,13 +68,6 @@
     <p class="helptext">Οι όροι ερμηνεύονται στην Ενότητα 11 του Σχεδίου. Επισυνάπτονται τα πιστοποιητικά του Καταλόγου Δικαιολογητικών (Γ).</p>
     <div class="form-grid">
         {% include "plot_applications/_field.html" with field=form.residence_category wide=True %}
-        <div class="form-span-all" data-show-when="main-residence_category=neighbouring" hidden>
-            <div class="form-grid">
-                {% include "plot_applications/_field.html" with field=form.neighbouring_subcategory %}
-                {% include "plot_applications/_field.html" with field=form.neighbouring_distance_km %}
-            </div>
-            <p class="helptext">Απόσταση ≤ 15 km κατά τις μετρήσεις ΤΚΧ (Ενότ. 10.Γ).</p>
-        </div>
     </div>
     <h4 class="form-section-subtitle">Δήλωση διεύθυνσης (υφιστάμενη)</h4>
     <div class="form-grid">
@@ -78,10 +75,15 @@
         {% include "plot_applications/_field.html" with field=form.residence_number %}
         {% include "plot_applications/_field.html" with field=form.residence_apartment %}
         {% include "plot_applications/_field.html" with field=form.residence_postal_code %}
-        {% include "plot_applications/_field.html" with field=form.residence_community wide=True %}
+        <div class="form-span-all" data-show-when="main-residence_category=autochthon,displaced,repatriated,internal_emigrant" hidden>
+            {% include "plot_applications/_field.html" with field=form.residence_community wide=True %}
+        </div>
+        <div class="form-span-all" data-show-when="main-residence_category=neighbouring" hidden>
+            {% include "plot_applications/_field.html" with field=form.neighbouring_community wide=True %}
+        </div>
     </div>
 
-    <div data-show-when="main-residence_category=internal_emigrant|main-neighbouring_subcategory=internal_emigrant" hidden>
+    <div data-show-when="main-residence_category=internal_emigrant" hidden>
         <h4 class="form-section-subtitle">(Β) Απόδημος Εσωτερικού</h4>
         <div class="form-grid">
             {% include "plot_applications/_field.html" with field=form.origin_parent_description wide=True %}
@@ -91,7 +93,7 @@
         </div>
     </div>
 
-    <div data-show-when="main-residence_category=repatriated|main-neighbouring_subcategory=repatriated" hidden>
+    <div data-show-when="main-residence_category=repatriated" hidden>
         <h4 class="form-section-subtitle">(Γ) Επαναπατρισθείς / Απόδημος Εξωτερικού <span class="text-muted">(≥ 3 έτη διαμονής, ≥ 10 έτη στο εξωτερικό — Ενότ. 11.IV)</span></h4>
         <div class="form-grid">
             {% include "plot_applications/_field.html" with field=form.community_residence_since %}
@@ -101,10 +103,6 @@
         </div>
     </div>
 
-    <div data-show-when="main-residence_category=autochthon,displaced,neighbouring" hidden>
-        <h4 class="form-section-subtitle">Διακοπή διαμονής <span class="text-muted">(Εθνική Φρουρά, τριτοβάθμια φοίτηση, νοσηλεία — δεν διακόπτουν τη μόνιμη διαμονή, Ενότ. 11)</span></h4>
-        {% include "plot_applications/_formset.html" with formset=forms.interruptions title="Περίοδος διακοπής" add_label="+ Προσθήκη περιόδου διακοπής" %}
-    </div>
     <div class="form-grid">
         {% include "plot_applications/_field.html" with field=form.residence_notes wide=True %}
     </div>
@@ -128,13 +126,15 @@
         {# ───────────── 5 ───────────── #}
         <h3 class="form-section-title">5. Προσωπικά στοιχεία συζύγου / συμβίου</h3>
         <div class="form-grid">
-            {% for field in forms.spouse %}{% include "plot_applications/_field.html" %}{% endfor %}
+            {% include "plot_applications/_person_fields.html" with person_form=forms.spouse %}
             {% with p=forms.spouse_party %}
             {% include "plot_applications/_field.html" with field=p.social_insurance_number %}
             {% include "plot_applications/_field.html" with field=p.refugee_identity_number %}
             {% include "plot_applications/_field.html" with field=p.alien_registration_number %}
             {% include "plot_applications/_field.html" with field=p.citizenship %}
-            {% include "plot_applications/_field.html" with field=p.citizenship_other %}
+            <div data-show-when="spouse_party-citizenship=other" hidden>
+                {% include "plot_applications/_field.html" with field=p.citizenship_other %}
+            </div>
             {% include "plot_applications/_field.html" with field=p.mobile_phone %}
             {% include "plot_applications/_field.html" with field=p.landline_phone %}
             {% include "plot_applications/_field.html" with field=p.email %}
@@ -257,5 +257,11 @@
     </div>
 </form>
 </div>
-<script src="{% static 'js/plot_application.js' %}"></script>
+<dialog id="person-edit-dialog" class="modal" data-person-edit-dialog>
+    <div class="alert alert--error" data-person-edit-errors hidden></div>
+    <div data-person-edit-body></div>
+</dialog>
+{{ form.community_names|json_script:"community-names" }}
+<script src="{% static 'js/plot_application.js' %}?v=2"></script>
+<script src="{% static 'js/plot_application_person.js' %}?v=1"></script>
 {% endblock %}

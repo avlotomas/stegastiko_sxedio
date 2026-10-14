@@ -25,7 +25,6 @@ PENDING = EligibilityResult.PENDING
 # (setting key, default, description) — όλα επεξεργάσιμα από Ρυθμίσεις (Ενότ. 19).
 PARAMETER_SETTINGS: tuple[tuple[str, int, str], ...] = (
     ("plotApp.maxAge", 45, "Ενότ. 10.Β — ηλικία που δεν πρέπει να έχει συμπληρωθεί"),
-    ("plotApp.maxNeighbourKm", 15, "Ενότ. 10.Γ — μέγιστη απόσταση γειτονικής κοινότητας (km)"),
     ("plotApp.minorMaxAge", 18, "Ενότ. 10.Α — ανήλικα τέκνα (ηλικία μικρότερη από)"),
     ("plotApp.studentMaxAgeFemale", 23, "Ενότ. 10.Α — σπουδάζοντα τέκνα θήλυ μέχρι (ετών)"),
     ("plotApp.studentMaxAgeMale", 25, "Ενότ. 10.Α — σπουδάζοντα τέκνα άρρενα μέχρι (ετών)"),
@@ -156,29 +155,17 @@ def _residence_criterion(application: PlotApplication, applicant_party) -> Crite
     if not category:
         return CriterionResult(code, label, section, PENDING, "Δεν δηλώθηκε κατηγορία διαμονής.")
     if category == ResidenceCategory.NEIGHBOURING:
-        max_km = parameter("plotApp.maxNeighbourKm")
-        distance = application.neighbouring_distance_km
+        # Δεν γίνεται έλεγχος απόστασης (15 km)· η Γειτονική Κοινότητα δηλώνεται ως ελεύθερο κείμενο.
         if not application.residence_community.strip():
             return CriterionResult(code, label, section, PENDING, "Δεν δηλώθηκε η Γειτονική Κοινότητα.")
-        if distance is None:
-            return CriterionResult(
-                code, label, section, PENDING, "Εκκρεμεί η απόσταση κατά τις μετρήσεις ΤΚΧ."
-            )
-        if distance > max_km:
-            return CriterionResult(
-                code, label, section, FAIL, f"Απόσταση {distance} km > {max_km} km — απορρίπτεται."
-            )
-        sub = application.neighbouring_subcategory
-        if not sub:
-            return CriterionResult(
-                code, label, section, PENDING, "Δεν δηλώθηκε η ιδιότητα σε σχέση με τη Γειτονική Κοινότητα."
-            )
-        result, note = _residence_detail_check(sub, application, applicant_party)
-        return CriterionResult(code, label, section, result, note)
+        return CriterionResult(
+            code, label, section, PASS, "Κάτοικος Γειτονικής Κοινότητας — δεν ελέγχεται η απόσταση."
+        )
     result, note = _residence_detail_check(category, application, applicant_party)
     return CriterionResult(code, label, section, result, note)
 
 
+NEIGHBOURING_PRIORITY = 5
 PRIMARY_ORDER = {
     ResidenceCategory.AUTOCHTHON: 1,
     ResidenceCategory.DISPLACED: 2,
@@ -190,16 +177,15 @@ PRIMARY_ORDER = {
 def priority(application: PlotApplication, recognized_children: int) -> tuple[int | None, int | None, str]:
     """Ενότ. 11: πρωτεύουσα σειρά κατά τόπο διαμονής, δευτερεύουσα κατά σύνθεση οικογένειας.
 
-    Οι Κάτοικοι Γειτονικής Κοινότητας έπονται (5x), με την ίδια σειρά 1–4 κατ' αναλογία (51–54).
+    Οι Κάτοικοι Γειτονικής Κοινότητας έπονται όλοι μαζί (5), χωρίς υποδιαίρεση ανά ιδιότητα.
     """
     category = application.residence_category
     if not category:
         return None, None, ""
     labels = dict(ResidenceCategory.choices)
     if category == ResidenceCategory.NEIGHBOURING:
-        sub = application.neighbouring_subcategory
-        primary = 50 + PRIMARY_ORDER.get(sub, 9)
-        primary_label = labels[category] + (f" — {labels[sub]}" if sub else "")
+        primary = NEIGHBOURING_PRIORITY
+        primary_label = labels[category]
     else:
         primary = PRIMARY_ORDER[category]
         primary_label = labels[category]
