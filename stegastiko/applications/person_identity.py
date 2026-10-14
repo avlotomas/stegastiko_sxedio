@@ -6,16 +6,12 @@ from typing import Any
 
 from applications.models import Person
 
+# Fields that never change over time and therefore live on Person (10.3.1).
 # field_name -> Greek label (UI / import errors)
 PERSON_FIELD_LABELS: dict[str, str] = {
     "first_name": "Όνομα",
     "last_name": "Επίθετο",
     "identity_number": "Αρ. Δελτίου Ταυτότητας",
-    "refugee_identity_number": "Αρ. Προσφυγικής Ταυτότητας",
-    "citizenship_cypriot": "Υπηκοότητα — Κύπριος Πολίτης",
-    "citizenship_repatriated": "Υπηκοότητα — Επαναπατρισθείς/είσα Κύπριος/α",
-    "citizenship_eu": "Υπηκοότητα — Πολίτης κράτους μέλους ΕΕ",
-    "citizenship_other": "Υπηκοότητα — Άλλη",
     "date_of_birth": "Ημερομηνία γέννησης",
     "birth_place": "Τόπος γέννησης",
     "birth_country": "Χώρα γέννησης",
@@ -25,18 +21,26 @@ PERSON_FIELD_LABELS: dict[str, str] = {
 
 PERSON_FIXED_FIELD_NAMES: tuple[str, ...] = tuple(PERSON_FIELD_LABELS.keys())
 
+# Per-person fields declared on each application (Παράρτημα 3); stored as
+# Application.person1_<name> / person2_<name>.
+APPLICATION_PERSON_FIELD_NAMES: tuple[str, ...] = (
+    "refugee_identity_number",
+    "citizenship_cypriot",
+    "citizenship_repatriated",
+    "citizenship_eu",
+    "citizenship_other",
+)
+
 
 def _normalize_value(field_name: str, value: Any) -> Any:
-    if field_name in ("citizenship_cypriot", "citizenship_repatriated", "citizenship_eu"):
-        return bool(value)
     if field_name == "date_of_birth" and isinstance(value, str) and value:
         try:
             return date.fromisoformat(value.strip()[:10])
         except ValueError:
             # Unparsable incoming date: keep the text so it is reported as a difference.
             return value
-    if field_name in ("refugee_identity_number", "citizenship_other"):
-        return str(value or "").strip()
+    if isinstance(value, str):
+        return value.strip()
     return value
 
 
@@ -46,11 +50,6 @@ def person_payload_from_form_prefix(form, prefix: str) -> dict:
         "first_name": form.cleaned_data[f"{prefix}_first_name"],
         "last_name": form.cleaned_data[f"{prefix}_last_name"],
         "identity_number": (form.cleaned_data[f"{prefix}_identity_number"] or "").strip(),
-        "refugee_identity_number": (form.cleaned_data.get(f"{prefix}_refugee_identity_number") or "").strip(),
-        "citizenship_cypriot": form.cleaned_data.get(f"{prefix}_citizenship_cypriot", False),
-        "citizenship_repatriated": form.cleaned_data.get(f"{prefix}_citizenship_repatriated", False),
-        "citizenship_eu": form.cleaned_data.get(f"{prefix}_citizenship_eu", False),
-        "citizenship_other": (form.cleaned_data.get(f"{prefix}_citizenship_other") or "").strip(),
         "date_of_birth": form.cleaned_data[f"{prefix}_date_of_birth"],
         "birth_place": form.cleaned_data[f"{prefix}_birth_place"],
         "birth_country": form.cleaned_data[f"{prefix}_birth_country"],
@@ -70,16 +69,27 @@ def person_payload_from_mapping(data: dict, prefix: str) -> dict:
         "first_name": text("first_name"),
         "last_name": text("last_name"),
         "identity_number": text("identity_number"),
-        "refugee_identity_number": text("refugee_id"),
-        "citizenship_cypriot": _parse_yes_no(data.get(f"{prefix}_citizenship_cypriot")),
-        "citizenship_repatriated": _parse_yes_no(data.get(f"{prefix}_citizenship_repatriated")),
-        "citizenship_eu": _parse_yes_no(data.get(f"{prefix}_citizenship_eu")),
-        "citizenship_other": text("citizenship_other"),
         "date_of_birth": data.get(f"{prefix}_date_of_birth"),
         "birth_place": text("birth_place"),
         "birth_country": text("birth_country"),
         "parents_birth_place": text("parents_birth_place"),
         "parents_birth_country": text("parents_birth_country"),
+    }
+
+
+def application_person_fields_from_mapping(data: dict, prefix: str, slot: str) -> dict:
+    """Excel/import keys (p1_*, p2_*) -> Application.person1_* / person2_* kwargs."""
+
+    def text(key: str) -> str:
+        value = data.get(f"{prefix}_{key}")
+        return "" if value is None else str(value).strip()
+
+    return {
+        f"{slot}_refugee_identity_number": text("refugee_id"),
+        f"{slot}_citizenship_cypriot": _parse_yes_no(data.get(f"{prefix}_citizenship_cypriot")),
+        f"{slot}_citizenship_repatriated": _parse_yes_no(data.get(f"{prefix}_citizenship_repatriated")),
+        f"{slot}_citizenship_eu": _parse_yes_no(data.get(f"{prefix}_citizenship_eu")),
+        f"{slot}_citizenship_other": text("citizenship_other"),
     }
 
 
@@ -94,8 +104,6 @@ def _parse_yes_no(value) -> bool:
 def _display_value(field_name: str, value: Any) -> str:
     if value is None:
         return ""
-    if field_name in ("citizenship_cypriot", "citizenship_repatriated", "citizenship_eu"):
-        return "Ναι" if value else "Όχι"
     if field_name == "date_of_birth" and isinstance(value, date):
         return value.isoformat()
     return str(value)

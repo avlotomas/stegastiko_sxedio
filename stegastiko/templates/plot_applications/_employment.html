@@ -1,0 +1,7 @@
+<div class="form-grid">
+    {% include "plot_applications/_field.html" with field=p.is_self_employed %}
+    {% include "plot_applications/_field.html" with field=p.is_employee %}
+    {% include "plot_applications/_field.html" with field=p.is_unemployed %}
+    {% include "plot_applications/_field.html" with field=p.has_disability %}
+    {% include "plot_applications/_field.html" with field=p.employer_details wide=True %}
+</div>

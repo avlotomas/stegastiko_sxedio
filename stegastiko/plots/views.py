@@ -111,7 +111,7 @@ def plot_detail(request, pk):
             "is_create": False,
             "can_edit": can_edit,
             "can_delete": has_access(request.user, "plots", DELETE),
-            "submission_cycles": plot.submission_cycles.select_related("community"),
+            "submission_cycles": plot.submission_cycles.prefetch_related("communities"),
             "allocations": plot.allocations.select_related("application"),
         },
     )

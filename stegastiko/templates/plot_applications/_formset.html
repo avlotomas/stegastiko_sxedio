@@ -1,0 +1,27 @@
+{% comment %}Inline formset with add / delete rows (handled by plot_application.js).{% endcomment %}
+<div data-formset="{{ formset.prefix }}">
+    {{ formset.management_form }}
+    {% if formset.non_form_errors %}<div class="alert alert--error">{{ formset.non_form_errors }}</div>{% endif %}
+    <div data-formset-rows>
+        {% for row in formset %}
+        <fieldset class="child-formset" data-formset-row>
+            <legend>{{ title }}</legend>
+            {{ row.id }}
+            {% if row.non_field_errors %}<div class="alert alert--error">{{ row.non_field_errors }}</div>{% endif %}
+            <div class="form-grid">
+                {% for field in row.visible_fields %}{% include "plot_applications/_field.html" %}{% endfor %}
+            </div>
+        </fieldset>
+        {% endfor %}
+    </div>
+    <template data-formset-template>
+        <fieldset class="child-formset" data-formset-row>
+            <legend>{{ title }}</legend>
+            {{ formset.empty_form.id }}
+            <div class="form-grid">
+                {% for field in formset.empty_form.visible_fields %}{% include "plot_applications/_field.html" %}{% endfor %}
+            </div>
+        </fieldset>
+    </template>
+    <button type="button" class="btn btn-secondary btn-sm" data-formset-add>{{ add_label }}</button>
+</div>

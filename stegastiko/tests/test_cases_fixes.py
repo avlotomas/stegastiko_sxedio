@@ -5,7 +5,7 @@ from decimal import Decimal
 
 import pytest
 from django.core import mail
-from django.db import IntegrityError, connection
+from django.db import IntegrityError, connection, transaction
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
@@ -19,6 +19,7 @@ from cases.models import (
     InfrastructureCheck,
     MinistryDecisionRound,
     SubmissionCycle,
+    SubmissionCyclePublication,
     YesNo,
 )
 from core.models import Communication, Community, Role
@@ -28,6 +29,7 @@ from core.services import (
     get_setting,
     set_setting,
 )
+from tests.fixtures.cycles import make_cycle
 
 JSON = {"HTTP_ACCEPT": "application/json"}
 STAFF_ROLE = "Προϊστάμενος ελέγχου"
@@ -107,14 +109,12 @@ def _allocate(plot, community):
     completed.copy_from(plot)
     completed.save()
 
-    cycle = SubmissionCycle.objects.create(
-        community=community,
+    cycle = make_cycle(
+        community,
         announcement_date=date(2027, 6, 1),
-        submission_start_date=date(2027, 6, 2),
-        submission_end_date=date(2027, 7, 1),
     )
     application = Application.objects.create(
-        submission_cycle=cycle,
+        community=community,
         person=_make_person(),
         folder_number="12001001",
         submitted_on=date(2027, 6, 10),
@@ -205,66 +205,112 @@ def test_case_create_shows_a_form_error_instead_of_500_when_numbers_keep_collidi
 
 
 def _cycle(community, published=False):
-    return SubmissionCycle.objects.create(
-        community=community,
+    return make_cycle(
+        community,
         announcement_date=date(2027, 6, 1),
-        submission_start_date=date(2027, 6, 2),
-        submission_end_date=date(2027, 7, 1),
-        announcement_text="Αρχικό κείμενο",
         published_at="2027-06-01T10:00:00Z" if published else None,
     )
 
 
-def _announcement_post(text):
-    return {
-        "cycle-announcement_date": "2027-06-01",
-        "cycle-submission_start_date": "2027-06-02",
-        "cycle-submission_end_date": "2027-07-01",
-        "cycle-comments": "",
-        "announcement_text": text,
-    }
+def _announcement_post(months="1"):
+    return {"cycle-announcement_date": "2027-06-01", "cycle-submission_months": months}
 
 
-PUBLICATION = {"method": "community", "published_on": "2027-06-02", "notes": ""}
+PUBLICATION = {"published_on": "2027-06-02"}
 
 
 @pytest.mark.django_db
 def test_announcement_detail_post_saves_a_draft(community, staff_client):
     cycle = _cycle(community)
     url = reverse("announcements:detail", args=[cycle.pk])
-    response = staff_client.post(url, _announcement_post("Νέο κείμενο"))
+    response = staff_client.post(url, _announcement_post("3"))
     assert response.status_code == 302
     cycle.refresh_from_db()
-    assert cycle.announcement_text == "Νέο κείμενο"
+    assert cycle.submission_months == 3 and cycle.submission_end_date == date(2027, 9, 1)
 
 
 @pytest.mark.django_db
-def test_announcement_publications_are_a_grid(community, staff_client):
+def test_publication_table_always_lists_the_four_methods_with_a_date_input(community, staff_client):
     cycle = _cycle(community)
     detail = staff_client.get(reverse("announcements:detail", args=[cycle.pk])).content.decode()
     assert "data-publication-table" in detail
-    create_url = reverse("announcements:publication_create", args=[cycle.pk])
-    assert create_url in detail
+    for method in SubmissionCyclePublication.FIXED_METHODS:
+        assert SubmissionCyclePublication.PublicationMethod(method).label in detail
+        assert reverse("announcements:publication_date", args=[cycle.pk, method.value]) in detail
+    assert detail.count("data-publication-date=") == 4
 
-    for published_on in ("2027-06-02", "2027-06-03"):
-        response = staff_client.post(create_url, {**PUBLICATION, "published_on": published_on}, **JSON)
+
+def _set_date(client, cycle, method, value):
+    url = reverse("announcements:publication_date", args=[cycle.pk, method])
+    return client.post(url, {"published_on": value}, **JSON)
+
+
+@pytest.mark.django_db
+def test_fixed_method_date_is_set_inline_once_and_is_optional(community, staff_client):
+    cycle = _cycle(community)
+    response = _set_date(staff_client, cycle, "district_office", "2027-06-02")
+    assert response.status_code == 200 and response.json()["ok"]
+    assert "data-publication-table" in response.json()["grid_html"]
+    row = cycle.publications.get()
+    assert (row.method, row.notes, row.published_on) == ("district_office", "", date(2027, 6, 2))
+
+    # Changing the date updates the same row; an empty date removes it (the method is optional).
+    assert _set_date(staff_client, cycle, "district_office", "2027-06-05").json()["ok"]
+    row.refresh_from_db()
+    assert row.published_on == date(2027, 6, 5) and cycle.publications.count() == 1
+    assert _set_date(staff_client, cycle, "district_office", "").json()["ok"]
+    assert cycle.publications.count() == 0
+    assert _set_date(staff_client, cycle, "district_office", "").json()["ok"]  # nothing to remove
+
+    assert _set_date(staff_client, cycle, "community", "31/02/2027").status_code == 400
+    assert _set_date(staff_client, cycle, "other", "2027-06-02").status_code == 404
+    assert cycle.publications.count() == 0
+
+
+@pytest.mark.django_db
+def test_fixed_method_dates_are_refused_once_published(community, staff_client):
+    cycle = _cycle(community, published=True)
+    assert _set_date(staff_client, cycle, "community", "2027-06-02").status_code == 409
+    assert cycle.publications.count() == 0
+
+
+@pytest.mark.django_db
+def test_fixed_methods_are_not_edited_in_the_modal(community, staff_client):
+    cycle = _cycle(community)
+    row = cycle.publications.create(method="community", published_on=date(2027, 6, 2))
+    edit_url = reverse("announcements:publication_edit", args=[cycle.pk, row.pk])
+    assert staff_client.get(edit_url, **JSON).status_code == 404
+    delete_url = reverse("announcements:publication_delete", args=[cycle.pk, row.pk])
+    assert staff_client.post(delete_url, **JSON).status_code == 404
+    assert cycle.publications.count() == 1
+
+
+@pytest.mark.django_db
+def test_other_can_be_recorded_many_times_with_date_and_comment(community, staff_client):
+    cycle = _cycle(community)
+    create_url = reverse("announcements:publication_create", args=[cycle.pk])
+    assert staff_client.post(create_url, PUBLICATION, **JSON).status_code == 400  # the comment is needed
+    for day, comment in (("2027-06-02", "Εφημερίδα"), ("2027-06-03", "Ραδιόφωνο")):
+        response = staff_client.post(create_url, {"published_on": day, "notes": comment}, **JSON)
         assert response.status_code == 200 and response.json()["ok"]
-    assert cycle.publications.count() == 2
     first, second = cycle.publications.all()
+    assert (first.method, first.notes) == ("other", "Εφημερίδα")
 
     edit_url = reverse("announcements:publication_edit", args=[cycle.pk, first.pk])
-    response = staff_client.post(edit_url, {**PUBLICATION, "method": "other", "notes": "Εφημερίδα"}, **JSON)
-    assert response.json()["ok"]
-    first.refresh_from_db()
-    assert first.method == "other" and first.notes == "Εφημερίδα"
-
-    response = staff_client.post(edit_url, {**PUBLICATION, "published_on": ""}, **JSON)
-    assert response.status_code == 400
-
+    assert staff_client.post(edit_url, {"published_on": "2027-06-04", "notes": "Τύπος"}, **JSON).json()["ok"]
     delete_url = reverse("announcements:publication_delete", args=[cycle.pk, second.pk])
-    response = staff_client.post(delete_url, **JSON)
-    assert response.json()["ok"]
-    assert list(cycle.publications.all()) == [first]
+    assert staff_client.post(delete_url, **JSON).json()["ok"]
+    assert list(cycle.publications.values_list("notes", flat=True)) == ["Τύπος"]
+
+
+@pytest.mark.django_db
+def test_the_database_keeps_each_fixed_method_once(community):
+    cycle = _cycle(community)
+    cycle.publications.create(method="community", published_on=date(2027, 6, 2))
+    with pytest.raises(IntegrityError), transaction.atomic():
+        cycle.publications.create(method="community", published_on=date(2027, 6, 3))
+    cycle.publications.create(method="other", published_on=date(2027, 6, 3), notes="α")
+    cycle.publications.create(method="other", published_on=date(2027, 6, 4), notes="β")
 
 
 @pytest.mark.django_db
@@ -282,13 +328,14 @@ def test_announcement_publications_are_locked_once_published(community, staff_cl
 def test_announcement_detail_post_is_refused_once_published(community, staff_client):
     cycle = _cycle(community, published=True)
     url = reverse("announcements:detail", args=[cycle.pk])
-    response = staff_client.post(url, _announcement_post("Αλλοιωμένο"))
+    response = staff_client.post(url, _announcement_post("5"))
     assert response.status_code == 409
     html = response.content.decode()
     assert "έχει οριστικοποιηθεί" in html
-    assert 'name="announcement_text"' in html and "disabled" in html
+    assert 'name="cycle-submission_months"' in html and "disabled" in html
+    assert 'name="cycle-submission_end_date"' not in html
     cycle.refresh_from_db()
-    assert cycle.announcement_text == "Αρχικό κείμενο"
+    assert cycle.submission_months == 2 and cycle.submission_end_date == date(2027, 8, 1)
 
 
 @pytest.mark.django_db

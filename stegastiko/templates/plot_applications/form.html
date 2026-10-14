@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{% if is_create %}Νέα αίτηση παραχώρησης οικοπέδου{% else %}Επεξεργασία {{ application.protocol_number }}{% endif %}{% endblock %}
+
+{% block content %}
+<nav class="breadcrumb" aria-label="Πλοήγηση">
+    <a href="{% url 'plot_applications:list' %}">Αιτήσεις παραχώρησης οικοπέδου</a>
+    <span>/</span>
+    <span>{% if is_create %}Νέα αίτηση{% else %}{{ application.protocol_number }}{% endif %}</span>
+</nav>
+
+<div class="page-header">
+    <h1>{% if is_create %}Αίτηση για παραχώρηση οικοπέδου{% else %}Επεξεργασία {{ application.protocol_number }}{% endif %}</h1>
+    <p class="page-header__lead">Έντυπο Παραρτήματος 3 — Στεγαστικό Σχέδιο Διάθεσης Οικοπέδων σε Οικογένειες στη βάση Εισοδηματικών Κριτηρίων.</p>
+</div>
+
+<div class="alert alert--warning">
+    Για Ζεύγος (με ή χωρίς τέκνα) η αίτηση υποβάλλεται από κοινού και υπογράφεται και από τα δύο πρόσωπα·
+    η υπογραφή από το ένα μόνο οδηγεί σε απόρριψη (Ενότ. 5). Αίτηση που χρειάζεται συμπλήρωση απορρίπτεται —
+    ο αιτητής υποβάλλει νέα, εφόσον η προθεσμία είναι ανοιχτή.
+</div>
+
+<div class="card">
+<form method="post" class="app-form plot-application-form" novalidate data-plot-application-form>
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+    <div class="alert alert--error form-span-all">{% for error in form.non_field_errors %}{{ error }} {% endfor %}</div>
+    {% endif %}
+
+    <h3 class="form-section-title">Αίτηση</h3>
+    {% if not is_create %}<p class="form-readonly"><strong>Αρ. Πρωτοκόλλου:</strong> {{ application.protocol_number }}</p>{% endif %}
+    <div class="form-grid">
+        {% include "plot_applications/_field.html" with field=form.community wide=True %}
+        {% include "plot_applications/_field.html" with field=form.submitted_on %}
+    </div>
+
+    {# ───────────── 1 ───────────── #}
+    <h3 class="form-section-title">1. Προσωπικά στοιχεία αιτητή/αιτήτριας</h3>
+    <div class="form-grid">
+        {% for field in forms.applicant %}{% include "plot_applications/_field.html" %}{% endfor %}
+        {% with p=forms.applicant_party %}
+        {% include "plot_applications/_field.html" with field=p.social_insurance_number %}
+        {% include "plot_applications/_field.html" with field=p.refugee_identity_number %}
+        {% include "plot_applications/_field.html" with field=p.citizenship %}
+        {% include "plot_applications/_field.html" with field=p.mobile_phone %}
+        {% include "plot_applications/_field.html" with field=p.landline_phone %}
+        {% endwith %}
+        {% include "plot_applications/_field.html" with field=form.email %}
+    </div>
+    <p class="helptext">Θα πρέπει να δηλωθεί έγκυρη ηλεκτρονική διεύθυνση για την επίσημη επικοινωνία και κοινοποίηση αποφάσεων (Ενότ. 6, 7).</p>
+    <h4 class="form-section-subtitle">Διεύθυνση αλληλογραφίας <span class="text-muted">(αν διαφέρει από τη διεύθυνση διαμονής)</span></h4>
+    <div class="form-grid">
+        {% include "plot_applications/_field.html" with field=form.correspondence_street %}
+        {% include "plot_applications/_field.html" with field=form.correspondence_number %}
+        {% include "plot_applications/_field.html" with field=form.correspondence_apartment %}
+        {% include "plot_applications/_field.html" with field=form.correspondence_community %}
+        {% include "plot_applications/_field.html" with field=form.correspondence_postal_code %}
+        {% include "plot_applications/_field.html" with field=form.correspondence_district %}
+    </div>
+
+    {# ───────────── 2 ───────────── #}
+    <h3 class="form-section-title">2. Τόπος διαμονής αιτητή/αιτήτριας</h3>
+    <p class="helptext">Οι όροι ερμηνεύονται στην Ενότητα 11 του Σχεδίου. Επισυνάπτονται τα πιστοποιητικά του Καταλόγου Δικαιολογητικών (Γ).</p>
+    <div class="form-grid">
+        {% include "plot_applications/_field.html" with field=form.residence_category wide=True %}
+        <div class="form-span-all" data-show-when="main-residence_category=neighbouring" hidden>
+            <div class="form-grid">
+                {% include "plot_applications/_field.html" with field=form.neighbouring_subcategory %}
+                {% include "plot_applications/_field.html" with field=form.neighbouring_distance_km %}
+            </div>
+            <p class="helptext">Απόσταση ≤ 15 km κατά τις μετρήσεις ΤΚΧ (Ενότ. 10.Γ).</p>
+        </div>
+    </div>
+    <h4 class="form-section-subtitle">Δήλωση διεύθυνσης (υφιστάμενη)</h4>
+    <div class="form-grid">
+        {% include "plot_applications/_field.html" with field=form.residence_street %}
+        {% include "plot_applications/_field.html" with field=form.residence_number %}
+        {% include "plot_applications/_field.html" with field=form.residence_apartment %}
+        {% include "plot_applications/_field.html" with field=form.residence_postal_code %}
+        {% include "plot_applications/_field.html" with field=form.residence_community wide=True %}
+    </div>
+
+    <div data-show-when="main-residence_category=internal_emigrant|main-neighbouring_subcategory=internal_emigrant" hidden>
+        <h4 class="form-section-subtitle">(Β) Απόδημος Εσωτερικού</h4>
+        <div class="form-grid">
+            {% include "plot_applications/_field.html" with field=form.origin_parent_description wide=True %}
+            {% include "plot_applications/_field.html" with field=form.previous_residence_address wide=True %}
+            {% include "plot_applications/_field.html" with field=form.previous_residence_from %}
+            {% include "plot_applications/_field.html" with field=form.previous_residence_to %}
+        </div>
+    </div>
+
+    <div data-show-when="main-residence_category=repatriated|main-neighbouring_subcategory=repatriated" hidden>
+        <h4 class="form-section-subtitle">(Γ) Επαναπατρισθείς / Απόδημος Εξωτερικού <span class="text-muted">(≥ 3 έτη διαμονής, ≥ 10 έτη στο εξωτερικό — Ενότ. 11.IV)</span></h4>
+        <div class="form-grid">
+            {% include "plot_applications/_field.html" with field=form.community_residence_since %}
+            <div></div>
+            {% include "plot_applications/_field.html" with field=form.abroad_from %}
+            {% include "plot_applications/_field.html" with field=form.abroad_to %}
+        </div>
+    </div>
+
+    <div data-show-when="main-residence_category=autochthon,displaced,neighbouring" hidden>
+        <h4 class="form-section-subtitle">Διακοπή διαμονής <span class="text-muted">(Εθνική Φρουρά, τριτοβάθμια φοίτηση, νοσηλεία — δεν διακόπτουν τη μόνιμη διαμονή, Ενότ. 11)</span></h4>
+        {% include "plot_applications/_formset.html" with formset=forms.interruptions title="Περίοδος διακοπής" add_label="+ Προσθήκη περιόδου διακοπής" %}
+    </div>
+    <div class="form-grid">
+        {% include "plot_applications/_field.html" with field=form.residence_notes wide=True %}
+    </div>
+
+    {# ───────────── 3 ───────────── #}
+    <h3 class="form-section-title">3. Οικογενειακή κατάσταση</h3>
+    <p class="helptext">Μονήρη άτομα δεν είναι δικαιούχοι (Ενότ. 10.Α). Ο αριθμός τέκνων προκύπτει από τον πίνακα της Ενότητας 7.</p>
+    <div class="form-grid">
+        {% include "plot_applications/_field.html" with field=form.family_status %}
+        <div data-show-when="main-family_status=single_parent" hidden>
+            {% include "plot_applications/_field.html" with field=form.single_parent_status %}
+            {% include "plot_applications/_field.html" with field=form.single_parent_other %}
+        </div>
+    </div>
+
+    {# ───────────── 4 ───────────── #}
+    <h3 class="form-section-title">4. Επαγγελματική και άλλη κατάσταση αιτητή/αιτήτριας</h3>
+    {% include "plot_applications/_employment.html" with p=forms.applicant_party %}
+
+    <div data-show-when="main-family_status=married,civil_partnership" hidden>
+        {# ───────────── 5 ───────────── #}
+        <h3 class="form-section-title">5. Προσωπικά στοιχεία συζύγου / συμβίου</h3>
+        <div class="form-grid">
+            {% for field in forms.spouse %}{% include "plot_applications/_field.html" %}{% endfor %}
+            {% with p=forms.spouse_party %}
+            {% include "plot_applications/_field.html" with field=p.social_insurance_number %}
+            {% include "plot_applications/_field.html" with field=p.refugee_identity_number %}
+            {% include "plot_applications/_field.html" with field=p.alien_registration_number %}
+            {% include "plot_applications/_field.html" with field=p.citizenship %}
+            {% include "plot_applications/_field.html" with field=p.citizenship_other %}
+            {% include "plot_applications/_field.html" with field=p.mobile_phone %}
+            {% include "plot_applications/_field.html" with field=p.landline_phone %}
+            {% include "plot_applications/_field.html" with field=p.email %}
+            {% endwith %}
+        </div>
+
+        {# ───────────── 6 ───────────── #}
+        <h3 class="form-section-title">6. Επαγγελματική και άλλη κατάσταση συζύγου / συμβίου</h3>
+        {% include "plot_applications/_employment.html" with p=forms.spouse_party %}
+    </div>
+
+    {# ───────────── 7 ───────────── #}
+    <h3 class="form-section-title">7. Τέκνα αιτητή/τριας που ζουν στην ίδια κατοικία</h3>
+    <p class="helptext">«Τέκνα» κατά την Ενότ. 10.Α: ανήλικα μέχρι 18, φοιτητές (μέχρι 23 θήλυ / 25 άρρεν), εθνοφρουροί, ενήλικα ΑμεΑ που δεν μπορούν να διαβιούν ανεξάρτητα.</p>
+    {% include "plot_applications/_formset.html" with formset=forms.children title="Τέκνο" add_label="+ Προσθήκη τέκνου" %}
+
+    {# ───────────── 8 ───────────── #}
+    <h3 class="form-section-title">8. Εισοδήματα</h3>
+    <p class="helptext">«Οικογενειακό Ακαθάριστο Εισόδημα» του έτους που προηγείται της αίτησης (Ενότ. 10.Στ). Δεν λαμβάνονται υπόψη φοιτητική χορηγία, επίδομα τέκνου, μη επαναλαμβανόμενα επιδόματα και επιδόματα αναπηρίας τέκνων ΑμεΑ.</p>
+    {% for member, income_form in forms.incomes %}
+    <fieldset class="child-formset" data-income-block {% if member == 'spouse' %}data-show-when="main-family_status=married,civil_partnership" hidden{% endif %}>
+        <legend>{% if member == 'applicant' %}Αιτητής/τρια{% elif member == 'spouse' %}Σύζυγος/Συμβίος{% else %}Άλλο μέλος της οικογένειας{% endif %}</legend>
+        {% if income_form.non_field_errors %}<div class="alert alert--error">{{ income_form.non_field_errors }}</div>{% endif %}
+        <div class="form-grid">
+            {% if income_form.member_description %}{% include "plot_applications/_field.html" with field=income_form.member_description wide=True %}{% endif %}
+            {% include "plot_applications/_field.html" with field=income_form.employment_type %}
+            {% include "plot_applications/_field.html" with field=income_form.gross_annual_income %}
+            {% include "plot_applications/_field.html" with field=income_form.other_income_1_description %}
+            {% include "plot_applications/_field.html" with field=income_form.other_income_1_amount %}
+            {% include "plot_applications/_field.html" with field=income_form.other_income_2_description %}
+            {% include "plot_applications/_field.html" with field=income_form.other_income_2_amount %}
+            {% include "plot_applications/_field.html" with field=income_form.other_income_3_description %}
+            {% include "plot_applications/_field.html" with field=income_form.other_income_3_amount %}
+        </div>
+        <p class="form-readonly"><strong>Συνολικό ακαθάριστο εισόδημα:</strong> € <span data-income-total>0.00</span></p>
+    </fieldset>
+    {% endfor %}
+    <p class="form-readonly"><strong>Οικογενειακό ακαθάριστο εισόδημα:</strong> € <span data-family-income-total>0.00</span></p>
+
+    {# ───────────── 9 ───────────── #}
+    <h3 class="form-section-title">9. Άλλη ακίνητη ιδιοκτησία</h3>
+    <p class="helptext">Σε απάντηση «Όχι» υποβάλλονται τα προβλεπόμενα Πιστοποιητικά ΤΚΧ. Σε απάντηση «Ναι» δίνονται διευκρινίσεις. Ισχύει χωριστά για κάθε πρόσωπο του Ζεύγους (Ενότ. 10.Δ, 10.Ε).</p>
+    <div class="form-grid">
+        {% include "plot_applications/_field.html" with field=form.has_dwelling wide=True %}
+        {% include "plot_applications/_field.html" with field=form.has_dwelling_details wide=True %}
+        {% include "plot_applications/_field.html" with field=form.has_residential_land wide=True %}
+        {% include "plot_applications/_field.html" with field=form.has_residential_land_details wide=True %}
+        {% include "plot_applications/_field.html" with field=form.has_alienated_property wide=True %}
+        {% include "plot_applications/_field.html" with field=form.has_alienated_property_details wide=True %}
+    </div>
+
+    {# ───────────── 10 ───────────── #}
+    <h3 class="form-section-title">10. Παραχώρηση άλλης κρατικής στεγαστικής βοήθειας</h3>
+    <div class="form-grid">
+        {% include "plot_applications/_field.html" with field=form.previous_housing_aid wide=True %}
+        {% include "plot_applications/_field.html" with field=form.previous_housing_aid_details wide=True %}
+    </div>
+
+    {# ───────────── 11 ───────────── #}
+    <h3 class="form-section-title">11. Υποβολή άλλης αίτησης στο πλαίσιο του Σχεδίου</h3>
+    <p class="helptext">Αν υποβλήθηκε (ή θα υποβληθεί) αίτηση και σε άλλη Κοινότητα, δηλώνεται η σειρά προτίμησης, περιλαμβανομένης της παρούσας (Κοινότητα, Επαρχιακή Διοίκηση).</p>
+    <div class="form-grid">
+        {% include "plot_applications/_field.html" with field=form.other_application_choice_1 %}
+        {% include "plot_applications/_field.html" with field=form.other_application_choice_2 %}
+        {% include "plot_applications/_field.html" with field=form.other_application_choice_3 %}
+        {% include "plot_applications/_field.html" with field=form.other_applications_notes wide=True %}
+    </div>
+
+    {# ───────────── 12–13 ───────────── #}
+    <h3 class="form-section-title">12. Υπεύθυνη δήλωση για τη δηλωθείσα ηλεκτρονική διεύθυνση</h3>
+    <div class="form-grid">
+        {% include "plot_applications/_field.html" with field=form.email_declaration_accepted wide=True %}
+    </div>
+    <h3 class="form-section-title">13. Υπογραφές αιτητή / αιτητών</h3>
+    <div class="form-grid">
+        {% include "plot_applications/_field.html" with field=form.applicant_signed %}
+        <div data-show-when="main-family_status=married,civil_partnership" hidden>
+            {% include "plot_applications/_field.html" with field=form.spouse_signed %}
+        </div>
+    </div>
+
+    <h3 class="form-section-title">Ένορκη δήλωση</h3>
+    <div class="form-grid">
+        {% include "plot_applications/_field.html" with field=form.sworn_by_applicant %}
+        <div data-show-when="main-family_status=married,civil_partnership" hidden>
+            {% include "plot_applications/_field.html" with field=form.sworn_by_spouse %}
+        </div>
+        {% include "plot_applications/_field.html" with field=form.sworn_declaration_date %}
+        {% include "plot_applications/_field.html" with field=form.sworn_court %}
+    </div>
+
+    <h3 class="form-section-title">Κατάλογος απαιτούμενων δικαιολογητικών εγγράφων</h3>
+    <p class="helptext">Σημειώστε ό,τι επισυνάπτεται. Χωρίς τα έγγραφα που εφαρμόζονται, η αίτηση ΔΕΝ θεωρείται πλήρης (Ενότ. 5, 20.2).</p>
+    {% if form.attached_documents.errors %}<ul class="errorlist">{% for e in form.attached_documents.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+    {% for title, choices in document_groups %}
+    <fieldset class="child-formset">
+        <legend>{{ title }}</legend>
+        <div class="document-checklist">
+            {% for choice in choices %}
+            <label class="checkbox-label">{{ choice.tag }} <span>{{ choice.choice_label }}</span></label>
+            {% endfor %}
+        </div>
+    </fieldset>
+    {% endfor %}
+    <div class="form-grid">
+        {% include "plot_applications/_field.html" with field=form.other_documents wide=True %}
+    </div>
+
+    <h3 class="form-section-title">Για επίσημη χρήση</h3>
+    <div class="form-grid">
+        {% include "plot_applications/_field.html" with field=form.received_at %}
+        {% include "plot_applications/_field.html" with field=form.received_by %}
+        {% include "plot_applications/_field.html" with field=form.district_file_number %}
+        {% include "plot_applications/_field.html" with field=form.comments wide=True %}
+    </div>
+
+    <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Αποθήκευση</button>
+        <a href="{% if is_create %}{% url 'plot_applications:list' %}{% else %}{% url 'plot_applications:detail' application.pk %}{% endif %}" class="btn btn-secondary">Ακύρωση</a>
+    </div>
+</form>
+</div>
+<script src="{% static 'js/plot_application.js' %}"></script>
+{% endblock %}

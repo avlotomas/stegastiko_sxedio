@@ -6,7 +6,7 @@
       novalidate>
     {% csrf_token %}
     <h2 class="card__title" id="publication-dialog-title">
-        {% if publication_form.instance.pk %}Επεξεργασία τρόπου δημοσίευσης{% else %}Νέος τρόπος δημοσίευσης{% endif %}
+        {% if publication_form.instance.pk %}Επεξεργασία «Άλλο»{% else %}Νέο «Άλλο»{% endif %}
     </h2>
 
     {% if publication_form.non_field_errors %}
@@ -16,7 +16,6 @@
     {% endif %}
 
     <div class="form-grid">
-        {% include "includes/form_field.html" with field=publication_form.method %}
         {% include "includes/form_field.html" with field=publication_form.published_on %}
         {% include "includes/form_field.html" with field=publication_form.notes wide=True %}
     </div>

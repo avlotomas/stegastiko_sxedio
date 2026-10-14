@@ -1,9 +1,11 @@
+import calendar
 from decimal import Decimal
 
 from django.apps import apps
 from django.conf import settings
 from django.contrib.contenttypes.fields import GenericRelation
 from django.core.exceptions import ObjectDoesNotExist
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import IntegrityError, models, transaction
 from django.db.models import Count, OuterRef, Subquery
 from django.db.models.functions import Coalesce
@@ -1100,27 +1102,46 @@ class ValuationReferral(AuditedModel):
         return self.reference_number or f"ΤΚΧ #{self.pk}"
 
 
+def add_months(value, months):
+    """`value` plus whole calendar months; a day the month lacks becomes its last day."""
+    index = value.year * 12 + value.month - 1 + months
+    year, month = divmod(index, 12)
+    month += 1
+    return value.replace(year=year, month=month, day=min(value.day, calendar.monthrange(year, month)[1]))
+
+
 class SubmissionCycle(AuditedModel):
-    """Ενότητα 9 Γνωστοποίηση / ανακοίνωση έναρξης αιτήσεων, ανά Κοινότητα.
+    """Ενότητα 9 Γνωστοποίηση / ανακοίνωση έναρξης αιτήσεων, για μία ή περισσότερες Κοινότητες.
 
     A separate flow from the division cases: it offers completed plots (plots.Plot) of its
-    community, whether they came from an old split, a new one or were entered by hand.
+    communities, whether they came from an old split, a new one or were entered by hand.
+    The communities are chosen first, then the plots are limited to theirs. An application
+    only records its own community; the announcement that opened it is found through that
+    community and the submission date (see `for_community`).
     """
 
-    community = models.ForeignKey(Community, on_delete=models.PROTECT, related_name="submission_cycles")
+    communities = models.ManyToManyField(
+        Community,
+        related_name="submission_cycles",
+        help_text="9.1 Κοινότητες / Δ.Δ. που καλύπτει η γνωστοποίηση (της ίδιας Επαρχίας, Ενότ. 4)",
+    )
     plots = models.ManyToManyField(
         "plots.Plot",
         blank=True,
         related_name="submission_cycles",
-        help_text="9.1 Διαθέσιμα οικόπεδα της Κοινότητας που προσφέρει η γνωστοποίηση",
+        help_text="9.1 Διαθέσιμα οικόπεδα των Κοινοτήτων που προσφέρει η γνωστοποίηση",
     )
     announcement_date = models.DateField(help_text="9.1 Ημερομηνία γνωστοποίησης")
-    submission_start_date = models.DateField(help_text="9.1 Έναρξη υποβολής αιτήσεων")
-    submission_end_date = models.DateField(help_text="9.1 Λήξη υποβολής αιτήσεων")
-    comments = models.TextField(blank=True, help_text="9.5 Σχόλια / Παρατηρήσεις Ενότητας 9")
-    announcement_text = models.TextField(
-        blank=True, help_text="9.3 Κείμενο ανακοίνωσης (αυτόματο προσχέδιο, επεξεργάσιμο)"
+    submission_months = models.PositiveSmallIntegerField(
+        default=2,
+        validators=[MinValueValidator(1), MaxValueValidator(12)],
+        help_text="9.1 Προθεσμία υποβολής αιτήσεων σε μήνες από την ημερομηνία γνωστοποίησης· η τελευταία ημέρα υποβολής υπολογίζεται αυτόματα",
     )
+    submission_end_date = models.DateField(
+        editable=False,
+        help_text="9.1 Τελευταία ημέρα υποβολής αιτήσεων (υπολογίζεται από την ημερομηνία γνωστοποίησης και τους μήνες)",
+    )
+    comments = models.TextField(blank=True, help_text="9.5 Σχόλια / Παρατηρήσεις Ενότητας 9")
     published_at = models.DateTimeField(
         null=True, blank=True, help_text="9.3 Οριστικοποίηση / έκδοση ανακοίνωσης"
     )
@@ -1129,7 +1150,14 @@ class SubmissionCycle(AuditedModel):
         ordering = ("-announcement_date", "-id")
 
     def __str__(self):
-        return f"{self.community.name} — γνωστοποίηση {self.announcement_date}"
+        return f"{self.communities_label} — γνωστοποίηση {self.announcement_date}"
+
+    def save(self, *args, **kwargs):
+        self.submission_end_date = add_months(self.announcement_date, self.submission_months)
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None and {"announcement_date", "submission_months"} & set(update_fields):
+            kwargs["update_fields"] = {*update_fields, "submission_end_date"}
+        super().save(*args, **kwargs)
 
     @property
     def is_published(self):
@@ -1139,14 +1167,41 @@ class SubmissionCycle(AuditedModel):
     def available_plots_count(self):
         return self.plots.count()
 
+    @property
+    def communities_label(self):
+        """Names of the communities, in the order of the list screens (for display)."""
+        names = [community.name for community in self.communities.all()]
+        return ", ".join(sorted(names)) if names else "—"
+
+    @classmethod
+    def for_community(cls, community, on_date=None):
+        """Published announcements that cover `community` (and, with `on_date`, are open then)."""
+        cycles = cls.objects.filter(communities=community, published_at__isnull=False)
+        if on_date is not None:
+            cycles = cycles.filter(announcement_date__lte=on_date, submission_end_date__gte=on_date)
+        return cycles
+
 
 class SubmissionCyclePublication(AuditedModel):
+    """9.2 One way the announcement was made known.
+
+    The four fixed methods are each recorded exactly once, with a date and no free text;
+    «Άλλο» may be recorded any number of times, each with a date and a comment.
+    """
+
     class PublicationMethod(models.TextChoices):
         COMMUNITY = "community", "Αποστολή/ανάρτηση στην Κοινότητα ή στο Δ.Δ."
         DISTRICT_OFFICE = "district_office", "Έντυπη ανάρτηση στα γραφεία Επαρχιακής Διοίκησης"
         DISTRICT_SITE = "district_site", "Ιστοσελίδα Επαρχιακής Διοίκησης"
         MINISTRY_SITE = "ministry_site", "Ιστοσελίδα ΥΠΕΣ"
         OTHER = "other", "Άλλο"
+
+    FIXED_METHODS = (
+        PublicationMethod.COMMUNITY,
+        PublicationMethod.DISTRICT_OFFICE,
+        PublicationMethod.DISTRICT_SITE,
+        PublicationMethod.MINISTRY_SITE,
+    )
 
     submission_cycle = models.ForeignKey(
         SubmissionCycle, on_delete=models.CASCADE, related_name="publications"
@@ -1161,6 +1216,17 @@ class SubmissionCyclePublication(AuditedModel):
 
     class Meta:
         ordering = ("published_on", "id")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["submission_cycle", "method"],
+                condition=~models.Q(method="other"),
+                name="unique_fixed_publication_method_per_cycle",
+            )
+        ]
+
+    @property
+    def is_fixed(self):
+        return self.method != self.PublicationMethod.OTHER
 
     @property
     def row_label(self):

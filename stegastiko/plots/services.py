@@ -58,52 +58,19 @@ def completion_message(summary: dict) -> str:
 
 
 def create_announcement(form) -> SubmissionCycle:
-    """9.1 Create the announcement of a valid SubmissionCycleForm, with its 9.3 draft."""
+    """9.1 Create the announcement of a valid SubmissionCycleForm."""
     with transaction.atomic():
         cycle = form.save(commit=False)
-        cycle.community = form.community
         cycle.save()
         form.save_m2m()
-        cycle.announcement_text = build_announcement_text(cycle)
-        cycle.save()
+        cycle.communities.set(form.communities)
     return cycle
-
-
-def build_announcement_text(cycle: SubmissionCycle) -> str:
-    """9.3 Automatic draft from the offered plots and the submission period.
-
-    The exact approved wording is still pending (Ε-68), so this is a working draft
-    that the operator previews and edits before finalising.
-    """
-    community = cycle.community
-    case_numbers = sorted(
-        {
-            plot.source_case.case_number
-            for plot in cycle.plots.select_related("source_case")
-            if plot.source_case_id
-        }
-    )
-    return (
-        "ΑΝΑΚΟΙΝΩΣΗ\n"
-        "Στεγαστικό Σχέδιο Διάθεσης Οικοπέδων\n\n"
-        f"Επαρχία: {community.district}\n"
-        f"Κοινότητα / Δ.Δ.: {community.name}\n"
-        f"Αρ. Φακέλου/ων υπόθεσης: {', '.join(case_numbers) or '—'}\n"
-        f"Αριθμός διαθέσιμων οικοπέδων: {cycle.available_plots_count}\n\n"
-        f"Ημερομηνία γνωστοποίησης: {cycle.announcement_date}\n"
-        f"Έναρξη υποβολής αιτήσεων: {cycle.submission_start_date}\n"
-        f"Λήξη υποβολής αιτήσεων: {cycle.submission_end_date}\n\n"
-        "Καλούνται οι ενδιαφερόμενες οικογένειες να υποβάλουν αίτηση (Παράρτημα 3) "
-        "εντός της ανωτέρω προθεσμίας, μαζί με τα απαιτούμενα δικαιολογητικά.\n"
-    )
 
 
 def publish_announcement(cycle: SubmissionCycle) -> SubmissionCycle:
     """9.3 Finalise and issue the announcement; it must offer at least one plot."""
     if cycle.is_published:
         raise ValidationError("Η ανακοίνωση έχει ήδη οριστικοποιηθεί.")
-    if not cycle.announcement_text.strip():
-        raise ValidationError("Δεν υπάρχει κείμενο ανακοίνωσης (9.3).")
     if not cycle.plots.exists():
         raise ValidationError("Η γνωστοποίηση δεν προσφέρει κανένα οικόπεδο (9.1).")
     cycle.published_at = timezone.now()

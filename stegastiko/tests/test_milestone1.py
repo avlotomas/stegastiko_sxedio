@@ -13,6 +13,7 @@ from django.urls import reverse
 from applications.services import application_form_initial, ensure_person, generate_folder_number
 from cases.models import ApprovedDesignPlot, Case, SubmissionCycle
 from core.models import ActionHistory, Community, SystemSetting
+from tests.fixtures.cycles import make_cycle
 
 
 @pytest.fixture
@@ -31,11 +32,9 @@ def baseline_data(db):
         start_date=date(2026, 1, 1),
         contact_email="case@example.org",
     )
-    cycle = SubmissionCycle.objects.create(
-        community=community,
+    cycle = make_cycle(
+        community,
         announcement_date=date(2026, 6, 1),
-        submission_start_date=date(2026, 6, 2),
-        submission_end_date=date(2026, 7, 1),
         published_at="2026-06-01T10:00:00Z",
     )
     SystemSetting.objects.update_or_create(
@@ -63,9 +62,10 @@ def _create_person(identity, first_name="A", last_name="B", year=1990):
 
 
 def _create_application(cycle, p1, p2=None):
-    folder = generate_folder_number(cycle)
+    community = cycle.communities.get()
+    folder = generate_folder_number(community)
     return Application.objects.create(
-        submission_cycle=cycle,
+        community=community,
         person=p1,
         person2=p2,
         folder_number=folder,
@@ -195,10 +195,8 @@ def test_eligibility_rules_age_income_and_overall(baseline_data):
     p1 = _create_person("ID-30", year=1980)
     p2 = _create_person("ID-31", year=1995)
     app = _create_application(cycle, p1, p2)
-    p1.citizenship_cypriot = False
-    p1.save()
-    p2.citizenship_cypriot = True
-    p2.save()
+    app.person1_citizenship_cypriot = False
+    app.person2_citizenship_cypriot = True
     app.residence_category = "Αυτόχθονας"
     app.family_members_count = 4
     app.person1_income = Decimal("20000")

@@ -38,6 +38,7 @@ from cases.forms import CompletenessCheckForm
 from cases.views import section_screens_for
 from core.models import ActionHistory, Attachment, Community
 from core.services import set_setting
+from tests.fixtures.cycles import make_cycle
 
 
 @pytest.fixture
@@ -883,11 +884,9 @@ def test_case_forms_use_greek_labels_without_section_prefix_on_fields(community,
 @pytest.mark.django_db
 def test_publication_rows_use_greek_labels(community, staff_client):
     """8.2 The publication formset is a separate model and needs labels too."""
-    cycle = SubmissionCycle.objects.create(
-        community=community,
+    cycle = make_cycle(
+        community,
         announcement_date=date(2027, 6, 1),
-        submission_start_date=date(2027, 6, 2),
-        submission_end_date=date(2027, 7, 1),
     )
     html = staff_client.get(reverse("announcements:detail", args=[cycle.pk])).content.decode()
     assert "Τρόπος δημοσίευσης" in html

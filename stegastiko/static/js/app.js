@@ -1449,6 +1449,31 @@ bindFilePickers(document);
         deleteErrorMessage: "Αποτυχία διαγραφής του τρόπου δημοσίευσης.",
         serverDeleteErrors: true,
     });
+
+    // The four fixed publication methods are dated inline in the same table: a change is saved
+    // at once (an empty date removes the row) and the table is re-rendered from the server.
+    document.addEventListener("change", function (event) {
+        const input = event.target.closest ? event.target.closest("[data-publication-date]") : null;
+        if (!input) {
+            return;
+        }
+        const data = csrfFormData();
+        data.append("published_on", input.value);
+        input.disabled = true;
+        requestJson(input.getAttribute("data-publication-date"), { method: "POST", body: data })
+            .then(function (result) {
+                if (result.grid_html) {
+                    replaceOuterHtml("[data-publication-container]", result.grid_html);
+                } else {
+                    input.disabled = false;
+                }
+                showStatusAlert("[data-publication-status]", result.message, result.ok ? "success" : "error");
+            })
+            .catch(function () {
+                showStatusAlert("[data-publication-status]", SERVER_ERROR_MESSAGE, "error");
+                input.disabled = false;
+            });
+    });
 })();
 
 // Role permission matrix: «Όλα» per row; any access implies «Προβολή» on the row and on the

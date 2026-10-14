@@ -11,7 +11,7 @@
 
 <div class="page-header">
     <h1>Αίτηση {{ application.folder_number }}</h1>
-    <p class="page-header__lead">{{ application.submission_cycle.community.name }} · υποβολή {{ application.submitted_on }}</p>
+    <p class="page-header__lead">{{ application.community.name }} · υποβολή {{ application.submitted_on }}</p>
 </div>
 
 <div class="toolbar">
@@ -49,16 +49,45 @@
         <div>
             <dt>Πρόσωπο 1</dt>
             <dd>{{ application.person.first_name }} {{ application.person.last_name }}<br>
-                <span class="text-muted">ΑΔΤ {{ application.person.identity_number }}</span></dd>
+                <span class="text-muted">ΑΔΤ {{ application.person.identity_number }} · γεν. {{ application.person.date_of_birth|date:"Y-m-d" }}</span><br>
+                <span class="text-muted">Υπηκοότητα: {% if application.person1_citizenship_cypriot %}Κύπριος Πολίτης{% endif %}{% if application.person1_citizenship_repatriated %} · Επαναπατρισθείς{% endif %}{% if application.person1_citizenship_eu %} · Πολίτης ΕΕ{% endif %}{% if application.person1_citizenship_other %} · {{ application.person1_citizenship_other }}{% endif %}{% if application.person1_refugee_identity_number %} · Προσφ. ταυτ. {{ application.person1_refugee_identity_number }}{% endif %}</span></dd>
         </div>
         {% if application.person2 %}
         <div>
             <dt>Πρόσωπο 2</dt>
             <dd>{{ application.person2.first_name }} {{ application.person2.last_name }}<br>
-                <span class="text-muted">ΑΔΤ {{ application.person2.identity_number }}</span></dd>
+                <span class="text-muted">ΑΔΤ {{ application.person2.identity_number }} · γεν. {{ application.person2.date_of_birth|date:"Y-m-d" }}</span><br>
+                <span class="text-muted">Υπηκοότητα: {% if application.person2_citizenship_cypriot %}Κύπριος Πολίτης{% endif %}{% if application.person2_citizenship_repatriated %} · Επαναπατρισθείς{% endif %}{% if application.person2_citizenship_eu %} · Πολίτης ΕΕ{% endif %}{% if application.person2_citizenship_other %} · {{ application.person2_citizenship_other }}{% endif %}{% if application.person2_refugee_identity_number %} · Προσφ. ταυτ. {{ application.person2_refugee_identity_number }}{% endif %}</span></dd>
         </div>
         {% endif %}
     </dl>
+</div>
+
+<div class="card">
+    <h2 class="card__title">Άλλες αιτήσεις των ίδιων προσώπων</h2>
+    {% if other_applications %}
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead>
+            <tr><th>Αρ. Φακέλου</th><th>Ημ. υποβολής</th><th>Κοινότητα</th><th>Πρόσωπο 1</th><th>Πρόσωπο 2</th><th>Τέκνα</th></tr>
+            </thead>
+            <tbody>
+            {% for other in other_applications %}
+            <tr>
+                <td><a href="{% url 'applications:detail' other.pk %}">{{ other.folder_number }}</a></td>
+                <td>{{ other.submitted_on|date:"Y-m-d" }}</td>
+                <td>{{ other.community.name }}</td>
+                <td>{{ other.person.first_name }} {{ other.person.last_name }}</td>
+                <td>{% if other.person2 %}{{ other.person2.first_name }} {{ other.person2.last_name }}{% else %}—{% endif %}</td>
+                <td>{{ other.declared_children_count }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-muted">Δεν υπάρχουν άλλες αιτήσεις.</p>
+    {% endif %}
 </div>
 
 <div class="card">

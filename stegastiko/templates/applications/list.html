@@ -34,19 +34,8 @@
             </select>
         </div>
         <div>
-            <label for="cycle_id">Κύκλος υποβολής</label>
-            <select name="cycle_id" id="cycle_id">
-                <option value="">Όλοι</option>
-                {% for cycle in cycles %}
-                    <option value="{{ cycle.id }}" {% if cycle_id == cycle.id|stringformat:"s" %}selected{% endif %}>
-                        {{ cycle.community.name }} — {{ cycle.announcement_date }}
-                    </option>
-                {% endfor %}
-            </select>
-        </div>
-        <div>
-            <label for="q">Αρ. φακέλου</label>
-            <input type="text" name="q" id="q" value="{{ q }}" placeholder="π.χ. 12001001">
+            <label for="q">Αρ. φακέλου / ΑΔΤ / Επίθετο</label>
+            <input type="text" name="q" id="q" value="{{ q }}" placeholder="π.χ. 12001001 ή 123456">
         </div>
         <div>
             <button type="submit" class="btn btn-primary">Αναζήτηση</button>
@@ -73,7 +62,7 @@
                     <a href="{% url 'applications:detail' item.pk %}"><strong>{{ item.folder_number }}</strong></a>
                 </td>
                 <td>{{ item.submitted_on }}</td>
-                <td>{{ item.submission_cycle.community.name }}</td>
+                <td>{{ item.community.name }}</td>
                 <td>{{ item.person.first_name }} {{ item.person.last_name }}</td>
                 <td>
                     {% if item.outcome_104 == 'pass' %}

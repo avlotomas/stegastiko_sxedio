@@ -4,6 +4,7 @@ from datetime import date
 
 from cases.models import Case, SubmissionCycle
 from core.models import Community, SystemSetting
+from tests.fixtures.cycles import make_cycle
 
 
 def seed_application_cycle(db=None):
@@ -22,11 +23,9 @@ def seed_application_cycle(db=None):
         start_date=date(2026, 1, 1),
         contact_email="case@example.org",
     )
-    cycle = SubmissionCycle.objects.create(
-        community=community,
+    cycle = make_cycle(
+        community,
         announcement_date=date(2026, 6, 1),
-        submission_start_date=date(2026, 6, 2),
-        submission_end_date=date(2026, 7, 1),
         published_at="2026-06-01T10:00:00Z",
     )
     SystemSetting.objects.update_or_create(
@@ -43,7 +42,7 @@ def seed_application_cycle(db=None):
 def golden_application_post_data(cycle: SubmissionCycle, identity: str = "GOLD-APP-001", **overrides):
     """Minimal valid POST body for applications:create (includes empty child formset)."""
     data = {
-        "submission_cycle": str(cycle.pk),
+        "community": str(cycle.communities.first().pk),
         "submitted_on": "2026-06-10",
         "family_type": "other",
         "family_type_other": "",

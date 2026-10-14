@@ -1,11 +1,16 @@
 from django.core.exceptions import ValidationError
 from django.db import models
 
-from cases.models import SubmissionCycle
-from core.models import AuditedModel, DocumentCatalogItem
+from core.models import AuditedModel, Community, DocumentCatalogItem
 
 
 class Person(AuditedModel):
+    """One row per ΑΔΤ, holding only the identity fields that never change over time (10.3.1).
+
+    Everything that can differ between applications of the same person (citizenship,
+    refugee ID, residence, income, children, ...) lives on `Application`.
+    """
+
     identity_number = models.CharField(max_length=32, unique=True)
     first_name = models.CharField(max_length=128)
     last_name = models.CharField(max_length=128)
@@ -14,23 +19,6 @@ class Person(AuditedModel):
     birth_country = models.CharField(max_length=128)
     parents_birth_place = models.CharField(max_length=128)
     parents_birth_country = models.CharField(max_length=128)
-    refugee_identity_number = models.CharField(
-        max_length=64,
-        blank=True,
-        help_text="10.3.1 Αρ. Προσφυγικής Ταυτότητας (εκτοπισθέντες)",
-    )
-    citizenship_cypriot = models.BooleanField(
-        default=False, help_text="10.3.1 Υπηκοότητα — Κύπριος Πολίτης"
-    )
-    citizenship_repatriated = models.BooleanField(
-        default=False, help_text="10.3.1 Υπηκοότητα — Επαναπατρισθείς/είσα Κύπριος/α"
-    )
-    citizenship_eu = models.BooleanField(
-        default=False, help_text="10.3.1 Υπηκοότητα — Πολίτης κράτους μέλους ΕΕ"
-    )
-    citizenship_other = models.CharField(
-        max_length=128, blank=True, help_text="10.3.1 Άλλη υπηκοότητα (κείμενο)"
-    )
     document_type = models.CharField(max_length=64, blank=True)
 
     class Meta:
@@ -62,9 +50,7 @@ class Application(AuditedModel):
         FAIL = "fail", "Κατ' αρχήν δεν πληροί"
         PENDING = "pending", "Εκκρεμεί έλεγχος"
 
-    submission_cycle = models.ForeignKey(
-        SubmissionCycle, on_delete=models.PROTECT, related_name="applications"
-    )
+    community = models.ForeignKey(Community, on_delete=models.PROTECT, related_name="applications")
     person = models.ForeignKey(Person, on_delete=models.PROTECT, related_name="applications_as_person1")
     person2 = models.ForeignKey(
         Person, on_delete=models.PROTECT, null=True, blank=True, related_name="applications_as_person2"
@@ -79,6 +65,28 @@ class Application(AuditedModel):
     declared_children_count = models.PositiveIntegerField(default=0)
     recognized_dependent_children_count = models.PositiveIntegerField(default=0)
     family_members_count = models.PositiveIntegerField(default=0)
+
+    # 10.3.1 — declared on each application (Παράρτημα 3), may change between applications.
+    person1_refugee_identity_number = models.CharField(
+        max_length=64, blank=True, help_text="10.3.1 Αρ. Προσφυγικής Ταυτότητας (εκτοπισθέντες)"
+    )
+    person2_refugee_identity_number = models.CharField(max_length=64, blank=True)
+    person1_citizenship_cypriot = models.BooleanField(
+        default=False, help_text="10.3.1 Υπηκοότητα — Κύπριος Πολίτης"
+    )
+    person2_citizenship_cypriot = models.BooleanField(default=False)
+    person1_citizenship_repatriated = models.BooleanField(
+        default=False, help_text="10.3.1 Υπηκοότητα — Επαναπατρισθείς/είσα Κύπριος/α"
+    )
+    person2_citizenship_repatriated = models.BooleanField(default=False)
+    person1_citizenship_eu = models.BooleanField(
+        default=False, help_text="10.3.1 Υπηκοότητα — Πολίτης κράτους μέλους ΕΕ"
+    )
+    person2_citizenship_eu = models.BooleanField(default=False)
+    person1_citizenship_other = models.CharField(
+        max_length=128, blank=True, help_text="10.3.1 Άλλη υπηκοότητα (κείμενο)"
+    )
+    person2_citizenship_other = models.CharField(max_length=128, blank=True)
 
     person1_relationship = models.CharField(max_length=64, default="Αιτητής")
     person2_relationship = models.CharField(max_length=64, blank=True)

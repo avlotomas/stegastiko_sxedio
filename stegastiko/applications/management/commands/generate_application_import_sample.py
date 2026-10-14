@@ -8,7 +8,6 @@ from applications.management.commands.generate_application_import_template impor
 
 SAMPLE_METADATA = {
     "template_version": TEMPLATE_VERSION,
-    "submission_cycle_id": "1",
     "community_code": "001",
     "community_name": "ΑΓΙΑ ΒΑΡΒΑΡΑ",
     "protocol_number": "ΠΡΩΤ-2026-0042",

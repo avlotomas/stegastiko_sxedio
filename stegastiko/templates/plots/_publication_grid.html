@@ -1,41 +1,44 @@
 {% comment %}
-9.2 Τρόποι δημοσίευσης / γνωστοποίησης: one row per method and date. Columns sort on click;
-re-rendered after every modal add/edit/delete. A published announcement shows it read-only.
+9.2 Τρόποι δημοσίευσης / γνωστοποίησης, in one table: the four fixed methods are always listed
+(the user only enters a date), followed by any number of «Άλλο» rows (date and comment).
+Re-rendered after every modal add/edit/delete. A published announcement shows it read-only.
 {% endcomment %}
 {% with editable=access.announcements.edit %}
 <div data-publication-container>
-{% if editable and not cycle.is_published %}
-<div class="form-actions form-span-all">
-    <button type="button"
-            class="btn btn-secondary"
-            data-publication-open="{% url 'announcements:publication_create' cycle.pk %}">
-        Προσθήκη τρόπου δημοσίευσης
-    </button>
-</div>
-{% endif %}
 <div class="table-wrap">
     <table class="data-table" data-publication-table>
         <thead>
         <tr>
-            <th>
-                <button type="button" class="btn-link btn-link--table" data-publication-sort="method">
-                    Τρόπος δημοσίευσης
-                </button>
-            </th>
-            <th>
-                <button type="button" class="btn-link btn-link--table" data-publication-sort="date">
-                    Ημερομηνία δημοσίευσης
-                </button>
-            </th>
-            <th>Διευκρίνιση «Άλλο» / σημειώσεις</th>
+            <th>Τρόπος δημοσίευσης</th>
+            <th>Ημερομηνία δημοσίευσης</th>
+            <th>Σχόλια</th>
             {% if editable and not cycle.is_published %}<th><span class="visually-hidden">Ενέργειες</span></th>{% endif %}
         </tr>
         </thead>
         <tbody>
-        {% for publication in publications %}
+        {% for row in fixed_rows %}
             <tr data-publication-row>
-                <td data-sort-method="{{ publication.get_method_display }}">{{ publication.get_method_display }}</td>
-                <td data-sort-date="{{ publication.published_on|date:'Y-m-d' }}">{{ publication.published_on }}</td>
+                <td><label for="publication-date-{{ row.method.value }}">{{ row.label }}</label></td>
+                <td>
+                    {% if editable and not cycle.is_published %}
+                    <input type="date"
+                           id="publication-date-{{ row.method.value }}"
+                           value="{{ row.publication.published_on|date:'Y-m-d' }}"
+                           data-publication-date="{% url 'announcements:publication_date' cycle.pk row.method.value %}">
+                    {% elif row.publication %}
+                    {{ row.publication.published_on }}
+                    {% else %}
+                    —
+                    {% endif %}
+                </td>
+                <td>—</td>
+                {% if editable and not cycle.is_published %}<td></td>{% endif %}
+            </tr>
+        {% endfor %}
+        {% for publication in other_rows %}
+            <tr data-publication-row>
+                <td>{{ publication.get_method_display }}</td>
+                <td>{{ publication.published_on }}</td>
                 <td>{{ publication.notes|default:"—" }}</td>
                 {% if editable and not cycle.is_published %}
                 <td class="data-table__actions">
@@ -51,11 +54,18 @@ re-rendered after every modal add/edit/delete. A published announcement shows it
                 </td>
                 {% endif %}
             </tr>
-        {% empty %}
-            <tr><td colspan="{% if editable and not cycle.is_published %}4{% else %}3{% endif %}">Δεν έχουν καταχωριστεί τρόποι δημοσίευσης.</td></tr>
         {% endfor %}
         </tbody>
     </table>
 </div>
+{% if editable and not cycle.is_published %}
+<div class="form-actions form-span-all">
+    <button type="button"
+            class="btn btn-secondary"
+            data-publication-open="{% url 'announcements:publication_create' cycle.pk %}">
+        Προσθήκη «Άλλο»
+    </button>
+</div>
+{% endif %}
 </div>
 {% endwith %}

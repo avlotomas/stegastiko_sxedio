@@ -10,9 +10,10 @@ from django.db import transaction
 from django.utils import timezone
 
 from applications.import_reader import ParsedImport, _parse_date, _parse_decimal
-from applications.import_template import DEFAULT_SUBMISSION_CYCLE_ID, INCOME_COLUMNS
+from applications.import_template import INCOME_COLUMNS
 from applications.models import Application, DependentChild
 from applications.person_identity import (
+    application_person_fields_from_mapping,
     compare_person_with_payload,
     format_person_conflict_message,
     person_payload_from_mapping,
@@ -25,6 +26,7 @@ from applications.services import (
     upsert_eligibility_checks,
 )
 from cases.models import SubmissionCycle
+from core.models import Community
 
 INCOME_ROLES = ("applicant", "spouse", "other_family")
 INCOME_AMOUNT_KEYS = frozenset(
@@ -108,12 +110,15 @@ def _person_slot_checks(parsed: ParsedImport) -> list[dict]:
     return conflicts
 
 
-def _cycle_id(parsed: ParsedImport) -> int:
-    raw = _text(parsed.metadata.get("submission_cycle_id")) or str(DEFAULT_SUBMISSION_CYCLE_ID)
-    try:
-        return int(raw)
-    except ValueError:
-        raise ValidationError(f"Μη έγκυρος κύκλος υποβολής «{raw}» (αναμένεται ακέραιος).")
+def _community(parsed: ParsedImport) -> Community:
+    """The community named by «community_code» in the metadata sheet."""
+    code = _text(parsed.metadata.get("community_code"))
+    if not code:
+        raise ValidationError("Λείπει ο κωδικός Κοινότητας (community_code) στα μεταδεδομένα.")
+    community = Community.objects.filter(community_folder_code=code).first()
+    if community is None:
+        raise ValidationError(f"Δεν βρέθηκε Κοινότητα με κωδικό «{code}».")
+    return community
 
 
 def _collect(errors: list[str], func, *args, **kwargs):
@@ -189,21 +194,9 @@ def validate_import(parsed: ParsedImport) -> ImportValidationResult:
     if not _text(parsed.fields.get("family_type")):
         errors.append("Λείπει τύπος οικογένειας.")
 
-    cycle_id = _collect(errors, _cycle_id, parsed)
-    cycle = None
-    if cycle_id is not None:
-        cycle = SubmissionCycle.objects.filter(pk=cycle_id).select_related("community").first()
-        if not cycle:
-            errors.append(f"Δεν βρέθηκε κύκλος υποβολής id={cycle_id}.")
-    if cycle:
-        code = _text(parsed.metadata.get("community_code"))
-        if code and cycle.community.community_folder_code != code:
-            errors.append(
-                f"Ο κωδικός κοινότητας «{code}» δεν ταιριάζει με τον κύκλο "
-                f"({cycle.community.community_folder_code})."
-            )
-        if cycle.published_at is None:
-            errors.append("Ο κύκλος υποβολής δεν είναι δημοσιευμένος.")
+    community = _collect(errors, _community, parsed)
+    if community and not SubmissionCycle.for_community(community).exists():
+        errors.append("Δεν υπάρχει εκδοθείσα Γνωστοποίηση για την Κοινότητα (Ενότ. 4).")
 
     _validate_values(parsed, errors)
 
@@ -251,7 +244,7 @@ def save_import(parsed: ParsedImport) -> Application:
     if validation.errors:
         raise ValidationError(validation.errors)
 
-    cycle = SubmissionCycle.objects.select_related("community").get(pk=_cycle_id(parsed))
+    community = _community(parsed)
 
     p1_payload = person_payload_from_mapping(parsed.fields, "p1")
     p1_payload["date_of_birth"] = _parse_date(p1_payload["date_of_birth"])
@@ -265,9 +258,12 @@ def save_import(parsed: ParsedImport) -> Application:
         p2 = ensure_person(p2_id, p2_payload)
 
     p1_income, p2_income, children_income = _income_totals(parsed)
+    person_fields = application_person_fields_from_mapping(parsed.fields, "p1", "person1")
+    if p2:
+        person_fields.update(application_person_fields_from_mapping(parsed.fields, "p2", "person2"))
 
     application = Application(
-        submission_cycle=cycle,
+        community=community,
         person=p1,
         person2=p2,
         submitted_on=_parse_date(parsed.fields.get("submitted_on")),
@@ -293,8 +289,9 @@ def save_import(parsed: ParsedImport) -> Application:
         person2_income=p2_income,
         children_income=children_income,
         completeness_updated_at=timezone.now(),
+        **person_fields,
     )
-    save_with_new_folder_number(application, cycle)
+    save_with_new_folder_number(application, community)
 
     for child in parsed.children:
         first = _text(child.get("child_first_name"))

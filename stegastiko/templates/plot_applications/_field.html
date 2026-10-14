@@ -1,0 +1,11 @@
+{% comment %}form_field.html with radio groups laid out like checkbox lists.{% endcomment %}
+{% if field.field.widget.input_type == 'radio' %}
+<div class="form-field form-field--choices{% if wide %} form-field--wide{% endif %}">
+    <label>{{ field.label }}</label>
+    {{ field }}
+    {% if field.errors %}<ul class="errorlist">{% for error in field.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+    {% if field.help_text %}<p class="helptext">{{ field.help_text|safe }}</p>{% endif %}
+</div>
+{% else %}
+{% include "includes/form_field.html" %}
+{% endif %}

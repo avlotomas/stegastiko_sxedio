@@ -29,7 +29,7 @@ def test_create_application_through_browser(page: Page, application_cycle, e2e_u
     page.goto(f"{live_server_url}/applications/new/")
     expect(page.get_by_role("heading", name="Νέα αίτηση")).to_be_visible()
 
-    page.locator("#id_submission_cycle").select_option(str(cycle.pk))
+    page.locator("#id_community").select_option(str(cycle.communities.get().pk))
     page.locator("#id_submitted_on").fill("2026-06-10")
     page.locator("#id_family_type").select_option("other")
     page.locator("#id_applicant_email").fill(email)

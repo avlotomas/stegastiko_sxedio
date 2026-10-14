@@ -10,7 +10,7 @@ from core.models import Community, SystemSetting
 
 
 class Command(BaseCommand):
-    help = "Create demo community (folder code 001) and published SubmissionCycle id=1 for import tests."
+    help = "Create demo community (folder code 001) and a published SubmissionCycle covering it for import tests."
 
     def handle(self, *args, **options):
         community, created = Community.objects.get_or_create(
@@ -38,25 +38,21 @@ class Command(BaseCommand):
             },
         )
 
-        cycle = SubmissionCycle.objects.filter(pk=1).first()
+        cycle = SubmissionCycle.objects.filter(communities=community).first()
         if cycle:
-            cycle.community = community
             cycle.announcement_date = date(2026, 6, 1)
-            cycle.submission_start_date = date(2026, 6, 2)
-            cycle.submission_end_date = date(2026, 12, 31)
+            cycle.submission_months = 7
             cycle.published_at = timezone.now()
             cycle.save()
-            self.stdout.write("Updated SubmissionCycle id=1")
+            self.stdout.write(f"Updated SubmissionCycle id={cycle.pk}")
         else:
             cycle = SubmissionCycle.objects.create(
-                id=1,
-                community=community,
                 announcement_date=date(2026, 6, 1),
-                submission_start_date=date(2026, 6, 2),
-                submission_end_date=date(2026, 12, 31),
+                submission_months=7,
                 published_at=timezone.now(),
             )
-            self.stdout.write(self.style.SUCCESS("Created SubmissionCycle id=1"))
+            cycle.communities.add(community)
+            self.stdout.write(self.style.SUCCESS(f"Created SubmissionCycle id={cycle.pk}"))
 
         SystemSetting.objects.update_or_create(
             key="applicationFolderPrefix",

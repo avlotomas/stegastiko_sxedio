@@ -29,7 +29,7 @@ def test_application_create_via_post_persists_and_redirects(client, make_user, a
     assert response.status_code == 302, response.content.decode()[:500]
 
     app = Application.objects.get(applicant_email="golden.applicant@example.org")
-    assert app.submission_cycle_id == cycle.pk
+    assert app.community_id == application_cycle["community"].pk
     assert app.person.identity_number == "GOLD-APP-001"
     assert app.folder_number
     assert response.url == reverse("applications:detail", args=[app.pk])

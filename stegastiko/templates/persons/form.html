@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block title %}{% if is_create %}Νέο άτομο{% else %}{{ person.first_name }} {{ person.last_name }}{% endif %}{% endblock %}
+
+{% block content %}
+<nav class="breadcrumb" aria-label="Πλοήγηση">
+    <a href="{% url 'persons:list' %}">Άτομα</a>
+    <span>/</span>
+    <span>{% if is_create %}Νέο άτομο{% else %}{{ person.identity_number }}{% endif %}</span>
+</nav>
+
+<div class="page-header">
+    <h1>{% if is_create %}Νέο άτομο{% else %}{{ person.first_name }} {{ person.last_name }}{% endif %}</h1>
+    <p class="page-header__lead">
+        Σταθερά στοιχεία ταυτότητας (10.3.1). Υπηκοότητα, προσφυγική ταυτότητα και τα υπόλοιπα
+        στοιχεία δηλώνονται σε κάθε αίτηση.
+    </p>
+</div>
+
+<div class="card">
+<form method="post" class="app-form" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+    <div class="alert alert--error form-span-all">
+        {% for error in form.non_field_errors %}{{ error }}{% endfor %}
+    </div>
+    {% endif %}
+    <div class="form-grid">
+        {% for field in form.visible_fields %}
+            {% include "includes/form_field.html" with field=field %}
+        {% endfor %}
+    </div>
+    <div class="form-actions form-span-all">
+        {% if is_create or can_edit %}
+        <button type="submit" class="btn btn-primary">Αποθήκευση</button>
+        {% endif %}
+        <a href="{% url 'persons:list' %}" class="btn btn-secondary">Πίσω στα Άτομα</a>
+    </div>
+</form>
+</div>
+
+{% if not is_create %}
+<div class="card">
+    <h2 class="card__title">Αιτήσεις του ατόμου</h2>
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead>
+            <tr>
+                <th>Αρ. Φακέλου</th>
+                <th>Κοινότητα</th>
+                <th>Ημ. υποβολής</th>
+                <th>Ρόλος</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for application in applications %}
+                <tr>
+                    <td>
+                        {% if access.applications.view %}
+                        <a href="{% url 'applications:detail' application.pk %}">{{ application.folder_number }}</a>
+                        {% else %}{{ application.folder_number }}{% endif %}
+                    </td>
+                    <td>{{ application.submission_cycle.community.name }}</td>
+                    <td>{{ application.submitted_on|date:"d/m/Y" }}</td>
+                    <td>{% if application.person_id == person.pk %}Πρόσωπο 1{% else %}Πρόσωπο 2{% endif %}</td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="4">Το άτομο δεν συμμετέχει σε αιτήσεις.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% if can_delete %}
+<div class="card">
+    <h2 class="card__title">Διαγραφή</h2>
+    {% if delete_refusal %}
+    <p class="helptext">{{ delete_refusal }}</p>
+    {% else %}
+    <form method="post" action="{% url 'persons:delete' person.pk %}" data-confirm="Διαγραφή του ατόμου {{ person.identity_number }};">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Διαγραφή ατόμου</button>
+    </form>
+    {% endif %}
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

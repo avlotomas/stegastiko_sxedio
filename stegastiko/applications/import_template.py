@@ -2,18 +2,10 @@
 
 TEMPLATE_VERSION = "1.0.1"
 
-# First release: one active SubmissionCycle row in the database (see §9, example ABΓ).
-DEFAULT_SUBMISSION_CYCLE_ID = 1
-
 # (field_key, Greek label, optional hint)
 METADATA_FIELDS = [
     ("template_version", "Έκδοση προτύπου", f"Μη τροποποιείται — {TEMPLATE_VERSION}"),
-    (
-        "submission_cycle_id",
-        "Κύκλος υποβολής (Ενότητα 9)",
-        f"Προς το παρόν σταθερό = {DEFAULT_SUBMISSION_CYCLE_ID} — μη τροποποιείτε",
-    ),
-    ("community_code", "Κωδικός Κοινότητας / Δ.Δ. (Παράρτημα 1)", ""),
+    ("community_code", "Κωδικός Κοινότητας / Δ.Δ. (Παράρτημα 1)", "Υποχρεωτικό"),
     ("community_name", "Κοινότητα παραχώρησης οικοπέδου", "Όπως στο Παράρτημα 3"),
     ("protocol_number", "Αρ. πρωτοκόλλησης (επίσημη χρήση)", "Προαιρετικό"),
     ("received_on", "Ημερομηνία παραλαβής", "YYYY-MM-DD"),
@@ -166,7 +158,7 @@ SUPPORTING_DOC_COLUMNS = [
 INSTRUCTIONS_GREEK = """Οδηγίες συμπλήρωσης (Παράρτημα 3 · αρχείο εισαγωγής λειτουργού §9)
 
 1. Συμπληρώστε ένα αρχείο ανά αίτηση πολίτη (μία γραμμή στα φύλλα Αίτηση, Πρόσωπο1, Πρόσωπο2, Δηλώσεις).
-2. Στο φύλλο «Μεταδεδομένα» μην αλλάξετε template_version ούτε submission_cycle_id (προς το παρόν πάντα 1)· η Κοινότητα δηλώνεται με community_code / community_name.
+2. Στο φύλλο «Μεταδεδομένα» μην αλλάξετε template_version· η Κοινότητα δηλώνεται με community_code (υποχρεωτικό) / community_name.
 3. Ημερομηνίες: YYYY-MM-DD. Ναι/Όχι: γράψτε ακριβώς «Ναι» ή «Όχι» (ή ΝΑΙ/ΟΧΙ για δικαιολογητικά).
 4. Τέκνα: μία γραμμή ανά τέκνο στο φύλλο «Τέκνα».
 5. Εισοδήματα: μία γραμμή ανά πρόσωπο (αιτητής, σύζυγος, άλλο μέλος) στο φύλλο «Εισοδήματα».

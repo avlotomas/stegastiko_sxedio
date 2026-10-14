@@ -1478,3 +1478,156 @@ code {
 .access-matrix__sub td:first-child {
     padding-left: 2rem;
 }
+
+/* Application form — person selection by ΑΔΤ (10.3.1) */
+.person-block {
+    position: relative;
+}
+
+.person-suggest {
+    list-style: none;
+    margin: -0.25rem 0 0.75rem;
+    padding: 0.25rem;
+    max-width: 32rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 6px 18px rgba(21, 34, 50, 0.12);
+}
+
+.person-suggest button {
+    display: block;
+    width: 100%;
+    padding: 0.45rem 0.6rem;
+    border: 0;
+    background: transparent;
+    color: var(--color-text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+}
+
+.person-suggest button:hover,
+.person-suggest button:focus {
+    background: var(--color-primary-soft);
+    outline: none;
+}
+
+.person-panel {
+    margin: 0 0 1rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--color-border);
+    border-left-width: 4px;
+    border-radius: var(--radius-sm);
+    background: #f8fafc;
+    font-size: 0.9rem;
+}
+
+.person-panel p {
+    margin: 0 0 0.5rem;
+}
+
+.person-panel p:last-child {
+    margin-bottom: 0;
+}
+
+.person-panel--found {
+    border-left-color: var(--color-primary);
+    background: var(--color-primary-soft);
+}
+
+.person-panel--new {
+    border-left-color: var(--color-warning);
+    background: var(--color-warning-bg);
+}
+
+.person-panel .table-wrap {
+    margin-bottom: 0.5rem;
+    overflow-x: auto;
+}
+
+.person-panel__note {
+    font-weight: 600;
+    color: var(--color-success);
+}
+
+.input[readonly] {
+    background: #f4f7fa;
+    color: var(--color-text-muted);
+    cursor: not-allowed;
+}
+
+/* Read-only fields (e.g. the ΑΔΤ of a registered person, view-only roles) look locked. */
+.input:disabled {
+    background: var(--color-bg);
+    color: var(--color-text-muted);
+    cursor: not-allowed;
+}
+
+/* Αίτηση Παραρτήματος 3 — κατάλογος δικαιολογητικών */
+.document-checklist {
+    display: grid;
+    gap: 0.4rem;
+}
+
+.document-checklist .checkbox-label {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+}
+
+.document-status-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 0.75rem;
+    display: grid;
+    gap: 0.25rem;
+}
+
+[data-show-when][hidden] {
+    display: none;
+}
+
+/* Γνωστοποιήσεις — wizard επιλογής Κοινοτήτων και οικοπέδων */
+.wizard-steps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    list-style: none;
+    padding: 0;
+    margin: 0 0 1rem;
+}
+
+.wizard-steps__item {
+    padding: 0.35rem 0.85rem;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    background: var(--color-surface);
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+}
+
+.wizard-steps__item.is-current {
+    border-color: var(--color-primary);
+    background: var(--color-primary-soft);
+    color: var(--color-primary);
+    font-weight: 600;
+}
+
+.wizard-steps__item.is-done {
+    color: var(--color-success);
+}
+
+.plot-picker__group {
+    margin: 0 0 1rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+}
+
+.plot-picker__group legend {
+    padding: 0 0.4rem;
+    font-weight: 600;
+}

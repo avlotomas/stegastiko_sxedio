@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Άτομα{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Άτομα</h1>
+    <p class="page-header__lead">
+        Τα καταχωρημένα άτομα (Πρόσωπο 1 / Πρόσωπο 2 των αιτήσεων) με τα σταθερά στοιχεία
+        ταυτότητας (10.3.1). Ο Αρ. Δελτίου Ταυτότητας συνδέει το άτομο με τις αιτήσεις του.
+    </p>
+</div>
+
+{% if access.persons.create %}
+<div class="toolbar">
+    <a href="{% url 'persons:create' %}" class="btn btn-primary">Νέο άτομο</a>
+</div>
+{% endif %}
+
+<div class="card">
+    <h2 class="card__title">Αναζήτηση</h2>
+    <form method="get" class="filter-form">
+        <div>
+            <label for="q">Αρ. Δελτίου Ταυτότητας / ονοματεπώνυμο</label>
+            <input type="text" name="q" id="q" value="{{ q }}">
+        </div>
+        <div>
+            <button type="submit" class="btn btn-primary">Αναζήτηση</button>
+        </div>
+    </form>
+</div>
+
+<div class="table-wrap">
+    <table class="data-table">
+        <thead>
+        <tr>
+            <th>Αρ. Δελτίου Ταυτότητας</th>
+            <th>Επίθετο</th>
+            <th>Όνομα</th>
+            <th>Ημερομηνία γέννησης</th>
+            <th>Τόπος / Χώρα γέννησης</th>
+            <th>Τόπος / Χώρα γέννησης γονέων</th>
+            <th>Αιτήσεις</th>
+            <th></th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for person in persons %}
+            <tr>
+                <td><a href="{% url 'persons:detail' person.pk %}"><strong>{{ person.identity_number }}</strong></a></td>
+                <td>{{ person.last_name }}</td>
+                <td>{{ person.first_name }}</td>
+                <td>{{ person.date_of_birth|date:"d/m/Y" }}</td>
+                <td>{{ person.birth_place }} / {{ person.birth_country }}</td>
+                <td>{{ person.parents_birth_place }} / {{ person.parents_birth_country }}</td>
+                <td>{{ person.applications_count }}</td>
+                <td><a href="{% url 'persons:detail' person.pk %}" class="btn btn-ghost btn-sm">Άνοιγμα</a></td>
+            </tr>
+        {% empty %}
+            <tr><td colspan="8">Δεν υπάρχουν καταχωρημένα άτομα.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% if page_obj.paginator.num_pages > 1 %}
+<nav class="pagination toolbar" aria-label="Σελίδες αποτελεσμάτων">
+    {% if page_obj.has_previous %}
+    <a href="?{% if filter_query %}{{ filter_query }}&amp;{% endif %}page={{ page_obj.previous_page_number }}" class="btn btn-ghost btn-sm" rel="prev">« Προηγούμενη</a>
+    {% endif %}
+    <span class="text-muted">Σελίδα {{ page_obj.number }} από {{ page_obj.paginator.num_pages }} · {{ page_obj.paginator.count }} άτομα</span>
+    {% if page_obj.has_next %}
+    <a href="?{% if filter_query %}{{ filter_query }}&amp;{% endif %}page={{ page_obj.next_page_number }}" class="btn btn-ghost btn-sm" rel="next">Επόμενη »</a>
+    {% endif %}
+</nav>
+{% endif %}
+{% endblock %}

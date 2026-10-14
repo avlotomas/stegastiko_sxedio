@@ -20,7 +20,7 @@ class RankingList(AuditedModel):
 
     class Meta:
         ordering = ("-id",)
-        unique_together = ("submission_cycle", "list_type")
+        unique_together = ("community", "submission_cycle", "list_type")
 
 
 class RankingEntry(AuditedModel):

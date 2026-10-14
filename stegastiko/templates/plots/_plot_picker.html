@@ -1,0 +1,21 @@
+{# Offerable plots of `form`, one group per community (9.1). #}
+{% for group in form.plot_groups %}
+<fieldset class="plot-picker__group">
+    <legend>{{ group.community.name }} <span class="text-muted">· {{ group.plots|length }} διαθέσιμα οικόπεδα</span></legend>
+    <div class="document-checklist">
+        {% for plot in group.plots %}
+        <label class="checkbox-label">
+            <input type="checkbox" name="{{ form.plots.html_name }}" value="{{ plot.pk }}"{% if plot.checked %} checked{% endif %}{% if form.fields.plots.disabled %} disabled{% endif %}>
+            <span>{{ plot.label }}</span>
+        </label>
+        {% empty %}
+        <p class="helptext">Η Κοινότητα δεν έχει διαθέσιμα οικόπεδα.</p>
+        {% endfor %}
+    </div>
+</fieldset>
+{% endfor %}
+{% if form.plots.errors %}
+<ul class="errorlist">
+    {% for error in form.plots.errors %}<li>{{ error }}</li>{% endfor %}
+</ul>
+{% endif %}

@@ -43,6 +43,7 @@ from core.configuration_forms import SystemWorkflowSettingsForm
 from core.models import Community
 from core.services import get_setting, set_setting
 from tests.fixtures.golden_application import golden_application_post_data, seed_application_cycle
+from tests.fixtures.cycles import make_cycle
 
 IMPORT_URL = "applications:import"
 
@@ -94,7 +95,7 @@ def make_workbook_bytes(
 ) -> bytes:
     """Appendix 3 workbook based on the sample data, with per-test overrides."""
     wb = build_workbook()
-    meta = {**SAMPLE_METADATA, "submission_cycle_id": str(cycle.pk), **(metadata or {})}
+    meta = {**SAMPLE_METADATA, **(metadata or {})}
     for row in wb["Μεταδεδομένα"].iter_rows(min_row=2):
         if row[0].value in meta:
             row[2].value = meta[row[0].value]
@@ -219,17 +220,17 @@ def test_import_invalid_dob_is_validation_error(clerk_client, application_cycle)
 
 
 @pytest.mark.django_db
-def test_import_invalid_dates_and_cycle_id_collected(clerk_client, application_cycle):
+def test_import_invalid_dates_and_community_code_collected(clerk_client, application_cycle):
     content = make_workbook_bytes(
         application_cycle["cycle"],
-        metadata={"submission_cycle_id": "abc"},
+        metadata={"community_code": "nope"},
         application={"submitted_on": "14/06/2026"},
         children=[{**SAMPLE_CHILDREN[0], "child_date_of_birth": "κάποτε"}],
     )
     response = upload(clerk_client, content)
     assert response.status_code == 200
     errors = _errors(response)
-    assert any("κύκλος υποβολής" in e and "abc" in e for e in errors)
+    assert any("Κοινότητα" in e and "nope" in e for e in errors)
     assert any(e.startswith("Ημερομηνία υποβολής") for e in errors)
     assert any(e.startswith("Τέκνο 1") for e in errors)
 
@@ -238,7 +239,7 @@ def test_import_invalid_dates_and_cycle_id_collected(clerk_client, application_c
 def test_import_confirm_with_stale_invalid_session_does_not_500(clerk_client, application_cycle):
     session = clerk_client.session
     session[IMPORT_SESSION_KEY] = {
-        "metadata": {"submission_cycle_id": "x"},
+        "metadata": {"community_code": "x"},
         "fields": {"p1_identity_number": "K1", "p1_date_of_birth": "bad"},
     }
     session.save()
@@ -396,7 +397,7 @@ def test_folder_number_not_reused_after_deletion(clerk_client, application_cycle
 @pytest.mark.django_db
 def test_save_with_new_folder_number_retries_on_clash(application_cycle):
     """A number taken outside this community's sequence is skipped instead of raising."""
-    cycle = application_cycle["cycle"]
+    community = application_cycle["community"]
     other = Community.objects.create(
         district="ΛΕΜΕΣΟΥ",
         municipality_type="Κοινότητα",
@@ -404,13 +405,6 @@ def test_save_with_new_folder_number_retries_on_clash(application_cycle):
         name="ΑΛΛΗ",
         contact_email="other@example.org",
         community_folder_code="999",
-    )
-    other_cycle = SubmissionCycle.objects.create(
-        community=other,
-        announcement_date=date(2026, 6, 1),
-        submission_start_date=date(2026, 6, 2),
-        submission_end_date=date(2026, 7, 1),
-        published_at="2026-06-01T10:00:00Z",
     )
     person = Person.objects.create(
         identity_number="CLASH-1",
@@ -424,10 +418,10 @@ def test_save_with_new_folder_number_retries_on_clash(application_cycle):
     )
     common = dict(person=person, submitted_on=date(2026, 6, 10), family_type="other", applicant_email="c@example.org")
     # Occupies the number the first community would issue next.
-    Application.objects.create(submission_cycle=other_cycle, folder_number="12001001", **common)
-    assert generate_folder_number(cycle) == "12001001"
+    Application.objects.create(community=other, folder_number="12001001", **common)
+    assert generate_folder_number(community) == "12001001"
 
-    app = save_with_new_folder_number(Application(submission_cycle=cycle, **common), cycle)
+    app = save_with_new_folder_number(Application(community=community, **common), community)
     assert app.pk and app.folder_number == "12001002"
 
 
@@ -435,26 +429,30 @@ def test_save_with_new_folder_number_retries_on_clash(application_cycle):
 
 
 @pytest.mark.django_db
-def test_edit_cannot_change_submission_cycle(clerk_client, application_cycle):
+def test_edit_cannot_change_community(clerk_client, application_cycle):
     cycle = application_cycle["cycle"]
-    other_cycle = SubmissionCycle.objects.create(
-        community=application_cycle["community"],
+    other = Community.objects.create(
+        district="ΛΕΥΚΩΣΙΑΣ", name="ΑΛΛΗ", contact_email="x@example.org", community_folder_code="998"
+    )
+    make_cycle(
+        other,
         announcement_date=date(2026, 8, 1),
-        submission_start_date=date(2026, 8, 2),
-        submission_end_date=date(2026, 9, 1),
-        published_at=None,
+        published_at="2026-08-01T10:00:00Z",
     )
     clerk_client.post(reverse("applications:create"), golden_application_post_data(cycle, identity="EDIT-CYC"))
     app = Application.objects.get()
     url = reverse("applications:edit", args=[app.pk])
 
     response = clerk_client.post(
-        url, golden_application_post_data(other_cycle, identity="EDIT-CYC", applicant_email="new@example.org")
+        url,
+        golden_application_post_data(
+            cycle, identity="EDIT-CYC", applicant_email="new@example.org", community=str(other.pk)
+        ),
     )
     assert response.status_code == 200
-    assert "submission_cycle" in response.context["form"].errors
+    assert "community" in response.context["form"].errors
     app.refresh_from_db()
-    assert app.submission_cycle_id == cycle.pk
+    assert app.community_id == application_cycle["community"].pk
     assert app.applicant_email == "golden.applicant@example.org"
 
 
@@ -572,7 +570,8 @@ def test_person_lookup(clerk_client, application_cycle):
     assert found["found"] is True
     assert found["person"]["date_of_birth"] == "1990-05-15"
     assert found["applications_count"] == 1
-    assert found["latest_prefill"]["person1_income"] == "18000.00"
+    assert found["prefill"]["fields"]["person1_income"] == "18000.00"
+    assert found["applications"][0]["role"] == "Πρόσωπο 1"
     assert clerk_client.get(url, {"identity": "NOPE"}).json() == {"found": False}
     assert clerk_client.get(url).json() == {"found": False}
 

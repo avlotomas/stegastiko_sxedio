@@ -73,9 +73,12 @@ class AnnouncementPlotsField(forms.ModelMultipleChoiceField):
         return " · ".join(parts)
 
 
-def offerable_plots(community, cycle=None):
-    """9.1 Plots of `community` an announcement may offer, plus those it already offers."""
-    plots = Plot.objects.filter(community=community).select_related("source_case")
+def offerable_plots(communities, cycle=None):
+    """9.1 Plots of `communities` an announcement may offer, plus those it already offers.
+
+    Available means not yet given to a holder (no active allocation) and with value and price.
+    """
+    plots = Plot.objects.filter(community__in=communities).select_related("community", "source_case")
     available = plots.available()
     if cycle is None or not cycle.pk:
         return available
@@ -84,11 +87,38 @@ def offerable_plots(community, cycle=None):
     ).distinct()
 
 
-class SubmissionCycleForm(StyledFormMixin, forms.ModelForm):
-    """9.1 Announcement of the submission period, at community level.
+class AnnouncementCommunitiesForm(forms.Form):
+    """9.1 Step 1 of the wizard: the communities an announcement covers.
 
-    The community is fixed by the caller (chosen first on the create screen) and the
-    plots are limited to the available plots of that community.
+    The announcement is issued by the Έπαρχος of the district (Ενότ. 4), so every chosen
+    community belongs to the same district.
+    """
+
+    communities = forms.ModelMultipleChoiceField(
+        queryset=Community.objects.filter(is_active=True).order_by("district", "name"),
+        error_messages={
+            "required": "Επιλέξτε τουλάχιστον μία Κοινότητα.",
+            "invalid_choice": "Μη έγκυρη Κοινότητα.",
+            "invalid_pk_value": "Μη έγκυρη Κοινότητα.",
+        },
+    )
+
+    def clean_communities(self):
+        communities = self.cleaned_data["communities"]
+        districts = sorted({community.district for community in communities})
+        if len(districts) > 1:
+            raise forms.ValidationError(
+                "Η ανακοίνωση εκδίδεται από τον Έπαρχο της Επαρχίας (Ενότ. 4)· επιλέξτε Κοινότητες "
+                f"μίας Επαρχίας (επιλέχθηκαν: {', '.join(districts)})."
+            )
+        return communities
+
+
+class SubmissionCycleForm(StyledFormMixin, forms.ModelForm):
+    """9.1 Announcement of the submission period, for the communities chosen in step 1.
+
+    The communities are fixed by the caller (they are chosen first on the create screen)
+    and the plots are limited to the available plots of those communities.
     """
 
     plots = AnnouncementPlotsField(
@@ -103,50 +133,46 @@ class SubmissionCycleForm(StyledFormMixin, forms.ModelForm):
         fields = [
             "plots",
             "announcement_date",
-            "submission_start_date",
-            "submission_end_date",
-            "comments",
+            "submission_months",
         ]
-        widgets = {
-            "announcement_date": IsoDateInput(),
-            "submission_start_date": IsoDateInput(),
-            "submission_end_date": IsoDateInput(),
-            "comments": forms.Textarea(attrs={"rows": 3}),
-        }
+        widgets = {"announcement_date": IsoDateInput()}
 
-    def __init__(self, *args, community=None, **kwargs):
+    def __init__(self, *args, communities=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.community = community or self.instance.community
-        self.instance.community = self.community
-        self.fields["plots"].queryset = offerable_plots(self.community, self.instance)
+        self.communities = list(communities if communities is not None else self.instance.communities.all())
+        self.fields["plots"].queryset = offerable_plots(self.communities, self.instance)
         if not self.instance.pk and not self.is_bound:
             # New announcements offer every available plot unless the user unticks some.
             self.initial.setdefault("plots", list(self.fields["plots"].queryset))
 
-    def clean(self):
-        cleaned_data = super().clean()
-        start = cleaned_data.get("submission_start_date")
-        end = cleaned_data.get("submission_end_date")
-        if start and end and end < start:
-            self.add_error(
-                "submission_end_date", "Η λήξη υποβολής δεν μπορεί να προηγείται της έναρξης."
+    def plot_groups(self):
+        """The offerable plots grouped by community, for the picker of the form."""
+        selected = {str(value) for value in self["plots"].value() or []}
+        field = self.fields["plots"]
+        groups = {community.pk: {"community": community, "plots": []} for community in self.communities}
+        for plot in field.queryset.order_by("community__name", "id"):
+            groups[plot.community_id]["plots"].append(
+                {"pk": plot.pk, "label": field.label_from_instance(plot), "checked": str(plot.pk) in selected}
             )
-        return cleaned_data
-
-
-class AnnouncementTextForm(StyledFormMixin, forms.ModelForm):
-    """9.3 Preview and edit the generated announcement before finalising it."""
-
-    class Meta:
-        model = SubmissionCycle
-        fields = ["announcement_text"]
-        widgets = {"announcement_text": forms.Textarea(attrs={"rows": 18})}
+        return sorted(groups.values(), key=lambda group: group["community"].name)
 
 
 class SubmissionCyclePublicationForm(StyledFormMixin, forms.ModelForm):
-    """9.2 One publication method of an announcement (a row of the 9.2 grid)."""
+    """9.2 An «Άλλο» row of the publication table: a date and a comment (the four fixed
+    methods are dated inline in the table, see `PublicationDateForm`)."""
 
     class Meta:
         model = SubmissionCyclePublication
-        fields = ["method", "published_on", "notes"]
+        fields = ["published_on", "notes"]
         widgets = {"published_on": IsoDateInput()}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["notes"].required = True
+        self.fields["notes"].label = "Σχόλια"
+
+
+class PublicationDateForm(forms.Form):
+    """9.2 The date of a fixed publication method; empty means the method was not used."""
+
+    published_on = forms.DateField(required=False)

@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+
+{% block title %}Αίτηση {{ application.protocol_number }}{% endblock %}
+
+{% block content %}
+{% with ap=application.applicant_party sp=application.spouse_party %}
+<nav class="breadcrumb" aria-label="Πλοήγηση">
+    <a href="{% url 'plot_applications:list' %}">Αιτήσεις παραχώρησης οικοπέδου</a>
+    <span>/</span>
+    <span>{{ application.protocol_number }}</span>
+</nav>
+
+<div class="page-header">
+    <h1>Αίτηση {{ application.protocol_number }}</h1>
+    <p class="page-header__lead">Κοινότητα {{ application.community.name }} · υποβολή {{ application.submitted_on|date:"d/m/Y" }}</p>
+</div>
+
+<div class="toolbar">
+    {% if access.plot_applications.edit %}
+    <a href="{% url 'plot_applications:edit' application.pk %}" class="btn btn-primary">Επεξεργασία</a>
+    {% endif %}
+    <a href="{% url 'plot_applications:list' %}" class="btn btn-secondary">Πίσω στον κατάλογο</a>
+</div>
+
+<div class="card">
+    <h2 class="card__title">Κατ' αρχήν έλεγχος κριτηρίων</h2>
+    <p class="card__lead">Αυτόματος έλεγχος βάσει των δηλώσεων· την τελική κρίση κάνει η Επιτροπή Εξέτασης Αιτήσεων (Ενότ. 6).</p>
+    <dl class="detail-grid">
+        <div><dt>Αποτέλεσμα</dt><dd><span class="badge badge--{{ outcome.overall }}">{{ application.get_eligibility_result_display }}</span></dd></div>
+        <div><dt>Προτεραιότητα (Ενότ. 11)</dt><dd>{{ application.priority_label|default:"—" }}</dd></div>
+        <div><dt>Μέλη οικογένειας</dt><dd>{{ outcome.family_members_count }} ({{ outcome.recognized_children_count }} από {{ outcome.children_count }} τέκνα κατά 10.Α)</dd></div>
+        <div><dt>Οικογενειακό ακαθάριστο εισόδημα</dt><dd>€ {{ outcome.family_income_total|floatformat:2 }}</dd></div>
+    </dl>
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead><tr><th>Κριτήριο</th><th>Ενότ.</th><th>Αποτέλεσμα</th><th>Σημείωση</th></tr></thead>
+            <tbody>
+            {% for c in outcome.criteria %}
+            <tr>
+                <td>{{ c.label }}</td>
+                <td>{{ c.section }}</td>
+                <td><span class="badge badge--{{ c.result }}">{% if c.result == 'pass' %}ΠΛΗΡΟΥΤΑΙ{% elif c.result == 'fail' %}ΔΕΝ ΠΛΗΡΟΥΤΑΙ{% else %}ΕΚΚΡΕΜΕΙ{% endif %}</span></td>
+                <td>{{ c.note }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card">
+    <h2 class="card__title">1. Αιτητής/τρια · 4. Επαγγελματική κατάσταση</h2>
+    <dl class="detail-grid">
+        <div><dt>Ονοματεπώνυμο</dt><dd>{{ application.applicant.first_name }} {{ application.applicant.last_name }}</dd></div>
+        <div><dt>ΑΔΤ</dt><dd>{{ application.applicant.identity_number }}</dd></div>
+        <div><dt>Ημερομηνία γέννησης</dt><dd>{{ application.applicant.date_of_birth|date:"d/m/Y" }}</dd></div>
+        <div><dt>Τόπος / χώρα γέννησης</dt><dd>{{ application.applicant.birth_place }}, {{ application.applicant.birth_country }}</dd></div>
+        <div><dt>Τόπος / χώρα γέννησης γονέων</dt><dd>{{ application.applicant.parents_birth_place }}, {{ application.applicant.parents_birth_country }}</dd></div>
+        {% if ap %}
+        <div><dt>Υπηκοότητα</dt><dd>{{ ap.get_citizenship_display }}</dd></div>
+        <div><dt>Αρ. Κοιν. Ασφαλίσεων</dt><dd>{{ ap.social_insurance_number|default:"—" }}</dd></div>
+        <div><dt>Αρ. Προσφυγικής Ταυτότητας</dt><dd>{{ ap.refugee_identity_number|default:"—" }}</dd></div>
+        <div><dt>Τηλέφωνα</dt><dd>{{ ap.mobile_phone|default:"—" }} / {{ ap.landline_phone|default:"—" }}</dd></div>
+        <div><dt>Επαγγελματική κατάσταση</dt><dd>{% include "plot_applications/_employment_text.html" with p=ap %}</dd></div>
+        {% endif %}
+        <div><dt>Email</dt><dd>{{ application.email }}</dd></div>
+        <div><dt>Διεύθυνση αλληλογραφίας</dt><dd>{% if application.correspondence_street or application.correspondence_community %}{{ application.correspondence_street }} {{ application.correspondence_number }}{% if application.correspondence_apartment %}, διαμ. {{ application.correspondence_apartment }}{% endif %}, {{ application.correspondence_postal_code }} {{ application.correspondence_community }}, {{ application.correspondence_district }}{% else %}Ίδια με τη διεύθυνση διαμονής{% endif %}</dd></div>
+    </dl>
+</div>
+
+<div class="card">
+    <h2 class="card__title">2. Τόπος διαμονής</h2>
+    <dl class="detail-grid">
+        <div><dt>Κατηγορία</dt><dd>{{ application.get_residence_category_display }}{% if application.neighbouring_subcategory %} — {{ application.get_neighbouring_subcategory_display }}{% endif %}</dd></div>
+        <div><dt>Διεύθυνση</dt><dd>{{ application.residence_street }} {{ application.residence_number }}{% if application.residence_apartment %}, {{ application.residence_apartment }}{% endif %}, {{ application.residence_postal_code }} {{ application.residence_community }}</dd></div>
+        {% if application.neighbouring_distance_km is not None %}<div><dt>Απόσταση (ΤΚΧ)</dt><dd>{{ application.neighbouring_distance_km }} km</dd></div>{% endif %}
+        {% if application.origin_parent_description %}<div><dt>Καταγωγή ως προς γονέα</dt><dd>{{ application.origin_parent_description|linebreaksbr }}</dd></div>{% endif %}
+        {% if application.previous_residence_from %}<div><dt>Προηγούμενη μόνιμη κατοίκηση</dt><dd>{{ application.previous_residence_address }} ({{ application.previous_residence_from|date:"d/m/Y" }} – {{ application.previous_residence_to|date:"d/m/Y" }})</dd></div>{% endif %}
+        {% if application.community_residence_since %}<div><dt>Διαμονή στην Κοινότητα από</dt><dd>{{ application.community_residence_since|date:"d/m/Y" }}</dd></div>{% endif %}
+        {% if application.abroad_from %}<div><dt>Παραμονή στο εξωτερικό</dt><dd>{{ application.abroad_from|date:"d/m/Y" }} – {{ application.abroad_to|date:"d/m/Y" }}</dd></div>{% endif %}
+        {% for i in application.residence_interruptions.all %}
+        <div><dt>Διακοπή διαμονής</dt><dd>{{ i.get_reason_display }}: {{ i.date_from|date:"d/m/Y" }} – {{ i.date_to|date:"d/m/Y" }}</dd></div>
+        {% endfor %}
+        {% if application.residence_notes %}<div><dt>Περιγραφή</dt><dd>{{ application.residence_notes|linebreaksbr }}</dd></div>{% endif %}
+    </dl>
+</div>
+
+<div class="card">
+    <h2 class="card__title">3. Οικογενειακή κατάσταση · 5–6. Σύζυγος/Συμβίος</h2>
+    <dl class="detail-grid">
+        <div><dt>Οικογενειακή κατάσταση</dt><dd>{{ application.get_family_status_display }}{% if application.single_parent_status %} — {{ application.get_single_parent_status_display }}{% if application.single_parent_other %}: {{ application.single_parent_other }}{% endif %}{% endif %}</dd></div>
+        {% if application.spouse %}
+        <div><dt>Σύζυγος/Συμβίος</dt><dd>{{ application.spouse.first_name }} {{ application.spouse.last_name }} · ΑΔΤ {{ application.spouse.identity_number }} · γεν. {{ application.spouse.date_of_birth|date:"d/m/Y" }}</dd></div>
+        {% if sp %}
+        <div><dt>Υπηκοότητα</dt><dd>{{ sp.get_citizenship_display }}{% if sp.citizenship_other %}: {{ sp.citizenship_other }}{% endif %}</dd></div>
+        <div><dt>Αρ. Προσφυγικής / ARC</dt><dd>{{ sp.refugee_identity_number|default:"—" }} / {{ sp.alien_registration_number|default:"—" }}</dd></div>
+        <div><dt>Επαγγελματική κατάσταση</dt><dd>{% include "plot_applications/_employment_text.html" with p=sp %}</dd></div>
+        {% endif %}
+        {% endif %}
+    </dl>
+</div>
+
+<div class="card">
+    <h2 class="card__title">7. Τέκνα</h2>
+    {% if outcome.children %}
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead><tr><th>Όνομα</th><th>Ημ. γέννησης</th><th>Ηλικία</th><th>ΑΔΤ</th><th>Κατάσταση</th><th>Τέκνο κατά 10.Α</th></tr></thead>
+            <tbody>
+            {% for item in outcome.children %}
+            <tr>
+                <td>{{ item.child.first_name }} {{ item.child.last_name }}</td>
+                <td>{{ item.child.date_of_birth|date:"d/m/Y" }}</td>
+                <td>{{ item.age }}</td>
+                <td>{{ item.child.identity_number|default:"—" }}</td>
+                <td>{{ item.child.get_status_display }}{% if item.child.sex %} ({{ item.child.get_sex_display }}){% endif %}</td>
+                <td>{% if item.recognized %}Ναι{% elif item.recognized is None %}Εκκρεμεί{% else %}Όχι{% endif %}{% if item.note %} — {{ item.note }}{% endif %}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}<p class="text-muted">Δεν δηλώθηκαν τέκνα.</p>{% endif %}
+</div>
+
+<div class="card">
+    <h2 class="card__title">8. Εισοδήματα</h2>
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead><tr><th>Μέλος</th><th>Κατάσταση</th><th>Ακαθάριστο</th><th>Άλλες πηγές</th><th>Σύνολο</th></tr></thead>
+            <tbody>
+            {% for income in application.incomes.all %}
+            <tr>
+                <td>{{ income.get_member_display }}{% if income.member_description %} — {{ income.member_description }}{% endif %}</td>
+                <td>{{ income.get_employment_type_display|default:"—" }}</td>
+                <td>€ {{ income.gross_annual_income|floatformat:2 }}</td>
+                <td>{% for description, amount in income.other_incomes %}{{ description }}: € {{ amount|floatformat:2 }}<br>{% empty %}—{% endfor %}</td>
+                <td>€ {{ income.total|floatformat:2 }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card">
+    <h2 class="card__title">9–11. Ιδιοκτησία, προηγούμενη ενίσχυση, άλλες αιτήσεις</h2>
+    <dl class="detail-grid">
+        {% include "plot_applications/_yes_no.html" with label="(α) Εγγεγραμμένη κατοικία" value=application.has_dwelling details=application.has_dwelling_details %}
+        {% include "plot_applications/_yes_no.html" with label="(β) Οικόπεδο σε Οικιστική Ζώνη" value=application.has_residential_land details=application.has_residential_land_details %}
+        {% include "plot_applications/_yes_no.html" with label="(γ) Αποξένωση εντός 3 ετών" value=application.has_alienated_property details=application.has_alienated_property_details %}
+        {% include "plot_applications/_yes_no.html" with label="Προηγούμενη κρατική στεγαστική ενίσχυση" value=application.previous_housing_aid details=application.previous_housing_aid_details %}
+        <div><dt>Σειρά προτίμησης αιτήσεων</dt><dd>{% if application.other_application_choice_1 %}1. {{ application.other_application_choice_1 }}<br>{% endif %}{% if application.other_application_choice_2 %}2. {{ application.other_application_choice_2 }}<br>{% endif %}{% if application.other_application_choice_3 %}3. {{ application.other_application_choice_3 }}<br>{% endif %}{{ application.other_applications_notes|default:"—"|linebreaksbr }}</dd></div>
+    </dl>
+</div>
+
+<div class="card">
+    <h2 class="card__title">12–13. Δηλώσεις και υπογραφές</h2>
+    <dl class="detail-grid">
+        <div><dt>Υπεύθυνη δήλωση email</dt><dd>{{ application.email_declaration_accepted|yesno:"Ναι,Όχι" }}</dd></div>
+        <div><dt>Υπογραφή αιτητή</dt><dd>{{ application.applicant_signed|yesno:"Ναι,Όχι" }}</dd></div>
+        {% if application.is_couple %}<div><dt>Υπογραφή συζύγου/συμβίου</dt><dd>{{ application.spouse_signed|yesno:"Ναι,Όχι" }}</dd></div>{% endif %}
+        <div><dt>Ένορκη δήλωση</dt><dd>Αιτητής: {{ application.sworn_by_applicant|yesno:"Ναι,Όχι" }}{% if application.is_couple %} · Σύζυγος: {{ application.sworn_by_spouse|yesno:"Ναι,Όχι" }}{% endif %}{% if application.sworn_declaration_date %} · {{ application.sworn_declaration_date|date:"d/m/Y" }}{% endif %}{% if application.sworn_court %} · Επ. Δικαστήριο {{ application.sworn_court }}{% endif %}</dd></div>
+    </dl>
+</div>
+
+<div class="card">
+    <h2 class="card__title">Δικαιολογητικά ({{ attached_count }} επισυναπτόμενα)</h2>
+    {% for title, items in document_groups %}
+    <h3 class="form-section-subtitle">{{ title }}</h3>
+    <ul class="document-status-list">
+        {% for code, label, attached in items %}
+        <li class="{% if attached %}is-attached{% else %}text-muted{% endif %}">{% if attached %}☑{% else %}☐{% endif %} {{ label }}</li>
+        {% endfor %}
+    </ul>
+    {% endfor %}
+    {% if application.other_documents %}<p><strong>Άλλα πιστοποιητικά:</strong> {{ application.other_documents|linebreaksbr }}</p>{% endif %}
+</div>
+
+<div class="card">
+    <h2 class="card__title">Για επίσημη χρήση</h2>
+    <dl class="detail-grid">
+        <div><dt>Αρ. Πρωτοκόλλου</dt><dd>{{ application.protocol_number }}</dd></div>
+        <div><dt>Παραλαβή</dt><dd>{{ application.received_at|date:"d/m/Y H:i"|default:"—" }}</dd></div>
+        <div><dt>Παραλήπτης</dt><dd>{{ application.received_by|default:"—" }}</dd></div>
+        <div><dt>Αρ. Φακέλου Επαρχιακής Διοίκησης</dt><dd>{{ application.district_file_number|default:"—" }}</dd></div>
+        {% if application.comments %}<div><dt>Σχόλια</dt><dd>{{ application.comments|linebreaksbr }}</dd></div>{% endif %}
+    </dl>
+</div>
+
+{% if other_applications %}
+<div class="card">
+    <h2 class="card__title">Άλλες αιτήσεις των ίδιων προσώπων</h2>
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead><tr><th>Αρ. Πρωτοκόλλου</th><th>Ημ. υποβολής</th><th>Κοινότητα</th><th>Αιτητής</th><th>Σύζυγος</th></tr></thead>
+            <tbody>
+            {% for other in other_applications %}
+            <tr>
+                <td><a href="{% url 'plot_applications:detail' other.pk %}">{{ other.protocol_number }}</a></td>
+                <td>{{ other.submitted_on|date:"d/m/Y" }}</td>
+                <td>{{ other.community.name }}</td>
+                <td>{{ other.applicant.first_name }} {{ other.applicant.last_name }}</td>
+                <td>{% if other.spouse %}{{ other.spouse.first_name }} {{ other.spouse.last_name }}{% else %}—{% endif %}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% endwith %}
+{% endblock %}

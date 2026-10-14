@@ -2,8 +2,10 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 
 from applications.forms import ApplicationForm, DependentChildFormSet
@@ -14,9 +16,11 @@ from applications.import_services import save_import, validate_import
 from applications.person_identity import compare_person_with_payload, person_payload_from_form_prefix
 from applications.services import (
     application_form_initial,
+    application_prefill,
     ensure_person,
     previous_applications_for_identity,
     save_with_new_folder_number,
+    search_persons,
     upsert_eligibility_checks,
 )
 from cases.models import SubmissionCycle
@@ -35,11 +39,6 @@ def _person_to_json(person):
         "identity_number": person.identity_number,
         "first_name": person.first_name,
         "last_name": person.last_name,
-        "refugee_identity_number": person.refugee_identity_number,
-        "citizenship_cypriot": person.citizenship_cypriot,
-        "citizenship_repatriated": person.citizenship_repatriated,
-        "citizenship_eu": person.citizenship_eu,
-        "citizenship_other": person.citizenship_other,
         "date_of_birth": person.date_of_birth.isoformat(),
         "birth_place": person.birth_place,
         "birth_country": person.birth_country,
@@ -48,31 +47,47 @@ def _person_to_json(person):
     }
 
 
+def _application_summary_json(application, person):
+    is_person1 = application.person_id == person.id
+    partner = application.person2 if is_person1 else application.person
+    return {
+        "id": application.id,
+        "url": reverse("applications:detail", args=[application.id]),
+        "folder_number": application.folder_number,
+        "submitted_on": application.submitted_on.isoformat(),
+        "community": application.community.name,
+        "role": "Πρόσωπο 1" if is_person1 else "Πρόσωπο 2",
+        "partner": f"{partner.first_name} {partner.last_name}" if partner else "",
+        "family_type": application.get_family_type_display(),
+        "children_count": application.declared_children_count,
+    }
+
+
 @access_required("applications")
 def application_list(request):
-    applications = Application.objects.select_related(
-        "submission_cycle", "submission_cycle__community", "person", "person2"
-    ).order_by("-submitted_on", "-id")
+    applications = Application.objects.select_related("community", "person", "person2").order_by(
+        "-submitted_on", "-id"
+    )
     communities = Community.objects.filter(is_active=True).order_by("name")
-    cycles = SubmissionCycle.objects.select_related("community").order_by("-announcement_date")
     community_id = request.GET.get("community_id") or ""
-    cycle_id = request.GET.get("cycle_id") or ""
     q = (request.GET.get("q") or "").strip()
     if community_id:
-        applications = applications.filter(submission_cycle__community_id=community_id)
-    if cycle_id:
-        applications = applications.filter(submission_cycle_id=cycle_id)
+        applications = applications.filter(community_id=community_id)
     if q:
-        applications = applications.filter(folder_number__icontains=q)
+        applications = applications.filter(
+            Q(folder_number__icontains=q)
+            | Q(person__identity_number__icontains=q)
+            | Q(person2__identity_number__icontains=q)
+            | Q(person__last_name__icontains=q)
+            | Q(person2__last_name__icontains=q)
+        )
     return render(
         request,
         "applications/list.html",
         {
             "applications": applications,
             "communities": communities,
-            "cycles": cycles,
             "community_id": str(community_id),
-            "cycle_id": str(cycle_id),
             "q": q,
         },
     )
@@ -96,20 +111,18 @@ def _save_application_from_form(form, formset, existing: Application | None = No
     application.person2 = p2
     application.completeness_updated_at = timezone.now()
     if existing:
-        # The form rejects cycle changes on edit (10.1.1); keep the issued folder number.
-        stored_cycle_id = (
-            Application.objects.filter(pk=existing.pk)
-            .values_list("submission_cycle_id", flat=True)
-            .first()
+        # The form rejects community changes on edit (10.1.1); keep the issued folder number.
+        stored_community_id = (
+            Application.objects.filter(pk=existing.pk).values_list("community_id", flat=True).first()
         )
-        if application.submission_cycle_id != stored_cycle_id:
-            raise ValidationError("Ο κύκλος υποβολής δεν μπορεί να αλλάξει μετά τη δημιουργία της αίτησης.")
+        if application.community_id != stored_community_id:
+            raise ValidationError("Η Κοινότητα δεν μπορεί να αλλάξει μετά τη δημιουργία της αίτησης.")
         application.folder_number = existing.folder_number
         application.save()
     else:
-        if application.submission_cycle.published_at is None:
-            raise ValidationError("Δεν επιτρέπεται αίτηση πριν τη δημοσίευση του κύκλου υποβολής.")
-        save_with_new_folder_number(application, application.submission_cycle)
+        if not SubmissionCycle.for_community(application.community).exists():
+            raise ValidationError("Δεν επιτρέπεται αίτηση πριν την έκδοση Γνωστοποίησης για την Κοινότητα (Ενότ. 4).")
+        save_with_new_folder_number(application, application.community)
 
     formset.instance = application
     formset.save()
@@ -123,6 +136,25 @@ def _save_application_from_form(form, formset, existing: Application | None = No
     application.save()
     upsert_eligibility_checks(application, results)
     return application
+
+
+def _render_form(request, form, formset, application: Application | None):
+    return render(
+        request,
+        "applications/form.html",
+        {
+            "form": form,
+            "formset": formset,
+            "is_create": application is None,
+            "application": application,
+            "person_form_config": {
+                "searchUrl": reverse("applications:person_search"),
+                "lookupUrl": reverse("applications:person_lookup"),
+                "applicationId": application.pk if application else None,
+                "isCreate": application is None,
+            },
+        },
+    )
 
 
 @access_required("applications", CREATE)
@@ -145,22 +177,13 @@ def application_create(request):
     else:
         form = ApplicationForm()
         formset = DependentChildFormSet(prefix="children")
-    return render(
-        request,
-        "applications/form.html",
-        {
-            "form": form,
-            "formset": formset,
-            "is_create": True,
-            "application": None,
-        },
-    )
+    return _render_form(request, form, formset, None)
 
 
 @access_required("applications", EDIT)
 def application_edit(request, pk):
     application = get_object_or_404(
-        Application.objects.select_related("person", "person2", "submission_cycle__community"), pk=pk
+        Application.objects.select_related("person", "person2", "community"), pk=pk
     )
     if request.method == "POST":
         form = ApplicationForm(request.POST, instance=application)
@@ -179,28 +202,26 @@ def application_edit(request, pk):
     else:
         form = ApplicationForm(instance=application, initial=application_form_initial(application))
         formset = DependentChildFormSet(instance=application, prefix="children")
-    return render(
-        request,
-        "applications/form.html",
-        {
-            "form": form,
-            "formset": formset,
-            "is_create": False,
-            "application": application,
-        },
-    )
+    return _render_form(request, form, formset, application)
 
 
 @access_required("applications")
 def application_detail(request, pk):
     application = get_object_or_404(
-        Application.objects.select_related("person", "person2", "submission_cycle__community"), pk=pk
+        Application.objects.select_related("person", "person2", "community"), pk=pk
     )
     checks = application.eligibility_checks.order_by("criterion")
+    persons = [person for person in (application.person, application.person2) if person]
+    other_applications = (
+        Application.objects.filter(Q(person__in=persons) | Q(person2__in=persons))
+        .exclude(pk=application.pk)
+        .select_related("community", "person", "person2")
+        .order_by("-submitted_on", "-id")
+    )
     return render(
         request,
         "applications/detail.html",
-        {"application": application, "checks": checks},
+        {"application": application, "checks": checks, "other_applications": other_applications},
     )
 
 
@@ -214,52 +235,58 @@ def _require_person_check_access(user, *, allow_import=False):
 
 
 @login_required
+def person_search(request):
+    """Suggestions while typing an ΑΔΤ (or name) on the application form."""
+    _require_person_check_access(request.user)
+    persons = search_persons(request.GET.get("q"))
+    return JsonResponse(
+        {
+            "results": [
+                {
+                    "identity_number": person.identity_number,
+                    "label": f"{person.identity_number} — {person.first_name} {person.last_name} "
+                    f"({person.date_of_birth.isoformat()})",
+                }
+                for person in persons
+            ]
+        }
+    )
+
+
+@login_required
 def person_lookup(request):
+    """Existing Person by exact ΑΔΤ: fixed fields, previous applications and a prefill.
+
+    The prefill comes from the latest application, or from `source` (an application id of
+    that person) when the clerk picks a specific one. `prefix` is the form slot being filled.
+    """
     _require_person_check_access(request.user)
     identity = (request.GET.get("identity") or "").strip()
+    prefix = request.GET.get("prefix") if request.GET.get("prefix") in ("person1", "person2") else "person1"
+    exclude_id = request.GET.get("exclude") or ""
     if not identity:
         return JsonResponse({"found": False})
     person, apps = previous_applications_for_identity(identity)
     if not person:
         return JsonResponse({"found": False})
+    if exclude_id.isdigit():
+        apps = [item for item in apps if item.id != int(exclude_id)]
+
+    source = apps[0] if apps else None
+    source_id = request.GET.get("source") or ""
+    if source_id.isdigit():
+        source = next((item for item in apps if item.id == int(source_id)), source)
 
     return JsonResponse(
         {
             "found": True,
             "person": _person_to_json(person),
             "applications_count": len(apps),
-            "latest_prefill": (
-                {
-                    "family_type": apps[0].family_type,
-                    "person1_relationship": apps[0].person1_relationship,
-                    "person2_relationship": apps[0].person2_relationship,
-                    "person1_residence_community": apps[0].person1_residence_community,
-                    "person2_residence_community": apps[0].person2_residence_community,
-                    "person1_residence_address": apps[0].person1_residence_address,
-                    "person2_residence_address": apps[0].person2_residence_address,
-                    "residence_category": apps[0].residence_category,
-                    "person1_has_property": apps[0].person1_has_property,
-                    "person2_has_property": apps[0].person2_has_property,
-                    "person1_non_alienation_clear": apps[0].person1_non_alienation_clear,
-                    "person2_non_alienation_clear": apps[0].person2_non_alienation_clear,
-                    "person1_previous_aid_clear": apps[0].person1_previous_aid_clear,
-                    "person2_previous_aid_clear": apps[0].person2_previous_aid_clear,
-                    "person1_income": str(apps[0].person1_income),
-                    "person2_income": str(apps[0].person2_income),
-                    "children_income": str(apps[0].children_income),
-                }
-                if apps
-                else {}
+            "prefill_source": (
+                {"id": source.id, "folder_number": source.folder_number} if source else None
             ),
-            "applications": [
-                {
-                    "id": item.id,
-                    "folder_number": item.folder_number,
-                    "submitted_on": item.submitted_on.isoformat(),
-                    "community": item.submission_cycle.community.name,
-                }
-                for item in apps[:10]
-            ],
+            "prefill": application_prefill(source, person, prefix) if source else None,
+            "applications": [_application_summary_json(item, person) for item in apps[:20]],
         }
     )
 

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}Νέα γνωστοποίηση{% endblock %}
 
@@ -12,67 +13,83 @@
 <div class="page-header">
     <h1>Νέα γνωστοποίηση</h1>
     <p class="page-header__lead">
-        Η γνωστοποίηση καταχωρείται σε επίπεδο Κοινότητας και προσφέρει διαθέσιμα οικόπεδα
-        (με αξία και τιμή διάθεσης, χωρίς κατανομή), είτε προέρχονται από αιτήσεις διαχωρισμού
-        είτε έχουν καταχωριστεί χειροκίνητα.
+        Η γνωστοποίηση καλύπτει μία ή περισσότερες Κοινότητες της ίδιας Επαρχίας και προσφέρει
+        διαθέσιμα οικόπεδα (με αξία και τιμή διάθεσης, χωρίς κατανομή), είτε προέρχονται από
+        αιτήσεις διαχωρισμού είτε έχουν καταχωριστεί χειροκίνητα.
     </p>
 </div>
 
+<ol class="wizard-steps" aria-label="Βήματα">
+    <li class="wizard-steps__item{% if step == 1 %} is-current{% else %} is-done{% endif %}">1. Κοινότητες</li>
+    <li class="wizard-steps__item{% if step == 2 %} is-current{% endif %}">2. Οικόπεδα και περίοδος υποβολής</li>
+</ol>
+
+{% if step == 1 %}
 <div class="card">
-    <h2 class="card__title">Κοινότητα</h2>
-    <form method="get" class="filter-form">
-        <div>
-            <label for="community_id">Κοινότητα / Δ.Δ.</label>
-            <select name="community_id" id="community_id" required>
-                <option value="">— Επιλέξτε Κοινότητα —</option>
-                {% for item in communities %}
-                    <option value="{{ item.id }}" {% if community and community.id == item.id %}selected{% endif %}>{{ item.name }}</option>
-                {% endfor %}
-            </select>
+    <h2 class="card__title">Βήμα 1 — Επιλογή Κοινοτήτων</h2>
+    <form method="get" class="app-form" data-community-picker novalidate>
+        {% if selection.errors %}
+        <div class="alert alert--error">
+            {% for error in selection.communities.errors %}{{ error }}{% endfor %}
         </div>
-        <div>
-            <button type="submit" class="btn btn-secondary">{% if community %}Αλλαγή{% else %}Συνέχεια{% endif %}</button>
+        {% endif %}
+        <p class="helptext">
+            Επιλέξτε τις Κοινότητες / Δ.Δ. της γνωστοποίησης. Η ανακοίνωση εκδίδεται από τον Έπαρχο,
+            οπότε οι Κοινότητες είναι μίας Επαρχίας (Ενότ. 4). Στο επόμενο βήμα θα εμφανιστούν
+            μόνο τα διαθέσιμα οικόπεδα των επιλεγμένων Κοινοτήτων.
+        </p>
+        {% for district, items in district_groups %}
+        <fieldset class="plot-picker__group" data-district="{{ district }}">
+            <legend>{{ district }}</legend>
+            <div class="document-checklist">
+                {% for item in items %}
+                <label class="checkbox-label">
+                    <input type="checkbox" name="communities" value="{{ item.community.pk }}" data-district="{{ district }}"{% if item.community.pk|stringformat:"s" in selected_ids %} checked{% endif %}>
+                    <span>{{ item.community.name }} <span class="text-muted">· {{ item.available }} διαθέσιμα οικόπεδα</span></span>
+                </label>
+                {% endfor %}
+            </div>
+        </fieldset>
+        {% empty %}
+        <div class="alert alert--warning">Δεν υπάρχουν ενεργές Κοινότητες.</div>
+        {% endfor %}
+        <div class="form-actions form-span-all">
+            <button type="submit" name="next" value="1" class="btn btn-primary">Συνέχεια</button>
+            <a href="{% url 'announcements:list' %}" class="btn btn-secondary">Ακύρωση</a>
         </div>
     </form>
 </div>
-
-{% if form %}
+<script src="{% static 'js/announcement_wizard.js' %}"></script>
+{% else %}
 <div class="card">
-<h2 class="card__title">9.1 Στοιχεία γνωστοποίησης — {{ community.name }}</h2>
-<form method="post" class="app-form" novalidate>
-    {% csrf_token %}
-    <input type="hidden" name="community_id" value="{{ community.pk }}">
-    {% if form.non_field_errors %}
-    <div class="alert alert--error form-span-all">
-        {% for error in form.non_field_errors %}{{ error }}{% endfor %}
-    </div>
-    {% endif %}
-    <p class="form-readonly">Επαρχία {{ community.district }} · Κοινότητα/Δ.Δ. {{ community.name }}</p>
-    <div class="form-grid">
-        {% include "includes/form_field.html" with field=form.announcement_date %}
-        {% include "includes/form_field.html" with field=form.submission_start_date %}
-        {% include "includes/form_field.html" with field=form.submission_end_date %}
-        {% include "includes/form_field.html" with field=form.comments wide=True %}
-    </div>
+    <h2 class="card__title">Βήμα 2 — Στοιχεία γνωστοποίησης</h2>
+    <p class="form-readonly">
+        Επαρχία {{ communities.0.district }} · Κοινότητες:
+        {% for community in communities %}{{ community.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+        — <a href="{% url 'announcements:create' %}?{% for community in communities %}communities={{ community.pk }}{% if not forloop.last %}&amp;{% endif %}{% endfor %}">αλλαγή Κοινοτήτων</a>
+    </p>
+    <form method="post" class="app-form" novalidate>
+        {% csrf_token %}
+        {% for community in communities %}<input type="hidden" name="communities" value="{{ community.pk }}">{% endfor %}
+        {% if form.non_field_errors %}
+        <div class="alert alert--error form-span-all">
+            {% for error in form.non_field_errors %}{{ error }}{% endfor %}
+        </div>
+        {% endif %}
+        <div class="form-grid">
+            {% include "includes/form_field.html" with field=form.announcement_date %}
+            {% include "includes/form_field.html" with field=form.submission_months %}
+        </div>
 
-    <h3 class="form-section-title">Διαθέσιμα οικόπεδα</h3>
-    {% if form.fields.plots.queryset %}
-    <p class="helptext">Προεπιλέγονται όλα τα διαθέσιμα οικόπεδα της Κοινότητας· αποεπιλέξτε όσα δεν προσφέρονται.</p>
-    <div class="form-grid">
-        {% include "includes/form_field.html" with field=form.plots wide=True %}
-    </div>
-    {% else %}
-    <div class="alert alert--warning">
-        Η Κοινότητα δεν έχει διαθέσιμα οικόπεδα. Ολοκληρώστε μια αίτηση διαχωρισμού ή
-        καταχωρίστε οικόπεδα χειροκίνητα στα «Οικόπεδα».
-    </div>
-    {% endif %}
+        <h3 class="form-section-title">Διαθέσιμα οικόπεδα</h3>
+        <p class="helptext">Προεπιλέγονται όλα τα διαθέσιμα οικόπεδα των επιλεγμένων Κοινοτήτων (όσα δεν έχουν παραχωρηθεί)· αποεπιλέξτε όσα δεν προσφέρονται.</p>
+        {% include "plots/_plot_picker.html" %}
 
-    <div class="form-actions form-span-all">
-        <button type="submit" class="btn btn-primary">Δημιουργία γνωστοποίησης</button>
-        <a href="{% url 'announcements:list' %}" class="btn btn-secondary">Ακύρωση</a>
-    </div>
-</form>
+        <div class="form-actions form-span-all">
+            <button type="submit" class="btn btn-primary">Δημιουργία γνωστοποίησης</button>
+            <a href="{% url 'announcements:create' %}?{% for community in communities %}communities={{ community.pk }}{% if not forloop.last %}&amp;{% endif %}{% endfor %}" class="btn btn-secondary">Πίσω</a>
+        </div>
+    </form>
 </div>
 {% endif %}
 {% endblock %}

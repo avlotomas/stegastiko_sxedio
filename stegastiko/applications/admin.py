@@ -24,9 +24,9 @@ class DependentChildInline(admin.TabularInline):
 
 @admin.register(Application)
 class ApplicationAdmin(admin.ModelAdmin):
-    list_display = ("folder_number", "submitted_on", "submission_cycle", "person", "outcome_104")
+    list_display = ("folder_number", "submitted_on", "community", "person", "outcome_104")
     search_fields = ("folder_number", "person__identity_number", "person__last_name")
-    list_filter = ("submission_cycle__community", "outcome_104", "family_type")
+    list_filter = ("community", "outcome_104", "family_type")
     inlines = [DependentChildInline]
 
 

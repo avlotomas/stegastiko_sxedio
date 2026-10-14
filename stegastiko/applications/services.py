@@ -19,6 +19,8 @@ __all__ = [
     "get_setting",
     "person_payload_from_form_prefix",
     "previous_applications_for_identity",
+    "search_persons",
+    "application_prefill",
 ]
 
 
@@ -57,7 +59,7 @@ def _highest_folder_sequence(community, base: str) -> int:
     """Largest numeric suffix already used by this community under `base` (0 if none)."""
     highest = 0
     numbers = Application.objects.filter(
-        submission_cycle__community=community, folder_number__startswith=base
+        community=community, folder_number__startswith=base
     ).values_list("folder_number", flat=True)
     for number in numbers:
         suffix = number[len(base):]
@@ -67,13 +69,12 @@ def _highest_folder_sequence(community, base: str) -> int:
 
 
 @transaction.atomic
-def generate_folder_number(submission_cycle, offset: int = 0) -> str:
+def generate_folder_number(community, offset: int = 0) -> str:
     """Next folder number (10.1.1): prefix + communityFolderCode + per-community sequence.
 
     The sequence continues from the highest number already issued (not the row count),
     so deleted applications never cause a number to be reused.
     """
-    community = submission_cycle.community
     community = community.__class__.objects.select_for_update().get(pk=community.pk)
     base = _folder_number_base(community)
     digits = int(get_setting("folderSequenceDigits", "3"))
@@ -85,10 +86,10 @@ def _is_folder_number_conflict(exc: IntegrityError) -> bool:
     return "folder_number" in str(exc)
 
 
-def save_with_new_folder_number(application: Application, submission_cycle) -> Application:
+def save_with_new_folder_number(application: Application, community) -> Application:
     """Assign a fresh folder number and insert; retry on a concurrent unique-number clash."""
     for attempt in range(FOLDER_NUMBER_MAX_ATTEMPTS):
-        application.folder_number = generate_folder_number(submission_cycle, offset=attempt)
+        application.folder_number = generate_folder_number(community, offset=attempt)
         try:
             with transaction.atomic():
                 application.save()
@@ -122,10 +123,109 @@ def previous_applications_for_identity(identity_number: str):
     person = Person.objects.filter(identity_number=identity_number).first()
     if not person:
         return person, []
-    applications = Application.objects.filter(Q(person=person) | Q(person2=person)).order_by(
-        "-submitted_on", "-id"
+    applications = (
+        Application.objects.filter(Q(person=person) | Q(person2=person))
+        .select_related("community", "person", "person2")
+        .order_by("-submitted_on", "-id")
     )
     return person, list(applications)
+
+
+PERSON_SEARCH_MIN_LENGTH = 2
+PERSON_SEARCH_LIMIT = 10
+
+
+def search_persons(query: str):
+    """ΑΔΤ prefix or surname/name match, used to pick an existing Person on the form."""
+    query = (query or "").strip()
+    if len(query) < PERSON_SEARCH_MIN_LENGTH:
+        return []
+    persons = Person.objects.filter(
+        Q(identity_number__istartswith=query)
+        | Q(last_name__icontains=query)
+        | Q(first_name__icontains=query)
+    ).order_by("identity_number")
+    return list(persons[:PERSON_SEARCH_LIMIT])
+
+
+# Application fields that describe one of the two persons (person1_* / person2_*).
+APPLICATION_SLOT_FIELDS: tuple[str, ...] = (
+    "refugee_identity_number",
+    "citizenship_cypriot",
+    "citizenship_repatriated",
+    "citizenship_eu",
+    "citizenship_other",
+    "relationship",
+    "residence_community",
+    "residence_address",
+    "residence_start",
+    "has_property",
+    "non_alienation_clear",
+    "previous_aid_clear",
+    "income",
+)
+
+# Application fields that describe the family as a whole.
+APPLICATION_FAMILY_FIELDS: tuple[str, ...] = (
+    "family_type",
+    "family_type_other",
+    "applicant_email",
+    "residence_category",
+    "children_income",
+)
+
+
+def _json_value(value):
+    if value is None:
+        return ""
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    if isinstance(value, bool):
+        return value
+    return str(value)
+
+
+def application_prefill(source: Application, person: Person, target_prefix: str) -> dict:
+    """Variable fields of `person` from a previous application, keyed for the new form.
+
+    The person may have been Πρόσωπο 2 in `source` and be Πρόσωπο 1 now (or vice versa),
+    so the slot fields are read from the slot the person actually held. Family-level
+    fields and the partner are only suggested when filling Πρόσωπο 1.
+    """
+    source_prefix = "person1" if source.person_id == person.id else "person2"
+    other_prefix = "person2" if source_prefix == "person1" else "person1"
+    prefill = {
+        f"{target_prefix}_{name}": _json_value(getattr(source, f"{source_prefix}_{name}"))
+        for name in APPLICATION_SLOT_FIELDS
+    }
+    partner = None
+    if target_prefix == "person1":
+        prefill.update(
+            {name: _json_value(getattr(source, name)) for name in APPLICATION_FAMILY_FIELDS}
+        )
+        partner = source.person2 if source_prefix == "person1" else source.person
+        if partner is not None:
+            prefill.update(
+                {
+                    f"person2_{name}": _json_value(getattr(source, f"{other_prefix}_{name}"))
+                    for name in APPLICATION_SLOT_FIELDS
+                }
+            )
+    return {
+        "fields": prefill,
+        "partner_identity_number": partner.identity_number if partner else "",
+        "children": [
+            {
+                "full_name": child.full_name,
+                "date_of_birth": child.date_of_birth.isoformat(),
+                "category": child.category,
+                "is_recognized_dependent": child.is_recognized_dependent,
+            }
+            for child in source.dependent_children.all()
+        ]
+        if target_prefix == "person1"
+        else [],
+    }
 
 
 def person_to_form_initial(person: Person, prefix: str) -> dict:
@@ -139,11 +239,6 @@ def person_to_form_initial(person: Person, prefix: str) -> dict:
         f"{prefix}_birth_country": person.birth_country,
         f"{prefix}_parents_birth_place": person.parents_birth_place,
         f"{prefix}_parents_birth_country": person.parents_birth_country,
-        f"{prefix}_refugee_identity_number": person.refugee_identity_number,
-        f"{prefix}_citizenship_cypriot": person.citizenship_cypriot,
-        f"{prefix}_citizenship_repatriated": person.citizenship_repatriated,
-        f"{prefix}_citizenship_eu": person.citizenship_eu,
-        f"{prefix}_citizenship_other": person.citizenship_other,
     }
 
 

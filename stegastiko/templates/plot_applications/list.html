@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}Αιτήσεις παραχώρησης οικοπέδου{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Αιτήσεις παραχώρησης οικοπέδου</h1>
+    <p class="page-header__lead">Αιτήσεις πολιτών κατά το έντυπο Παραρτήματος 3, ανά Κοινότητα.</p>
+</div>
+
+{% if access.plot_applications.create %}
+<div class="toolbar">
+    <a href="{% url 'plot_applications:create' %}" class="btn btn-primary">Νέα αίτηση</a>
+</div>
+{% endif %}
+
+<div class="card">
+    <h2 class="card__title">Αναζήτηση</h2>
+    <form method="get" class="filter-form">
+        <div>
+            <label for="community_id">Κοινότητα</label>
+            <select name="community_id" id="community_id">
+                <option value="">Όλες</option>
+                {% for community in communities %}
+                <option value="{{ community.id }}" {% if community_id == community.id|stringformat:"s" %}selected{% endif %}>{{ community.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="result">Κατ' αρχήν έλεγχος</label>
+            <select name="result" id="result">
+                <option value="">Όλα</option>
+                {% for value, label in results %}
+                <option value="{{ value }}" {% if result == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="order">Ταξινόμηση</label>
+            <select name="order" id="order">
+                <option value="">Ημερομηνία υποβολής</option>
+                <option value="priority" {% if order == 'priority' %}selected{% endif %}>Σειρά προτεραιότητας (Ενότ. 11)</option>
+            </select>
+        </div>
+        <div>
+            <label for="q">Αρ. Πρωτοκόλλου / ΑΔΤ / Επίθετο</label>
+            <input type="text" name="q" id="q" value="{{ q }}">
+        </div>
+        <div><button type="submit" class="btn btn-primary">Αναζήτηση</button></div>
+    </form>
+</div>
+
+<div class="table-wrap">
+    <table class="data-table">
+        <thead>
+        <tr>
+            <th>Αρ. Πρωτοκόλλου</th>
+            <th>Ημ. υποβολής</th>
+            <th>Κοινότητα</th>
+            <th>Αιτητής/τρια</th>
+            <th>Σύζυγος/Συμβίος</th>
+            <th>Οικογ. κατάσταση</th>
+            <th>Τέκνα</th>
+            <th>Προτεραιότητα</th>
+            <th>Κατ' αρχήν έλεγχος</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for a in applications %}
+        <tr>
+            <td><a href="{% url 'plot_applications:detail' a.pk %}">{{ a.protocol_number }}</a></td>
+            <td>{{ a.submitted_on|date:"d/m/Y" }}</td>
+            <td>{{ a.community.name }}</td>
+            <td>{{ a.applicant.first_name }} {{ a.applicant.last_name }}<br><span class="text-muted">{{ a.applicant.identity_number }}</span></td>
+            <td>{% if a.spouse %}{{ a.spouse.first_name }} {{ a.spouse.last_name }}<br><span class="text-muted">{{ a.spouse.identity_number }}</span>{% else %}—{% endif %}</td>
+            <td>{{ a.get_family_status_display }}</td>
+            <td>{{ a.recognized_children_count }}</td>
+            <td>{{ a.priority_label|default:"—" }}</td>
+            <td><span class="badge badge--{{ a.eligibility_result }}">{{ a.get_eligibility_result_display }}</span></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="9" class="text-muted">Δεν βρέθηκαν αιτήσεις.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

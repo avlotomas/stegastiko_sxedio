@@ -10,6 +10,7 @@ urlpatterns = [
     path("import/", views.application_import, name="import"),
     path("<int:pk>/", views.application_detail, name="detail"),
     path("<int:pk>/edit/", views.application_edit, name="edit"),
+    path("person-search/", views.person_search, name="person_search"),
     path("person-lookup/", views.person_lookup, name="person_lookup"),
     path("person-compare/", views.person_compare, name="person_compare"),
 ]

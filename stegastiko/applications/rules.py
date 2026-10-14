@@ -58,8 +58,8 @@ def evaluate_eligibility(application: Application):
 
     results = {}
     # 10.4.1 Citizenship
-    citizenship_pass = application.person.citizenship_cypriot or bool(
-        person2_exists and application.person2 and application.person2.citizenship_cypriot
+    citizenship_pass = application.person1_citizenship_cypriot or bool(
+        person2_exists and application.person2_citizenship_cypriot
     )
     results[EligibilityCheck.Criterion.CITIZENSHIP] = (
         EligibilityCheck.Result.PASS if citizenship_pass else EligibilityCheck.Result.FAIL

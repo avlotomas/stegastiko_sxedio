@@ -9,7 +9,6 @@ from openpyxl.utils import get_column_letter
 from applications.import_template import (
     APPLICATION_FIELDS,
     CHILDREN_COLUMNS,
-    DEFAULT_SUBMISSION_CYCLE_ID,
     INCOME_COLUMNS,
     INSTRUCTIONS_GREEK,
     METADATA_FIELDS,
@@ -110,7 +109,6 @@ def build_workbook():
         METADATA_FIELDS,
         default_values={
             "template_version": TEMPLATE_VERSION,
-            "submission_cycle_id": str(DEFAULT_SUBMISSION_CYCLE_ID),
         },
     )
 

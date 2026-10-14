@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'core',
     'cases',
     'applications',
+    'plot_applications',
     'allocation',
     'plots',
 ]
