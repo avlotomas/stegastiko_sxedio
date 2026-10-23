@@ -27,6 +27,7 @@ class PersonForm(StyledFormMixin, forms.ModelForm):
         super().__init__(*args, **kwargs)
         for name, label in PERSON_FIELD_LABELS.items():
             self.fields[name].label = label
+            self.fields[name].required = True
         self.fields["document_type"].label = DOCUMENT_TYPE_LABEL
         if self.instance.pk:
             identity = self.fields["identity_number"]

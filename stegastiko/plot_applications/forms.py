@@ -1,3 +1,5 @@
+from datetime import date
+
 from django import forms
 from django.db.models import Count, Q
 
@@ -7,6 +9,8 @@ from core.appendix1 import appendix1_choices
 from core.forms import IsoDateInput
 from core.models import Community
 from plot_applications.documents import DOCUMENT_CHOICES
+from plot_applications.parameters import age_at
+from plot_applications.rules import parameter
 from plots.models import Plot
 from plot_applications.models import (
     ApplicationChild,
@@ -61,6 +65,11 @@ class PersonIdentityForm(forms.Form):
         "parents_birth_place",
         "parents_birth_country",
     )
+    DRAFT_REQUIRED_FIELDS = (
+        "identity_number",
+        "first_name",
+        "last_name",
+    )
 
     identity_number = forms.CharField(label="Αρ. Δελτίου Ταυτότητας", max_length=32)
     first_name = forms.CharField(label="Όνομα", max_length=128)
@@ -71,16 +80,26 @@ class PersonIdentityForm(forms.Form):
     parents_birth_place = forms.CharField(label="Τόπος γέννησης γονέων", max_length=128)
     parents_birth_country = forms.CharField(label="Χώρα Γέννησης Γονέων", max_length=128)
 
-    def __init__(self, *args, required=True, **kwargs):
+    def __init__(self, *args, required=True, is_draft=False, **kwargs):
         super().__init__(*args, **kwargs)
         self.is_required = required
+        self.is_draft = is_draft
         self.existing = self._existing_person()
         for name, field in self.fields.items():
-            field.required = required and (self.existing is None or name == "identity_number")
+            has_stored = self.existing is not None and getattr(self.existing, name) not in (None, "")
+            if is_draft:
+                field.required = (
+                    required
+                    and (name in self.DRAFT_REQUIRED_FIELDS)
+                    and (not has_stored or name == "identity_number")
+                )
+            else:
+                field.required = required and (not has_stored or name == "identity_number")
         if self.existing is not None:
             for name in self.FIXED_FIELDS:
-                self.fields[name].widget.attrs["readonly"] = "readonly"
-                self.fields[name].help_text = "Από το μητρώο Ατόμων."
+                if getattr(self.existing, name) not in (None, ""):
+                    self.fields[name].widget.attrs["readonly"] = "readonly"
+                    self.fields[name].help_text = "Από το μητρώο Ατόμων."
         self.fields["identity_number"].help_text = (
             "Αν το ΑΔΤ είναι ήδη καταχωρημένο, τα υπόλοιπα στοιχεία συμπληρώνονται από το μητρώο Ατόμων."
         )
@@ -107,7 +126,9 @@ class PersonIdentityForm(forms.Form):
             posted = cleaned.get(name)
             if isinstance(posted, str):
                 posted = posted.strip()
-            if posted not in (None, "") and posted != stored:
+            if stored in (None, ""):
+                cleaned[name] = posted if name == "date_of_birth" else (posted or "")
+            elif posted not in (None, "") and posted != stored:
                 self.add_error(
                     name,
                     f"Το ΑΔΤ {self.existing.identity_number} είναι ήδη καταχωρημένο και το πεδίο "
@@ -117,13 +138,31 @@ class PersonIdentityForm(forms.Form):
                 cleaned[name] = stored
         return cleaned
 
+    def _field_values(self) -> dict:
+        return {
+            name: (
+                self.cleaned_data.get(name)
+                if name == "date_of_birth"
+                else (self.cleaned_data.get(name) or "").strip()
+            )
+            for name in self.FIXED_FIELDS
+        }
+
     def get_or_create_person(self) -> Person:
         identity = self.cleaned_data["identity_number"].strip()
+        values = self._field_values()
         if self.existing is not None:
+            changed = False
+            for name, value in values.items():
+                if getattr(self.existing, name) in (None, "") and value not in (None, ""):
+                    setattr(self.existing, name, value)
+                    changed = True
+            if changed:
+                self.existing.save()
             return self.existing
         return Person.objects.create(
             identity_number=identity,
-            **{name: self.cleaned_data[name] for name in self.FIXED_FIELDS},
+            **values,
         )
 
 
@@ -140,7 +179,7 @@ class PlotApplicationForm(forms.ModelForm):
         "η ανέγερση κατοικίας;"
     )
     has_alienated_property = yes_no_field(
-        "(γ) Έχετε αποξενώσει εσείς (περιλ. συζύγου/συμβίου) ή οι γονείς σας ή οι γονείς του/της "
+        "Έχετε αποξενώσει εσείς (περιλ. συζύγου/συμβίου) ή οι γονείς σας ή οι γονείς του/της "
         "συζύγου/συμβίου ακίνητο αξιοποιήσιμο για οικιστικούς σκοπούς εντός των προηγούμενων "
         "τριών (3) ετών;"
     )
@@ -166,9 +205,6 @@ class PlotApplicationForm(forms.ModelForm):
         fields = [
             "community",
             "submitted_on",
-            "received_at",
-            "received_by",
-            "district_file_number",
             "email",
             "correspondence_street",
             "correspondence_number",
@@ -184,11 +220,6 @@ class PlotApplicationForm(forms.ModelForm):
             "residence_community",
             "origin_parent_description",
             "previous_residence_address",
-            "previous_residence_from",
-            "previous_residence_to",
-            "community_residence_since",
-            "abroad_from",
-            "abroad_to",
             "residence_notes",
             "family_status",
             "single_parent_status",
@@ -201,11 +232,6 @@ class PlotApplicationForm(forms.ModelForm):
             "has_alienated_property_details",
             "previous_housing_aid",
             "previous_housing_aid_details",
-            "other_application_choice_1",
-            "other_application_choice_2",
-            "other_application_choice_3",
-            "other_applications_notes",
-            "email_declaration_accepted",
             "applicant_signed",
             "spouse_signed",
             "sworn_declaration_date",
@@ -214,14 +240,10 @@ class PlotApplicationForm(forms.ModelForm):
             "sworn_by_spouse",
             "attached_documents",
             "other_documents",
-            "comments",
         ]
         labels = {
             "community": "Κοινότητα στην οποία ζητείται η παραχώρηση οικοπέδου",
             "submitted_on": "Ημερομηνία υποβολής",
-            "received_at": "Ημερομηνία και ώρα παραλαβής",
-            "received_by": "Όνομα παραλήπτη",
-            "district_file_number": "Αρ. Φακέλου Επαρχιακής Διοίκησης",
             "email": "Ηλεκτρονική Διεύθυνση",
             "correspondence_street": "Οδός",
             "correspondence_number": "Αριθμός",
@@ -237,24 +259,14 @@ class PlotApplicationForm(forms.ModelForm):
             "residence_community": "Κοινότητα / Δημοτικό Διαμέρισμα διαμονής",
             "origin_parent_description": "Καταγωγή από την Κοινότητα ως προς ποιο γονέα",
             "previous_residence_address": "Διεύθυνση στην Κοινότητα κατά την περίοδο μόνιμης κατοίκησης",
-            "previous_residence_from": "Περίοδος μόνιμης κατοίκησης από",
-            "previous_residence_to": "Περίοδος μόνιμης κατοίκησης μέχρι",
-            "community_residence_since": "(α) Μόνιμη διαμονή στην Κοινότητα από",
-            "abroad_from": "(β) Παραμονή στο εξωτερικό από",
-            "abroad_to": "(β) Παραμονή στο εξωτερικό μέχρι",
             "residence_notes": "Αναλυτική περιγραφή / λοιπές πληροφορίες",
             "family_status": "Οικογενειακή κατάσταση",
             "single_parent_status": "Μονογονιός",
             "single_parent_other": "Άλλο (περιγραφή)",
             "has_dwelling_details": "Διευκρινίσεις (α)",
             "has_residential_land_details": "Διευκρινίσεις (β)",
-            "has_alienated_property_details": "Διευκρινίσεις (γ)",
+            "has_alienated_property_details": "Διευκρινίσεις",
             "previous_housing_aid_details": "Επεξηγήσεις και διευκρινίσεις",
-            "other_application_choice_1": "1η Επιλογή",
-            "other_application_choice_2": "2η Επιλογή",
-            "other_application_choice_3": "3η Επιλογή",
-            "other_applications_notes": "Λοιπές πληροφορίες (Κοινότητα, Επαρχιακή Διοίκηση)",
-            "email_declaration_accepted": "Υπεύθυνη δήλωση για την ηλεκτρονική διεύθυνση — υπογράφηκε",
             "applicant_signed": "Υπογραφή Αιτητή/Αιτήτριας",
             "spouse_signed": "Υπογραφή Συζύγου/Συμβίου",
             "sworn_declaration_date": "Ημερομηνία ορκωμοσίας",
@@ -262,16 +274,9 @@ class PlotApplicationForm(forms.ModelForm):
             "sworn_by_applicant": "Ένορκη δήλωση Αιτητή/Αιτήτριας",
             "sworn_by_spouse": "Ένορκη δήλωση Συζύγου/Συμβίου",
             "other_documents": "Άλλα πιστοποιητικά",
-            "comments": "Σχόλια / Παρατηρήσεις",
         }
         widgets = {
             "submitted_on": IsoDateInput(),
-            "received_at": forms.DateTimeInput(attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M"),
-            "previous_residence_from": IsoDateInput(),
-            "previous_residence_to": IsoDateInput(),
-            "community_residence_since": IsoDateInput(),
-            "abroad_from": IsoDateInput(),
-            "abroad_to": IsoDateInput(),
             "sworn_declaration_date": IsoDateInput(),
             "residence_category": forms.RadioSelect,
             "family_status": forms.RadioSelect,
@@ -282,13 +287,12 @@ class PlotApplicationForm(forms.ModelForm):
             "has_residential_land_details": forms.Textarea(attrs={"rows": 2}),
             "has_alienated_property_details": forms.Textarea(attrs={"rows": 2}),
             "previous_housing_aid_details": forms.Textarea(attrs={"rows": 2}),
-            "other_applications_notes": forms.Textarea(attrs={"rows": 2}),
             "other_documents": forms.Textarea(attrs={"rows": 2}),
-            "comments": forms.Textarea(attrs={"rows": 3}),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, is_draft=False, **kwargs):
         super().__init__(*args, **kwargs)
+        self.is_draft = is_draft
         # Η Αίτηση δεν συνδέεται με Γνωστοποιήσεις: προσφέρονται οι ενεργές Κοινότητες που
         # έχουν διαθέσιμα Οικόπεδα, με τον αριθμό τους. Στην επεξεργασία μένει μόνο η υπάρχουσα.
         communities = Community.objects.annotate(
@@ -304,12 +308,25 @@ class PlotApplicationForm(forms.ModelForm):
             f"{community.name} ({community.available_plots})"
         )
         self.community_names = {str(c.pk): c.name for c in communities}
+        for name in ("submitted_on", "email", "residence_category", "family_status"):
+            self.fields[name].required = not is_draft
         # Η απαιτούμενη τιμή κατά κατηγορία ελέγχεται στο clean().
         self.fields["residence_community"].required = False
-        self.fields["residence_community"].help_text = ""
+        for field in self.fields.values():
+            field.help_text = ""
         if self.instance.pk and self.instance.residence_category == ResidenceCategory.NEIGHBOURING:
             self.initial.setdefault("neighbouring_community", self.instance.residence_community)
-        self.fields["received_at"].input_formats = ["%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M"]
+        if self.instance.pk:
+            for bool_field in (
+                "has_dwelling",
+                "has_residential_land",
+                "has_alienated_property",
+                "previous_housing_aid",
+            ):
+                val = getattr(self.instance, bool_field)
+                self.initial.setdefault(
+                    bool_field, "" if val is None else ("True" if val else "False")
+                )
         for name in ("residence_category", "family_status"):
             self.fields[name].choices = [c for c in self.fields[name].choices if c[0]]
         self.fields["single_parent_status"].choices = [
@@ -323,22 +340,27 @@ class PlotApplicationForm(forms.ModelForm):
             cleaned["community"].pk != self.instance.community_id
         ):
             self.add_error("community", "Η Κοινότητα δεν αλλάζει μετά την καταχώριση.")
-        if cleaned.get("family_status") == PlotApplication.FamilyStatus.SINGLE_PARENT:
+        if self.fields["family_status"].disabled and self.instance.pk:
+            cleaned["family_status"] = self.instance.family_status
+            cleaned["single_parent_status"] = self.instance.single_parent_status
+            cleaned["single_parent_other"] = self.instance.single_parent_other
+        elif cleaned.get("family_status") == PlotApplication.FamilyStatus.SINGLE_PARENT:
             status = cleaned.get("single_parent_status")
-            if not status:
+            if not status and not self.is_draft:
                 self.add_error("single_parent_status", "Επιλέξτε την περίπτωση μονογονιού.")
-            elif status == PlotApplication.SingleParentStatus.OTHER and not cleaned.get("single_parent_other"):
+            elif (
+                status == PlotApplication.SingleParentStatus.OTHER
+                and not cleaned.get("single_parent_other")
+                and not self.is_draft
+            ):
                 self.add_error("single_parent_other", "Περιγράψτε την περίπτωση «Άλλο».")
         else:
             cleaned["single_parent_status"] = ""
             cleaned["single_parent_other"] = ""
-        self._clean_residence_community(cleaned)
-        for start, end in (
-            ("previous_residence_from", "previous_residence_to"),
-            ("abroad_from", "abroad_to"),
-        ):
-            if cleaned.get(start) and cleaned.get(end) and cleaned[end] < cleaned[start]:
-                self.add_error(end, "Η ημερομηνία λήξης είναι πριν την έναρξη.")
+        if self.fields["residence_category"].disabled and self.instance.pk:
+            cleaned["residence_community"] = self.instance.residence_community
+        else:
+            self._clean_residence_community(cleaned)
         return cleaned
 
     def _clean_residence_community(self, cleaned):
@@ -348,10 +370,10 @@ class PlotApplicationForm(forms.ModelForm):
             cleaned["residence_community"] = community.name if community else ""
         elif category == ResidenceCategory.NEIGHBOURING:
             chosen = cleaned.get("neighbouring_community") or ""
-            if not chosen and "neighbouring_community" not in self.errors:
+            if not chosen and not self.is_draft and "neighbouring_community" not in self.errors:
                 self.add_error("neighbouring_community", "Επιλέξτε τη Γειτονική Κοινότητα από τον κατάλογο.")
             cleaned["residence_community"] = chosen
-        elif category and not (cleaned.get("residence_community") or "").strip():
+        elif category and not self.is_draft and not (cleaned.get("residence_community") or "").strip():
             self.add_error("residence_community", "Συμπληρώστε την Κοινότητα / Δημοτικό Διαμέρισμα διαμονής.")
 
 
@@ -395,9 +417,10 @@ class ApplicationPartyForm(forms.ModelForm):
             "employer_details": forms.Textarea(attrs={"rows": 2}),
         }
 
-    def __init__(self, *args, role=ApplicationParty.Role.APPLICANT, **kwargs):
+    def __init__(self, *args, role=ApplicationParty.Role.APPLICANT, is_draft=False, **kwargs):
         super().__init__(*args, **kwargs)
         self.role = role
+        self.is_draft = is_draft
         choices = [c for c in self.fields["citizenship"].choices if c[0]]
         if role == ApplicationParty.Role.APPLICANT:
             for name in ("alien_registration_number", "email"):
@@ -407,13 +430,18 @@ class ApplicationPartyForm(forms.ModelForm):
                 "Για την επίσημη αλληλογραφία χρησιμοποιείται το email του Αιτητή/Αιτήτριας."
             )
         self.fields["citizenship"].choices = choices
-        self.fields["mobile_phone"].required = True
+        self.fields["citizenship"].required = not is_draft
+        self.fields["mobile_phone"].required = (role == ApplicationParty.Role.APPLICANT) or not is_draft
         _style(self)
 
     def clean(self):
         cleaned = super().clean()
+        if self.fields["citizenship"].disabled and self.instance.pk:
+            cleaned["citizenship"] = self.instance.citizenship
+            cleaned["citizenship_other"] = self.instance.citizenship_other
+            return cleaned
         if cleaned.get("citizenship") == ApplicationParty.Citizenship.OTHER:
-            if not (cleaned.get("citizenship_other") or "").strip():
+            if not self.is_draft and not (cleaned.get("citizenship_other") or "").strip():
                 self.add_error("citizenship_other", "Συμπληρώστε την υπηκοότητα / ιδιότητα.")
         else:
             cleaned["citizenship_other"] = ""
@@ -436,14 +464,50 @@ class ApplicationChildForm(forms.ModelForm):
         }
         widgets = {"date_of_birth": IsoDateInput()}
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, submitted_on: date | None = None, is_draft: bool = False, **kwargs):
         super().__init__(*args, **kwargs)
+        self.submitted_on = submitted_on
+        self.is_draft = is_draft
         _style(self)
 
     def clean(self):
         cleaned = super().clean()
-        if cleaned.get("status") == ApplicationChild.Status.STUDENT and not cleaned.get("sex"):
+        status = cleaned.get("status")
+        sex = cleaned.get("sex")
+        dob = cleaned.get("date_of_birth")
+
+        if status == ApplicationChild.Status.STUDENT and not sex:
             self.add_error("sex", "Για φοιτητή/τρια απαιτείται το φύλο (όριο 23 θήλυ / 25 άρρεν).")
+
+        if dob is not None:
+            ref_date = self.submitted_on or date.today()
+            if dob > ref_date:
+                self.add_error(
+                    "date_of_birth",
+                    "Η ημερομηνία γέννησης δεν μπορεί να είναι μεταγενέστερη της ημερομηνίας υποβολής.",
+                )
+            elif not self.is_draft:
+                age = age_at(ref_date, dob)
+                minor_limit = parameter("plotApp.minorMaxAge")
+                if status == ApplicationChild.Status.MINOR and age >= minor_limit:
+                    self.add_error(
+                        "date_of_birth",
+                        f"Ηλικία {age} ετών: για ανήλικο τέκνο η ηλικία πρέπει να είναι μικρότερη των {minor_limit} ετών (Ενότ. 10.Α).",
+                    )
+                elif status == ApplicationChild.Status.STUDENT and sex:
+                    student_limit = parameter(
+                        "plotApp.studentMaxAgeFemale" if sex == "F" else "plotApp.studentMaxAgeMale"
+                    )
+                    if age > student_limit:
+                        self.add_error(
+                            "date_of_birth",
+                            f"Ηλικία {age} ετών: υπερβαίνει το όριο των {student_limit} ετών για φοιτητή/τρια (Ενότ. 10.Α).",
+                        )
+                elif status == ApplicationChild.Status.ADULT_DISABILITY and age < minor_limit:
+                    self.add_error(
+                        "date_of_birth",
+                        f"Ηλικία {age} ετών: για ενήλικο τέκνο με αναπηρία η ηλικία πρέπει να είναι τουλάχιστον {minor_limit} ετών (Ενότ. 10.Α).",
+                    )
         return cleaned
 
 
@@ -453,44 +517,85 @@ ChildFormSet = forms.inlineformset_factory(
 
 
 class IncomeDeclarationForm(forms.ModelForm):
+    member = forms.CharField(label="Μέλος", required=False, widget=forms.Select)
+
     class Meta:
         model = IncomeDeclaration
         fields = [
-            "member_description",
+            "member",
             "employment_type",
+            "description",
             "gross_annual_income",
-            "other_income_1_description",
-            "other_income_1_amount",
-            "other_income_2_description",
-            "other_income_2_amount",
-            "other_income_3_description",
-            "other_income_3_amount",
         ]
         labels = {
-            "member_description": "Δήλωση Μέλους Οικογένειας",
-            "employment_type": "Κατάσταση",
-            "gross_annual_income": "Ετήσιο Ακαθάριστο Εισόδημα (€, συμπ. 13ου, 14ου, άλλου μισθού)",
-            "other_income_1_description": "Άλλη πηγή εισοδήματος 1",
-            "other_income_1_amount": "Ποσό 1 (€)",
-            "other_income_2_description": "Άλλη πηγή εισοδήματος 2",
-            "other_income_2_amount": "Ποσό 2 (€)",
-            "other_income_3_description": "Άλλη πηγή εισοδήματος 3",
-            "other_income_3_amount": "Ποσό 3 (€)",
+            "member": "Μέλος",
+            "employment_type": "Κατάσταση / Είδος",
+            "description": "Περιγραφή / Πηγή",
+            "gross_annual_income": "Ετήσιο Ποσό (€)",
         }
-        help_texts = {"gross_annual_income": "", "member_description": ""}
+        help_texts = {
+            "member": "",
+            "employment_type": "",
+            "description": "",
+            "gross_annual_income": "",
+        }
 
-    def __init__(self, *args, member=IncomeDeclaration.Member.APPLICANT, **kwargs):
+    def __init__(
+        self,
+        *args,
+        is_couple=True,
+        is_draft=False,
+        children_choices=(),
+        child_id_to_index=None,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
-        self.member = member
-        if member != IncomeDeclaration.Member.OTHER:
-            self.fields.pop("member_description")
+        self.is_couple = is_couple
+        self.is_draft = is_draft
+        self.selected_child_index = None
+        child_id_to_index = child_id_to_index or {}
+
+        choices = [(IncomeDeclaration.Member.APPLICANT, IncomeDeclaration.Member.APPLICANT.label)]
+        if is_couple:
+            choices.append((IncomeDeclaration.Member.SPOUSE, IncomeDeclaration.Member.SPOUSE.label))
+        if children_choices:
+            choices.extend(children_choices)
         else:
-            self.fields["member_description"].help_text = (
-                "Σε περίπτωση περισσότερων μελών, αναφέρετε το σύνολο των εισοδημάτων τους."
-            )
+            choices.append((IncomeDeclaration.Member.CHILD, IncomeDeclaration.Member.CHILD.label))
+        choices.append((IncomeDeclaration.Member.OTHER, IncomeDeclaration.Member.OTHER.label))
+
+        if (
+            not self.is_bound
+            and self.instance.pk
+            and self.instance.member == IncomeDeclaration.Member.CHILD
+            and self.instance.child_id in child_id_to_index
+        ):
+            self.initial["member"] = f"child:{child_id_to_index[self.instance.child_id]}"
+        elif not self.is_bound and not self.instance.pk:
+            self.initial.setdefault("member", IncomeDeclaration.Member.APPLICANT)
+
+        self.fields["member"].widget.choices = choices
         self.fields["gross_annual_income"].required = False
         self.fields["gross_annual_income"].widget.attrs.update({"min": "0", "step": "0.01"})
         _style(self)
+
+    def clean_member(self):
+        raw = (self.cleaned_data.get("member") or "").strip()
+        self.selected_child_index = None
+        if not raw or raw == IncomeDeclaration.Member.APPLICANT:
+            return IncomeDeclaration.Member.APPLICANT
+        if raw in (
+            IncomeDeclaration.Member.SPOUSE,
+            IncomeDeclaration.Member.CHILD,
+            IncomeDeclaration.Member.OTHER,
+        ):
+            return raw
+        if raw.startswith("child:"):
+            suffix = raw.split(":", 1)[1]
+            if suffix.isdigit():
+                self.selected_child_index = int(suffix)
+                return IncomeDeclaration.Member.CHILD
+        raise forms.ValidationError("Επιλέξτε έγκυρο μέλος οικογένειας.")
 
     def clean_gross_annual_income(self):
         value = self.cleaned_data.get("gross_annual_income")
@@ -500,17 +605,63 @@ class IncomeDeclarationForm(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
-        for slot in IncomeDeclaration.OTHER_INCOME_SLOTS:
-            amount = cleaned.get(f"other_income_{slot}_amount")
-            if amount is not None and amount < 0:
-                self.add_error(f"other_income_{slot}_amount", "Το ποσό δεν μπορεί να είναι αρνητικό.")
-            if amount and not cleaned.get(f"other_income_{slot}_description"):
-                self.add_error(f"other_income_{slot}_description", "Περιγράψτε την πηγή εισοδήματος.")
+        if self.is_empty:
+            return cleaned
+        if cleaned.get("member") == IncomeDeclaration.Member.SPOUSE and not self.is_couple:
+            return cleaned
+        emp_type = cleaned.get("employment_type")
+        amount = cleaned.get("gross_annual_income") or 0
+        desc = (cleaned.get("description") or "").strip()
+        if not self.is_draft:
+            if not emp_type:
+                self.add_error("employment_type", "Επιλέξτε κατάσταση / είδος εισοδήματος.")
+            elif (
+                emp_type != IncomeDeclaration.EmploymentType.UNEMPLOYED
+                and amount <= 0
+                and "gross_annual_income" not in self.errors
+            ):
+                self.add_error(
+                    "gross_annual_income",
+                    "Για την επιλεγμένη κατάσταση απαιτείται ετήσιο ποσό μεγαλύτερο του μηδενός.",
+                )
+            if emp_type == IncomeDeclaration.EmploymentType.OTHER_SOURCE and not desc:
+                self.add_error("description", "Περιγράψτε την πηγή εισοδήματος.")
         return cleaned
 
     @property
     def is_empty(self) -> bool:
-        data = self.cleaned_data
-        return not any(
-            data.get(name) for name in self.fields if name != "employment_type"
-        ) and not data.get("employment_type")
+        data = getattr(self, "cleaned_data", {})
+        return (
+            not data.get("employment_type")
+            and not (data.get("description") or "").strip()
+            and not data.get("gross_annual_income")
+        )
+
+
+IncomeFormSet = forms.inlineformset_factory(
+    PlotApplication, IncomeDeclaration, form=IncomeDeclarationForm, extra=0, can_delete=True
+)
+
+
+class PlotApplicationEmailForm(forms.Form):
+    """Αποστολή email προς το άτομο/αιτητή με δυνατότητα προσθήκης ελλειπόντων δικαιολογητικών και χειροκίνητης επεξεργασίας."""
+
+    recipient = forms.EmailField(
+        label="Προς",
+        max_length=255,
+        required=False,
+        widget=forms.EmailInput(attrs={"class": "input", "data-email-recipient-input": ""}),
+    )
+    subject = forms.CharField(
+        label="Θέμα",
+        max_length=255,
+        widget=forms.TextInput(attrs={"class": "input"}),
+    )
+    body = forms.CharField(
+        label="Κείμενο",
+        required=False,
+        widget=forms.Textarea(
+            attrs={"class": "input", "rows": 10, "data-email-body": ""}
+        ),
+    )
+

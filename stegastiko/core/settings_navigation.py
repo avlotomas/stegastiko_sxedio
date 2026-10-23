@@ -4,12 +4,6 @@ from core.permissions import has_access
 
 SETTINGS_NAV_SECTIONS = (
     {
-        "key": "overview",
-        "url_name": "system_configuration",
-        "label": "Επισκόπηση",
-        "function": "settings",
-    },
-    {
         "key": "users",
         "url_name": "settings_users",
         "label": "Χρήστες",

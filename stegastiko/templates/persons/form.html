@@ -41,36 +41,77 @@
 
 {% if not is_create %}
 <div class="card">
-    <h2 class="card__title">Αιτήσεις του ατόμου</h2>
+    <h2 class="card__title">Αιτήσεις παραχώρησης οικοπέδου</h2>
+    {% if can_edit and applications|length > 1 %}
+    <p class="helptext">Σύρετε τις γραμμές (drag &amp; drop) για να αλλάξετε τη σειρά προτεραιότητας των αιτήσεων του ατόμου.</p>
+    {% endif %}
     <div class="table-wrap">
-        <table class="data-table">
+        <table class="data-table" data-person-applications-table
+               {% if can_edit %}data-reorder-url="{% url 'persons:applications_reorder' person.pk %}"{% endif %}>
             <thead>
             <tr>
-                <th>Αρ. Φακέλου</th>
+                <th>Σειρά προτεραιότητας</th>
+                <th>Αρ. Πρωτοκόλλου</th>
                 <th>Κοινότητα</th>
                 <th>Ημ. υποβολής</th>
                 <th>Ρόλος</th>
+                <th>Κατ' αρχήν έλεγχος</th>
+                {% if can_send_email %}<th><span class="visually-hidden">Ενέργειες</span></th>{% endif %}
             </tr>
             </thead>
-            <tbody>
+            <tbody data-person-applications-sortable>
             {% for application in applications %}
-                <tr>
+                <tr data-application-id="{{ application.pk }}"
+                    data-sortable-row
+                    {% if can_edit and applications|length > 1 %}draggable="true"{% endif %}>
                     <td>
-                        {% if access.applications.view %}
-                        <a href="{% url 'applications:detail' application.pk %}">{{ application.folder_number }}</a>
-                        {% else %}{{ application.folder_number }}{% endif %}
+                        {% if can_edit and applications|length > 1 %}
+                        <span class="drag-handle" aria-hidden="true" title="Σύρετε για αλλαγή σειράς">⋮⋮</span>
+                        {% endif %}
+                        <strong data-preference-order>{{ application.preference_order|default:forloop.counter }}</strong>
                     </td>
-                    <td>{{ application.submission_cycle.community.name }}</td>
-                    <td>{{ application.submitted_on|date:"d/m/Y" }}</td>
-                    <td>{% if application.person_id == person.pk %}Πρόσωπο 1{% else %}Πρόσωπο 2{% endif %}</td>
+                    <td>
+                        {% if access.plot_applications.view %}
+                        <a href="{% url 'plot_applications:detail' application.pk %}">{{ application.protocol_number }}</a>
+                        {% else %}{{ application.protocol_number }}{% endif %}
+                    </td>
+                    <td>{{ application.community.name }}</td>
+                    <td>{{ application.submitted_on|date:"d/m/Y"|default:"—" }}</td>
+                    <td>{% if application.applicant_id == person.pk %}Αιτητής/τρια{% else %}Σύζυγος/Συμβίος{% endif %}</td>
+                    <td><span class="badge badge--{{ application.eligibility_result }}">{{ application.get_eligibility_result_display }}</span></td>
+                    {% if can_send_email %}
+                    <td class="data-table__actions">
+                        <button type="button"
+                                class="btn btn-secondary btn-sm"
+                                data-dialog-open="plot-application-email-dialog"
+                                data-email-action="{% url 'plot_applications:email_send' application.pk %}"
+                                data-email-subject="{{ application.email_subject }}"
+                                data-email-recipient="{{ application.email }}"
+                                data-copy-text="{{ application.missing_documents_text }}"
+                                data-check-label="Αίτηση {{ application.protocol_number }}">
+                            Αποστολή Email
+                        </button>
+                    </td>
+                    {% endif %}
                 </tr>
             {% empty %}
-                <tr><td colspan="4">Το άτομο δεν συμμετέχει σε αιτήσεις.</td></tr>
+                <tr><td colspan="{% if can_send_email %}7{% else %}6{% endif %}">Το άτομο δεν συμμετέχει σε αιτήσεις.</td></tr>
             {% endfor %}
             </tbody>
         </table>
     </div>
+    <p class="helptext" data-reorder-status hidden></p>
 </div>
+
+<div class="card">
+    <h2 class="card__title">Ιστορικό απεσταλμένων email</h2>
+    <div data-plot-application-email-status></div>
+    {% include "plot_applications/_email_log.html" %}
+</div>
+
+{% if can_send_email %}
+{% include "plot_applications/_email_dialog.html" %}
+{% endif %}
 
 {% if can_delete %}
 <div class="card">
@@ -85,5 +126,105 @@
     {% endif %}
 </div>
 {% endif %}
+<script>
+(function () {
+    "use strict";
+    const table = document.querySelector("[data-person-applications-table][data-reorder-url]");
+    if (!table) return;
+    const tbody = table.querySelector("[data-person-applications-sortable]");
+    const statusEl = table.closest(".card")?.querySelector("[data-reorder-status]");
+    const reorderUrl = table.dataset.reorderUrl;
+    if (!tbody || !reorderUrl) return;
+
+    function csrfToken() {
+        const input = document.querySelector('input[name="csrfmiddlewaretoken"]');
+        return input ? input.value : "";
+    }
+
+    function rows() {
+        return Array.from(tbody.querySelectorAll("tr[data-sortable-row]"));
+    }
+
+    function refreshNumbers() {
+        rows().forEach((row, index) => {
+            const num = row.querySelector("[data-preference-order]");
+            if (num) num.textContent = String(index + 1);
+        });
+    }
+
+    function saveOrder() {
+        const order = rows().map((row) => row.dataset.applicationId);
+        if (statusEl) {
+            statusEl.hidden = false;
+            statusEl.textContent = "Αποθήκευση σειράς προτεραιότητας…";
+        }
+        fetch(reorderUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": csrfToken(),
+                "X-Requested-With": "XMLHttpRequest",
+            },
+            body: JSON.stringify({ order }),
+        })
+            .then((response) => {
+                if (!response.ok) throw new Error(String(response.status));
+                return response.json();
+            })
+            .then(() => {
+                refreshNumbers();
+                if (statusEl) {
+                    statusEl.textContent = "Η σειρά προτεραιότητας αποθηκεύτηκε.";
+                }
+            })
+            .catch(() => {
+                if (statusEl) {
+                    statusEl.textContent = "Η αποθήκευση της σειράς προτεραιότητας απέτυχε.";
+                }
+            });
+    }
+
+    let draggedRow = null;
+
+    tbody.addEventListener("dragstart", (event) => {
+        const row = event.target.closest("tr[data-sortable-row]");
+        if (!row) return;
+        draggedRow = row;
+        row.classList.add("is-dragging");
+        if (event.dataTransfer) {
+            event.dataTransfer.effectAllowed = "move";
+            event.dataTransfer.setData("text/plain", row.dataset.applicationId || "");
+        }
+    });
+
+    tbody.addEventListener("dragover", (event) => {
+        if (!draggedRow) return;
+        event.preventDefault();
+        const targetRow = event.target.closest("tr[data-sortable-row]");
+        if (!targetRow || targetRow === draggedRow) return;
+        const rect = targetRow.getBoundingClientRect();
+        const after = event.clientY > rect.top + rect.height / 2;
+        if (after) {
+            targetRow.after(draggedRow);
+        } else {
+            targetRow.before(draggedRow);
+        }
+        refreshNumbers();
+    });
+
+    tbody.addEventListener("drop", (event) => {
+        if (!draggedRow) return;
+        event.preventDefault();
+        saveOrder();
+    });
+
+    tbody.addEventListener("dragend", () => {
+        if (draggedRow) {
+            draggedRow.classList.remove("is-dragging");
+            draggedRow = null;
+        }
+    });
+})();
+</script>
 {% endif %}
 {% endblock %}

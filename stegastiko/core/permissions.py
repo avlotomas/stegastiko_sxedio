@@ -11,10 +11,15 @@ from django.core.exceptions import PermissionDenied
 
 from core.function_catalog import (
     ACCESS_TYPE_LABELS,
+    EDIT,
     FUNCTIONS_BY_CODE,
+    PLOT_APPLICATION_ACTION_LABEL_MAP,
+    PLOT_APPLICATION_SUBFUNCTION_CODES,
+    PLOT_APPLICATION_SUBSECTION_CODES,
     VIEW,
     function_label,
     grant_key,
+    plot_app_subsection_code,
 )
 from core.models import Role
 
@@ -22,10 +27,19 @@ GRANTS_CACHE_ATTR = "_role_grants_cache"
 
 
 def grants_allow(grants, code: str, action: str = VIEW) -> bool:
-    """Whether a set of grants opens `action` on `code`, including «Προβολή» on every ancestor."""
+    """Whether a set of grants opens `action` on `code`, including ancestor checks."""
     function = FUNCTIONS_BY_CODE[code]
     if action not in function.actions:
         raise ValueError(f"{code} has no access type {action}")
+    if function.parent == "plot_applications":
+        if grant_key("plot_applications", action) not in grants:
+            return False
+        if grant_key(code, action) in grants:
+            return True
+        return not any(
+            grant_key(sub_func, action) in grants
+            for sub_func in PLOT_APPLICATION_SUBFUNCTION_CODES
+        )
     if grant_key(code, action) not in grants:
         return False
     parent = function.parent
@@ -44,6 +58,21 @@ def grant_dependency_errors(grants) -> list:
         code, _, action = key.partition(":")
         function = FUNCTIONS_BY_CODE.get(code)
         if function is None:
+            continue
+        if code == "plot_applications":
+            continue
+        if function.parent == "plot_applications":
+            if grant_key("plot_applications", action) not in grants:
+                parent = FUNCTIONS_BY_CODE["plot_applications"]
+                action_label = PLOT_APPLICATION_ACTION_LABEL_MAP.get(
+                    action, ACCESS_TYPE_LABELS.get(action, action)
+                )
+                message = (
+                    f"«{function_label(function)}»: απαιτείται «{action_label}» στη λειτουργία "
+                    f"«{function_label(parent)}»."
+                )
+                if message not in errors:
+                    errors.append(message)
             continue
         if action != VIEW and VIEW in function.actions and grant_key(code, VIEW) not in grants:
             errors.append(
@@ -123,6 +152,23 @@ def access_required(code: str, action: str = VIEW, *, post_action: str | None = 
     return decorator
 
 
+def plot_application_subsection_map(user, action: str = VIEW) -> dict[str, bool]:
+    """Map of subsection_code -> bool for `plot_applications` view or edit."""
+    return {
+        sub_code: has_access(user, plot_app_subsection_code(sub_code), action)
+        for sub_code in PLOT_APPLICATION_SUBSECTION_CODES
+    }
+
+
+def editable_plot_application_subsections(user) -> set[str]:
+    """Set of subsection codes the user is permitted to edit on a PlotApplication."""
+    return {
+        sub_code
+        for sub_code, allowed in plot_application_subsection_map(user, EDIT).items()
+        if allowed
+    }
+
+
 class FunctionAccess:
     """Template helper: `{% if access.case_section_2.delete %}`."""
 
@@ -131,6 +177,9 @@ class FunctionAccess:
         self._code = code
 
     def __getitem__(self, action):
+        if action == "any":
+            function = FUNCTIONS_BY_CODE.get(self._code)
+            return bool(function and has_any_access(self._user, self._code, function.actions))
         try:
             return has_access(self._user, self._code, action)
         except ValueError:

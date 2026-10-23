@@ -88,25 +88,18 @@ WSGI_APPLICATION = 'config.wsgi.application'
 DATABASES = {
     "default": env.db("DATABASE_URL", default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}"),
 }
+if (
+    DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3"
+    and DATABASES["default"]["NAME"] != ":memory:"
+    and not Path(DATABASES["default"]["NAME"]).is_absolute()
+):
+    DATABASES["default"]["NAME"] = str(BASE_DIR / DATABASES["default"]["NAME"])
 
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
-AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
-]
+AUTH_PASSWORD_VALIDATORS = []
 
 
 # Internationalization

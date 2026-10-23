@@ -13,6 +13,12 @@
     <h1>Ο λογαριασμός μου</h1>
 </div>
 
+{% if must_change_password %}
+<div class="alert alert--warning" role="alert">
+    Πρέπει να αλλάξετε τον κωδικό πρόσβασής σας πριν συνεχίσετε στην εφαρμογή.
+</div>
+{% endif %}
+
 <div class="card">
     <h2 class="card__title">Στοιχεία σύνδεσης</h2>
     <dl class="detail-grid detail-grid--compact">
@@ -39,7 +45,9 @@
         </div>
         <div class="form-actions form-span-all">
             <button type="submit" class="btn btn-primary">Αποθήκευση νέου κωδικού</button>
+            {% if not must_change_password %}
             <a href="{% url 'home' %}" class="btn btn-secondary">Ακύρωση</a>
+            {% endif %}
         </div>
     </form>
 </div>

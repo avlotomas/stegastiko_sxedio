@@ -1,6 +1,5 @@
 from django.db import models
 
-from applications.models import Application
 from cases.models import SubmissionCycle
 from core.models import AuditedModel, Community
 
@@ -29,7 +28,7 @@ class RankingEntry(AuditedModel):
         ALTERNATE = "alternate", "Επιλαχών"
 
     ranking_list = models.ForeignKey(RankingList, on_delete=models.CASCADE, related_name="entries")
-    application = models.ForeignKey(Application, on_delete=models.CASCADE, related_name="ranking_entries")
+    application = models.ForeignKey("plot_applications.PlotApplication", on_delete=models.CASCADE, related_name="ranking_entries")
     proposed_rank = models.PositiveIntegerField(null=True, blank=True)
     finalized_rank = models.PositiveIntegerField(null=True, blank=True)
     status = models.CharField(max_length=16, choices=Status.choices)
@@ -63,7 +62,14 @@ class Allocation(AuditedModel):
     lottery = models.ForeignKey(
         Lottery, on_delete=models.SET_NULL, null=True, blank=True, related_name="allocations"
     )
-    application = models.ForeignKey(Application, on_delete=models.PROTECT, related_name="allocations")
+    # Empty only for allocations made through the removed old citizen application.
+    application = models.ForeignKey(
+        "plot_applications.PlotApplication",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="allocations",
+    )
     parcel = models.ForeignKey(
         "plots.Plot", on_delete=models.PROTECT, related_name="allocations"
     )

@@ -1,0 +1,100 @@
+{% comment %}Modals προσθήκης και επεξεργασίας Τέκνου (Ενότητα 7) και Εισοδήματος (Ενότητα 8) με έλεγχο εγκυρότητας.{% endcomment %}
+<dialog id="child-formset-dialog" class="modal" aria-labelledby="child-formset-dialog-title" data-child-modal>
+    <form method="dialog" class="app-form" data-child-modal-form novalidate>
+        <h2 class="card__title" id="child-formset-dialog-title" data-child-modal-title>Προσθήκη τέκνου</h2>
+        <p class="helptext">«Τέκνα» κατά την Ενότ. 10.Α: ανήλικα μέχρι 18, φοιτητές (μέχρι 23 θήλυ / 25 άρρεν), εθνοφρουροί, ενήλικα ΑμεΑ που δεν μπορούν να διαβιούν ανεξάρτητα.</p>
+        <div class="alert alert--error" data-child-modal-errors hidden></div>
+
+        <div class="form-grid">
+            <div class="form-field">
+                <label class="required" for="modal-child-first_name">Όνομα</label>
+                <input type="text" id="modal-child-first_name" class="input" maxlength="128" data-modal-field="first_name">
+                <ul class="errorlist" data-modal-error="first_name" hidden></ul>
+            </div>
+            <div class="form-field">
+                <label class="required" for="modal-child-last_name">Επίθετο</label>
+                <input type="text" id="modal-child-last_name" class="input" maxlength="128" data-modal-field="last_name">
+                <ul class="errorlist" data-modal-error="last_name" hidden></ul>
+            </div>
+            <div class="form-field">
+                <label class="required" for="modal-child-date_of_birth">Ημερομηνία Γέννησης</label>
+                <input type="date" id="modal-child-date_of_birth" class="input" data-modal-field="date_of_birth">
+                <ul class="errorlist" data-modal-error="date_of_birth" hidden></ul>
+            </div>
+            <div class="form-field">
+                <label for="modal-child-identity_number">Αρ. Δελτίου Ταυτότητας</label>
+                <input type="text" id="modal-child-identity_number" class="input" maxlength="32" data-modal-field="identity_number">
+                <ul class="errorlist" data-modal-error="identity_number" hidden></ul>
+            </div>
+            <div class="form-field">
+                <label class="required" for="modal-child-status">Κατάσταση</label>
+                <select id="modal-child-status" class="input" data-modal-field="status">
+                    <option value="">---------</option>
+                    <option value="minor">Ανήλικο τέκνο μέχρι 18 ετών</option>
+                    <option value="national_guard">Στρατιώτης (Εθνοφρουρός)</option>
+                    <option value="student">Φοιτητής/τρια</option>
+                    <option value="adult_disability">Ενήλικο τέκνο με αναπηρία</option>
+                </select>
+                <ul class="errorlist" data-modal-error="status" hidden></ul>
+            </div>
+            <div class="form-field">
+                <label for="modal-child-sex" data-modal-child-sex-label>Φύλο</label>
+                <select id="modal-child-sex" class="input" data-modal-field="sex">
+                    <option value="">---------</option>
+                    <option value="F">Θήλυ</option>
+                    <option value="M">Άρρεν</option>
+                </select>
+                <p class="helptext">Απαιτείται για φοιτητές (όριο 23 θήλυ / 25 άρρεν, Ενότ. 10.Α).</p>
+                <ul class="errorlist" data-modal-error="sex" hidden></ul>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary" data-child-modal-save>Αποθήκευση</button>
+            <button type="button" class="btn btn-secondary" data-dialog-close>Ακύρωση</button>
+        </div>
+    </form>
+</dialog>
+
+<dialog id="income-formset-dialog" class="modal" aria-labelledby="income-formset-dialog-title" data-income-modal>
+    <form method="dialog" class="app-form" data-income-modal-form novalidate>
+        <h2 class="card__title" id="income-formset-dialog-title" data-income-modal-title>Προσθήκη εισοδήματος</h2>
+        <p class="helptext">«Οικογενειακό Ακαθάριστο Εισόδημα» του έτους που προηγείται της αίτησης (Ενότ. 10.Στ).</p>
+        <div class="alert alert--error" data-income-modal-errors hidden></div>
+
+        <div class="form-grid">
+            <div class="form-field">
+                <label class="required" for="modal-income-member">Μέλος</label>
+                <select id="modal-income-member" class="input" data-modal-field="member"></select>
+                <ul class="errorlist" data-modal-error="member" hidden></ul>
+            </div>
+            <div class="form-field">
+                <label class="required" for="modal-income-employment_type">Κατάσταση / Είδος</label>
+                <select id="modal-income-employment_type" class="input" data-modal-field="employment_type">
+                    <option value="">---------</option>
+                    <option value="employee">Μισθωτός Εργαζόμενος</option>
+                    <option value="self_employed">Αυτοτελώς Εργαζόμενος</option>
+                    <option value="unemployed">Άνεργος</option>
+                    <option value="other">Άλλη πηγή εισοδήματος</option>
+                </select>
+                <ul class="errorlist" data-modal-error="employment_type" hidden></ul>
+            </div>
+            <div class="form-field form-field--wide">
+                <label for="modal-income-description" data-modal-income-description-label>Περιγραφή / Πηγή</label>
+                <input type="text" id="modal-income-description" class="input" maxlength="255" data-modal-field="description">
+                <p class="helptext">Υποχρεωτικό όταν επιλέγεται «Άλλη πηγή εισοδήματος».</p>
+                <ul class="errorlist" data-modal-error="description" hidden></ul>
+            </div>
+            <div class="form-field">
+                <label class="required" for="modal-income-gross_annual_income">Ετήσιο Ποσό (€)</label>
+                <input type="number" id="modal-income-gross_annual_income" class="input" min="0" step="0.01" data-modal-field="gross_annual_income">
+                <ul class="errorlist" data-modal-error="gross_annual_income" hidden></ul>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary" data-income-modal-save>Αποθήκευση</button>
+            <button type="button" class="btn btn-secondary" data-dialog-close>Ακύρωση</button>
+        </div>
+    </form>
+</dialog>

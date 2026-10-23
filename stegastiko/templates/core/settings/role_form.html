@@ -36,53 +36,73 @@
     </div>
 
     <div class="card">
-        <h2 class="card__title">Πρόσβαση ανά λειτουργία και υπολειτουργία</h2>
+        <h2 class="card__title">Δικαιώματα ανά λειτουργία</h2>
         <p class="helptext">
-            Η υπολειτουργία λειτουργεί μόνο όταν ο ρόλος έχει «Προβολή» και στη λειτουργία που ανήκει.
-            Κάθε άλλο είδος πρόσβασης απαιτεί και «Προβολή» στην ίδια γραμμή. «—»: το είδος πρόσβασης δεν
-            εφαρμόζεται στη συγκεκριμένη λειτουργία.
+            Επιλέξτε λειτουργία για να ρυθμίσετε τα δικαιώματα του ρόλου σε αυτήν.
         </p>
-        <div class="table-wrap">
-            <table class="data-table access-matrix" data-access-matrix>
-                <thead>
-                <tr>
-                    <th>Λειτουργία / Υπολειτουργία</th>
-                    <th class="access-matrix__cell">Όλα</th>
-                    {% for action, label in form.access_columns %}
-                    <th class="access-matrix__cell">{{ label }}</th>
-                    {% endfor %}
-                </tr>
-                </thead>
-                <tbody>
-                {% for row in form.matrix_rows %}
-                <tr class="{% if row.is_child %}access-matrix__sub{% else %}access-matrix__function{% endif %}"
-                    data-access-row
-                    data-access-group="{{ row.group }}"
-                    {% if not row.is_child %}data-access-parent{% endif %}>
-                    <td>
-                        <span class="access-matrix__label">{{ row.label }}</span>
-                        {% if row.function.description %}<br><span class="text-muted">{{ row.function.description }}</span>{% endif %}
-                    </td>
-                    <td class="access-matrix__cell">
-                        <input type="checkbox" data-access-row-toggle
-                               aria-label="Όλα: {{ row.label }}"
-                               {% if not can_edit %}disabled{% endif %}>
-                    </td>
-                    {% for cell in row.cells %}
-                    <td class="access-matrix__cell">
-                        {% if cell %}
-                        <label class="visually-hidden" for="{{ cell.id_for_label }}">{{ cell.label }}</label>
-                        {{ cell }}
-                        {% else %}
-                        <span class="text-muted" aria-hidden="true">—</span>
-                        {% endif %}
-                    </td>
-                    {% endfor %}
-                </tr>
+
+        <div class="form-field role-function-picker">
+            <label for="role-function-select">Λειτουργία</label>
+            <select id="role-function-select" class="input" data-role-function-select>
+                {% for panel in form.function_panels %}
+                <option value="{{ panel.code }}">{{ panel.label }}</option>
                 {% endfor %}
-                </tbody>
-            </table>
+            </select>
         </div>
+
+        {% for panel in form.function_panels %}
+        <input type="hidden" name="configured_functions" value="{{ panel.code }}">
+        <div class="role-function-panel"
+             data-role-function-panel="{{ panel.code }}"
+             {% if not forloop.first %}hidden{% endif %}>
+            <h3 class="form-section-title">{{ panel.label }}</h3>
+            {% if panel.description %}
+            <p class="helptext">{{ panel.description }}</p>
+            {% endif %}
+
+            <div class="role-actions-list">
+                {% for action_item in panel.actions %}
+                <div class="role-action-block" data-role-action-block="{{ action_item.action }}">
+                    <label class="checkbox-label role-action-block__toggle" for="{{ action_item.field.id_for_label }}">
+                        {{ action_item.field }}
+                        <span><strong>{{ action_item.label }}</strong></span>
+                    </label>
+
+                    {% if action_item.subsections %}
+                    <div class="role-subsections-panel"
+                         data-subsections-panel="{{ action_item.action }}"
+                         {% if not action_item.is_checked %}hidden{% endif %}>
+                        <p class="helptext role-subsections-panel__hint">
+                            Επιλέξτε τις υποενότητες που θα είναι ορατές (οι υπόλοιπες θα είναι κρυφές):
+                        </p>
+                        <div class="role-subsections-all">
+                            <label class="checkbox-label">
+                                <input type="checkbox"
+                                       class="checkbox"
+                                       data-subsection-all="{{ action_item.action }}"
+                                       aria-label="Όλα ({{ action_item.label }})"
+                                       {% if action_item.all_checked %}checked{% endif %}
+                                       {% if not can_edit %}disabled{% endif %}>
+                                <span><strong>Όλα</strong></span>
+                            </label>
+                        </div>
+                        <div class="role-subsections-grid">
+                            {% for sub in action_item.subsections %}
+                            <label class="checkbox-label role-subsection-item"
+                                   data-subsection-item="{{ action_item.action }}"
+                                   for="{{ sub.field.id_for_label }}">
+                                {{ sub.field }}
+                                <span>{{ sub.label }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
     </div>
 
     <div class="form-actions form-span-all">

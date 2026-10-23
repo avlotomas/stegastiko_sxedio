@@ -1,0 +1,44 @@
+{% comment %}
+Αποστολή email προς το άτομο/αιτητή με δυνατότητα προσθήκης των ελλειπόντων δικαιολογητικών
+και χειροκίνητης επεξεργασίας του κειμένου πριν την αποστολή.
+{% endcomment %}
+<dialog id="plot-application-email-dialog" class="modal modal--wide" aria-labelledby="plot-application-email-dialog-title">
+    <form method="post"
+          action="{% if application and application.pk %}{% url 'plot_applications:email_send' application.pk %}{% endif %}"
+          class="app-form"
+          data-email-form
+          data-email-log-target="[data-plot-application-email-log]"
+          data-email-status-target="[data-plot-application-email-status]"
+          novalidate>
+        {% csrf_token %}
+        <h2 class="card__title" id="plot-application-email-dialog-title">Αποστολή email στον αιτητή</h2>
+        <p class="helptext" data-email-check-label>{% if application and application.protocol_number %}Αίτηση {{ application.protocol_number }}{% endif %}</p>
+
+        {% if not smtp_ready %}
+        <div class="alert alert--warning">
+            Δεν έχει ρυθμιστεί ο διακομιστής SMTP. Ο Διαχειριστής τον ορίζει στις Ρυθμίσεις συστήματος.
+        </div>
+        {% endif %}
+        <div class="alert alert--error" data-email-errors hidden></div>
+
+        <div class="form-grid">
+            {% include "includes/form_field.html" with field=plot_application_email_form.recipient wide=True %}
+            {% include "includes/form_field.html" with field=plot_application_email_form.subject wide=True %}
+            <div class="form-field form-field--wide">
+                <div class="toolbar">
+                    <button type="button"
+                            class="btn btn-secondary btn-sm"
+                            data-insert-missing-documents>
+                        + Προσθήκη ελλειπόντων δικαιολογητικών στο κείμενο
+                    </button>
+                </div>
+            </div>
+            {% include "includes/form_field.html" with field=plot_application_email_form.body wide=True %}
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Αποστολή</button>
+            <button type="button" class="btn btn-secondary" data-dialog-close>Άκυρο</button>
+        </div>
+    </form>
+</dialog>

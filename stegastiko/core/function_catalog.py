@@ -28,6 +28,49 @@ ACCESS_TYPES = (
 )
 ACCESS_TYPE_LABELS = dict(ACCESS_TYPES)
 
+PLOT_APPLICATION_ACTION_LABELS = (
+    (CREATE, "Δημιουργία"),
+    (DELETE, "Διαγραφή"),
+    (VIEW, "Εμφάνιση"),
+    (EDIT, "Επεξεργασία"),
+    (SEND, "Αποστολή emails"),
+)
+PLOT_APPLICATION_ACTION_LABEL_MAP = dict(PLOT_APPLICATION_ACTION_LABELS)
+
+PLOT_APPLICATION_SUBSECTIONS = (
+    ("basic", "Στοιχεία αίτησης (Κοινότητα, Ημερομηνία υποβολής)"),
+    ("section_1", "1. Προσωπικά στοιχεία αιτητή/αιτήτριας"),
+    ("section_2", "2. Τόπος διαμονής αιτητή/αιτήτριας"),
+    ("section_3", "3. Οικογενειακή κατάσταση"),
+    ("section_4", "4. Επαγγελματική και άλλη κατάσταση αιτητή/αιτήτριας"),
+    ("section_5", "5. Προσωπικά στοιχεία συζύγου / συμβίου"),
+    ("section_6", "6. Επαγγελματική και άλλη κατάσταση συζύγου / συμβίου"),
+    ("section_7", "7. Τέκνα αιτητή/τριας που ζουν στην ίδια κατοικία"),
+    ("section_8", "8. Εισοδήματα"),
+    ("section_9", "9. Άλλη ακίνητη ιδιοκτησία"),
+    ("section_10", "10. Αποξένωση ακίνητης ιδιοκτησίας"),
+    ("section_11", "11. Παραχώρηση άλλης κρατικής στεγαστικής βοήθειας"),
+    ("section_12", "12. Υπεύθυνη δήλωση για τη δηλωθείσα ηλεκτρονική διεύθυνση"),
+    ("sworn_declaration", "Ένορκη δήλωση"),
+    ("documents", "Κατάλογος απαιτούμενων δικαιολογητικών εγγράφων"),
+    ("eligibility", "Κατ' αρχήν έλεγχος κριτηρίων"),
+    ("other_applications", "Άλλες αιτήσεις των ίδιων προσώπων"),
+    ("email_history", "Ιστορικό απεσταλμένων email"),
+)
+PLOT_APPLICATION_SUBSECTION_LABELS = dict(PLOT_APPLICATION_SUBSECTIONS)
+PLOT_APPLICATION_SUBSECTION_CODES = tuple(code for code, _ in PLOT_APPLICATION_SUBSECTIONS)
+
+CONFIGURABLE_FUNCTION_CODES = ("plot_applications",)
+
+
+def plot_app_subsection_code(sub_code: str) -> str:
+    return f"plot_app_{sub_code}"
+
+
+PLOT_APPLICATION_SUBFUNCTION_CODES = tuple(
+    plot_app_subsection_code(code) for code in PLOT_APPLICATION_SUBSECTION_CODES
+)
+
 
 @dataclass(frozen=True)
 class AppFunction:
@@ -128,17 +171,20 @@ FUNCTIONS = (
         description="9.1 νέα γνωστοποίηση, επεξεργασία, οριστικοποίηση και έκδοση ανακοίνωσης.",
     ),
     AppFunction(
-        "applications",
-        "Αιτήσεις Πολιτών",
-        (VIEW, CREATE, EDIT),
-        description="Κατάλογος και φάκελος αιτητή, νέα αίτηση, επεξεργασία (Ενότητα 10).",
-    ),
-    AppFunction(
         "plot_applications",
-        "Αιτήσεις παραχώρησης οικοπέδου (Παράρτημα 3)",
-        (VIEW, CREATE, EDIT),
+        "Αίτηση παραχώρησης οικοπέδου",
+        (CREATE, DELETE, VIEW, EDIT, SEND),
         description="Νέα αίτηση πολίτη κατά το έντυπο Παραρτήματος 3 του Σχεδίου, με αυτόματο "
-        "κατ' αρχήν έλεγχο κριτηρίων (Ενότ. 10, 20) και προτεραιοποίηση (Ενότ. 11).",
+        "κατ' αρχήν έλεγχο κριτηρίων (Ενότ. 10, 20), προτεραιοποίηση (Ενότ. 11) και αποστολή email.",
+    ),
+    *(
+        AppFunction(
+            plot_app_subsection_code(sub_code),
+            sub_label,
+            (VIEW, EDIT),
+            parent="plot_applications",
+        )
+        for sub_code, sub_label in PLOT_APPLICATION_SUBSECTIONS
     ),
     AppFunction(
         "persons",
@@ -146,13 +192,6 @@ FUNCTIONS = (
         (VIEW, CREATE, EDIT, DELETE),
         description="Πίνακας καταχωρημένων ατόμων (10.3.1)· ο Αρ. Δελτίου Ταυτότητας δεν αλλάζει "
         "και άτομο με αιτήσεις δεν διαγράφεται.",
-    ),
-    AppFunction(
-        "application_import",
-        "Εισαγωγή αίτησης από Excel",
-        (IMPORT,),
-        parent="applications",
-        description="Αρχείο Παραρτήματος 3: προεπισκόπηση και αποθήκευση.",
     ),
     AppFunction(
         "settings",
@@ -215,8 +254,19 @@ def function_label(function: AppFunction) -> str:
     return f"{function.label} — {get_case_section_label(function.case_section)}"
 
 
+def action_label_for(code: str, action: str) -> str:
+    if code == "plot_applications" or code in PLOT_APPLICATION_SUBFUNCTION_CODES:
+        return PLOT_APPLICATION_ACTION_LABEL_MAP.get(
+            action, ACCESS_TYPE_LABELS.get(action, action)
+        )
+    return ACCESS_TYPE_LABELS.get(action, action)
+
+
 def grant_label(key: str) -> str:
     code, _, action = key.partition(":")
     function = FUNCTIONS_BY_CODE.get(code)
     name = function_label(function) if function else code
-    return f"{name}: {ACCESS_TYPE_LABELS.get(action, action)}"
+    if function and function.parent == "plot_applications":
+        parent = FUNCTIONS_BY_CODE["plot_applications"]
+        name = f"{function_label(parent)} — {name}"
+    return f"{name}: {action_label_for(code, action)}"

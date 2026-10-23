@@ -3,6 +3,8 @@ from urllib.parse import urlparse
 
 from django.conf import settings
 from django.middleware.csrf import CsrfViewMiddleware
+from django.shortcuts import redirect
+from django.urls import reverse
 
 
 _current_user = ContextVar("current_user", default=None)
@@ -41,8 +43,20 @@ class CurrentUserMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        token = _current_user.set(getattr(request, "user", None))
+        user = getattr(request, "user", None)
+        token = _current_user.set(user)
         try:
+            if user and user.is_authenticated:
+                from core.models import user_must_change_password
+
+                if user_must_change_password(user):
+                    account_url = reverse("account")
+                    logout_url = reverse("logout")
+                    static_url = getattr(settings, "STATIC_URL", "/static/")
+                    if request.path not in (account_url, logout_url) and not (
+                        static_url and request.path.startswith(static_url)
+                    ):
+                        return redirect("account")
             return self.get_response(request)
         finally:
             _current_user.reset(token)

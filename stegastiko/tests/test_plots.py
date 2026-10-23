@@ -8,13 +8,14 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.urls import reverse
 
-from applications.models import Application, Person
+from applications.models import Person
 from cases.models import ApprovedDesignPlot, Case, InfrastructureCheck, SubmissionCycle, YesNo
 from cases.services import completion_readiness
 from core.models import Community
 from plots.models import Plot
 from plots.services import complete_case, publish_announcement
 from tests.fixtures.cycles import make_cycle
+from tests.fixtures.plot_applications import make_plot_application
 
 JSON = {"HTTP_ACCEPT": "application/json"}
 
@@ -80,10 +81,6 @@ def _ready_case(community, number="CASE-ABG-01", plots=("1", "2")):
 def _allocate(plot, community):
     from allocation.models import Allocation
 
-    cycle = make_cycle(
-        community,
-        announcement_date=date(2027, 6, 1),
-    )
     person = Person.objects.create(
         identity_number="ID-1",
         first_name="Α",
@@ -94,14 +91,7 @@ def _allocate(plot, community):
         parents_birth_place="Λευκωσία",
         parents_birth_country="Κύπρος",
     )
-    application = Application.objects.create(
-        community=community,
-        person=person,
-        folder_number="12001001",
-        submitted_on=date(2027, 6, 10),
-        family_type=Application.FamilyType.OTHER,
-        applicant_email="a@example.org",
-    )
+    application = make_plot_application(community, person)
     return Allocation.objects.create(application=application, parcel=plot)
 
 

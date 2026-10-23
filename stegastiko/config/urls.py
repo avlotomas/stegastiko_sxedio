@@ -21,7 +21,6 @@ handler403 = "core.views.permission_denied"
 
 urlpatterns = [
     path("cases/", include("cases.urls")),
-    path("applications/", include("applications.urls")),
     path("plot-applications/", include("plot_applications.urls")),
     path("persons/", include("applications.person_urls")),
     path("plots/", include("plots.urls")),

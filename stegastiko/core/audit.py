@@ -2,7 +2,12 @@ from django.db.models.signals import m2m_changed, post_delete, post_save, pre_sa
 from django.dispatch import receiver
 
 from core.middleware import get_current_user
-from core.models import ActionHistory, AuditedModel, serialize_field_value
+from core.models import (
+    ActionHistory,
+    AuditedModel,
+    serialize_field_value,
+    user_must_change_password,
+)
 
 
 def _is_audited_instance(instance):
@@ -39,7 +44,9 @@ USER_AUDIT_FIELDS = ("username", "first_name", "last_name", "email", "is_active"
 
 
 def user_audit_snapshot(user):
-    return {name: getattr(user, name) for name in USER_AUDIT_FIELDS}
+    snapshot = {name: getattr(user, name) for name in USER_AUDIT_FIELDS}
+    snapshot["must_change_password"] = user_must_change_password(user)
+    return snapshot
 
 
 def record_user_changes(user, previous=None, password_changed=False):
@@ -52,9 +59,21 @@ def record_user_changes(user, previous=None, password_changed=False):
     }
     if previous is None:
         ActionHistory.objects.create(action=ActionHistory.ActionType.CREATE, **base)
+        if user_must_change_password(user):
+            ActionHistory.objects.create(
+                action=ActionHistory.ActionType.UPDATE,
+                field_name="must_change_password",
+                old_value="False",
+                new_value="True",
+                **base,
+            )
     else:
         for name, old_value in previous.items():
-            new_value = getattr(user, name)
+            new_value = (
+                user_must_change_password(user)
+                if name == "must_change_password"
+                else getattr(user, name)
+            )
             if old_value != new_value:
                 ActionHistory.objects.create(
                     action=ActionHistory.ActionType.UPDATE,

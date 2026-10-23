@@ -1,11 +1,26 @@
+from datetime import timedelta
+
+from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
+from django.db.models import Q
+from django.utils import timezone
 
-from core.models import Community
-from core.services import get_setting
+from cases.models import CommunicationStatus
+from core.models import Communication, Community
+from core.services import get_setting, require_smtp_configured, send_email
+from plot_applications.documents import DOCUMENT_GROUPS, applicable_documents
 from plot_applications.models import PlotApplication
+from plot_applications.rules import parameter
 
 PROTOCOL_NUMBER_MAX_ATTEMPTS = 5
+PLOT_APPLICATION_EMAIL_SUBJECT_KEY = "plotApplicationEmailSubject"
+PLOT_APPLICATION_EMAIL_SUBJECT_DEFAULT = (
+    "Αίτηση παραχώρησης οικοπέδου {protocol_number} — Κοινότητα {community}"
+)
+EMAIL_DEDUPE_SECONDS = 120
+REF_PLOT_APPLICATION_EMAIL = "plot_application_email"
+MISSING_DOCUMENTS_HEADING = "Ελλείποντα δικαιολογητικά έγγραφα:"
 
 
 def _protocol_base(community) -> str:
@@ -48,3 +63,127 @@ def save_with_new_protocol_number(application: PlotApplication) -> PlotApplicati
             continue
         return application
     raise ValidationError("Δεν ήταν δυνατή η απόδοση μοναδικού Αρ. Πρωτοκόλλου. Δοκιμάστε ξανά.")
+
+
+def plot_application_email_subject(application: PlotApplication) -> str:
+    """Προκαθορισμένο θέμα email για αίτηση παραχώρησης οικοπέδου."""
+    template = get_setting(
+        PLOT_APPLICATION_EMAIL_SUBJECT_KEY, PLOT_APPLICATION_EMAIL_SUBJECT_DEFAULT
+    )
+    community_name = application.community.name if application.community_id else ""
+    return template.replace("{protocol_number}", application.protocol_number or "").replace(
+        "{community}", community_name
+    )
+
+
+def missing_documents_for_application(application: PlotApplication) -> list[tuple[str, str]]:
+    """Εφαρμοζόμενα δικαιολογητικά από τον Κατάλογο που δεν έχουν επιλεγεί (unchecked checkboxes)."""
+    applicable = applicable_documents(application, parameter("plotApp.largeFamilyChildren"))
+    attached = set(application.attached_documents or [])
+    return [
+        (code, label)
+        for _, items in DOCUMENT_GROUPS
+        for code, label in items
+        if code in applicable and code not in attached
+    ]
+
+
+def missing_documents_email_text(application: PlotApplication) -> str:
+    """Κείμενο με τα ελλείποντα δικαιολογητικά έγγραφα για προσθήκη στο σώμα του email."""
+    missing = [label for _, label in missing_documents_for_application(application)]
+    if not missing:
+        return ""
+    lines = [MISSING_DOCUMENTS_HEADING]
+    lines.extend(f"- {label}" for label in missing)
+    return "\n".join(lines)
+
+
+def send_plot_application_email(
+    application: PlotApplication,
+    subject: str,
+    body: str,
+    recipient: str | None = None,
+) -> Communication:
+    """Αποστολή email προς το άτομο/αιτητή της αίτησης και καταγραφή στο ιστορικό (Communication)."""
+    target_email = (recipient if recipient is not None else (application.email or "")).strip()
+    if not target_email:
+        raise ValidationError("Η αίτηση δεν έχει ηλεκτρονική διεύθυνση επικοινωνίας.")
+    subject = (subject or "").strip()
+    if not subject:
+        raise ValidationError("Το θέμα του email είναι κενό.")
+    body = (body or "").strip()
+    if not body:
+        raise ValidationError("Το κείμενο του email είναι κενό.")
+    require_smtp_configured()
+
+    owner_type = ContentType.objects.get_for_model(PlotApplication)
+    with transaction.atomic():
+        PlotApplication.objects.select_for_update().filter(pk=application.pk).exists()
+        since = timezone.now() - timedelta(seconds=EMAIL_DEDUPE_SECONDS)
+        duplicate = Communication.objects.filter(
+            content_type=owner_type,
+            object_id=application.pk,
+            recipient=target_email,
+            subject=subject,
+            body=body,
+            status__in=(CommunicationStatus.SENDING, CommunicationStatus.SENT),
+            created_at__gte=since,
+        ).exists()
+        if duplicate:
+            raise ValidationError(
+                "Το ίδιο email έχει ήδη σταλεί για αυτή την αίτηση πριν από λίγο."
+            )
+        communication = Communication(
+            content_type=owner_type,
+            object_id=application.pk,
+            recipient=target_email,
+            subject=subject,
+            body=body,
+            status=CommunicationStatus.SENDING,
+        )
+        communication._section_ref = REF_PLOT_APPLICATION_EMAIL
+        communication.save()
+
+    communication._section_ref = REF_PLOT_APPLICATION_EMAIL
+    try:
+        send_email(target_email, subject, body)
+    except Exception:
+        communication.status = CommunicationStatus.FAILED
+        communication.save()
+        raise
+    communication.status = CommunicationStatus.SENT
+    communication.sent_at = timezone.now()
+    communication.save()
+    return communication
+
+
+def plot_application_communications(application: PlotApplication):
+    """Ιστορικό απεσταλμένων email μιας αίτησης παραχώρησης οικοπέδου."""
+    if not application or not application.pk:
+        return Communication.objects.none()
+    return (
+        Communication.objects.filter(
+            content_type=ContentType.objects.get_for_model(PlotApplication),
+            object_id=application.pk,
+        )
+        .prefetch_related("content_object")
+        .order_by("-created_at", "-id")
+    )
+
+
+def person_communications(person):
+    """Ιστορικό απεσταλμένων email για όλες τις αιτήσεις παραχώρησης οικοπέδου του ατόμου."""
+    if not person or not person.pk:
+        return Communication.objects.none()
+    app_ids = PlotApplication.objects.filter(
+        Q(applicant=person) | Q(spouse=person)
+    ).values("pk")
+    return (
+        Communication.objects.filter(
+            content_type=ContentType.objects.get_for_model(PlotApplication),
+            object_id__in=app_ids,
+        )
+        .prefetch_related("content_object")
+        .order_by("-created_at", "-id")
+    )
+

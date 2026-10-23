@@ -16,7 +16,7 @@ from plot_applications.models import (
     PlotApplication,
     ResidenceCategory,
 )
-from plot_applications.rules import apply_evaluation, evaluate
+from plot_applications.rules import apply_evaluation, evaluate, required_documents
 from plots.models import Plot
 from tests.fixtures.cycles import make_cycle
 
@@ -73,7 +73,9 @@ def _application(cycle, *, couple=True, income=Decimal("30000"), **extra):
         residence_category=ResidenceCategory.AUTOCHTHON,
         residence_community="ΑΒΓ",
         family_status=(
-            PlotApplication.FamilyStatus.MARRIED if couple else PlotApplication.FamilyStatus.SINGLE_PARENT
+            PlotApplication.FamilyStatus.COUPLE_WITHOUT_CHILDREN
+            if couple
+            else PlotApplication.FamilyStatus.SINGLE_PARENT
         ),
         single_parent_status="" if couple else PlotApplication.SingleParentStatus.DIVORCED,
         has_dwelling=False,
@@ -97,6 +99,12 @@ def _application(cycle, *, couple=True, income=Decimal("30000"), **extra):
     IncomeDeclaration.objects.create(
         application=application, member=IncomeDeclaration.Member.APPLICANT, gross_annual_income=income
     )
+    return attach_required_documents(application)
+
+
+def attach_required_documents(application):
+    application.attached_documents = [codes[0] for codes, _ in required_documents(application)]
+    application.save()
     return application
 
 
@@ -126,6 +134,7 @@ class TestRules:
             application=application, first_name="Τ", last_name="Τ", date_of_birth=date(2015, 1, 1),
             status=ApplicationChild.Status.MINOR,
         )
+        attach_required_documents(application)
         outcome = evaluate(application)
         assert outcome["overall"] == "pass"
         assert outcome["family_members_count"] == 2
@@ -172,20 +181,45 @@ class TestRules:
         application.residence_community = " "
         assert _results(application)["residence"] == "pending"
 
-    def test_repatriated_years(self, cycle):
+    def test_repatriated_passes_without_period_dates(self, cycle):
+        application = _application(cycle, residence_category=ResidenceCategory.REPATRIATED)
+        assert _results(application)["residence"] == "pass"
+        assert evaluate(application)["priority_primary"] == 4
+
+    def test_internal_emigrant_passes_without_residence_period_dates(self, cycle):
         application = _application(
-            cycle, residence_category=ResidenceCategory.REPATRIATED,
-            abroad_from=date(2010, 1, 1), abroad_to=date(2022, 1, 1),
-            community_residence_since=date(2022, 6, 1),
+            cycle,
+            residence_category=ResidenceCategory.INTERNAL_EMIGRANT,
+            origin_parent_description="Πατέρας από ΑΒΓ",
         )
         assert _results(application)["residence"] == "pass"
-        application.community_residence_since = date(2024, 6, 1)
-        assert _results(application)["residence"] == "fail"
+        application.origin_parent_description = " "
+        assert _results(application)["residence"] == "pending"
 
     def test_property_yes_fails_and_unanswered_is_pending(self, cycle):
         application = _application(cycle, has_residential_land=True, has_alienated_property=None)
         results = _results(application)
         assert results["land"] == "fail" and results["alienation"] == "pending"
+
+    def test_missing_required_documents_fail_the_application(self, cycle):
+        # Ενότ. 5, 20.2: αίτηση που χρειάζεται συμπλήρωση απορρίπτεται.
+        application = _application(cycle)
+        application.attached_documents = [c for c in application.attached_documents if c not in ("C1", "D3")]
+        application.save()
+        outcome = evaluate(application)
+        documents = next(c for c in outcome["criteria"] if c.code == "documents")
+        assert documents.result == "fail" and "ΑΗΚ" in documents.note
+        assert outcome["overall"] == "fail"
+
+    def test_required_documents_follow_the_declared_situation(self, cycle):
+        application = _application(cycle, residence_category=ResidenceCategory.NEIGHBOURING)
+        ApplicationChild.objects.create(
+            application=application, first_name="Φ", last_name="Τ", date_of_birth=date(2003, 1, 1),
+            sex="M", status=ApplicationChild.Status.STUDENT,
+        )
+        codes = {codes[0] for codes, _ in required_documents(application)}
+        assert {"B1", "B11", "B12", "C9", "C10"} <= codes
+        assert not {"C1", "C2", "B2", "B13"} & codes
 
     def test_no_deadline_criterion(self, cycle):
         # Η Αίτηση δεν συνδέεται με Γνωστοποιήσεις.
@@ -213,15 +247,14 @@ def _post_data(cycle, **overrides):
         "main-email": "couple@example.org",
         "main-residence_category": "autochthon",
         "main-residence_community": "ΑΒΓ",
-        "main-family_status": "married",
+        "main-family_status": "couple_with_children",
         "main-has_dwelling": "False",
         "main-has_residential_land": "False",
         "main-has_alienated_property": "False",
         "main-previous_housing_aid": "False",
         "main-applicant_signed": "on",
         "main-spouse_signed": "on",
-        "main-email_declaration_accepted": "on",
-        "main-attached_documents": ["A1", "B1"],
+        "main-attached_documents": ["A1", "B1", "B11", "C1", "C2", "D1", "D2", "D3", "D4", "D5", "E1", "E4", "E6"],
         "applicant-identity_number": "900001",
         "applicant-first_name": "Ανδρέας",
         "applicant-last_name": "Ανδρέου",
@@ -249,13 +282,20 @@ def _post_data(cycle, **overrides):
         "children-0-last_name": "Ανδρέου",
         "children-0-date_of_birth": "2020-01-01",
         "children-0-status": "minor",
-        "income_applicant-employment_type": "employee",
-        "income_applicant-gross_annual_income": "28000",
-        "income_spouse-employment_type": "employee",
-        "income_spouse-gross_annual_income": "15000",
-        "income_spouse-other_income_1_description": "Ενοίκια",
-        "income_spouse-other_income_1_amount": "2000",
-        "income_other-gross_annual_income": "",
+        "incomes-TOTAL_FORMS": "3",
+        "incomes-INITIAL_FORMS": "0",
+        "incomes-0-member": "applicant",
+        "incomes-0-employment_type": "employee",
+        "incomes-0-description": "Μισθός",
+        "incomes-0-gross_annual_income": "28000",
+        "incomes-1-member": "spouse",
+        "incomes-1-employment_type": "employee",
+        "incomes-1-description": "Μισθός",
+        "incomes-1-gross_annual_income": "15000",
+        "incomes-2-member": "spouse",
+        "incomes-2-employment_type": "other",
+        "incomes-2-description": "Ενοίκια",
+        "incomes-2-gross_annual_income": "2000",
     }
     data.update(overrides)
     return data
@@ -271,7 +311,7 @@ class TestViews:
         application = PlotApplication.objects.get()
         assert application.protocol_number == "Π3-007-001"
         assert application.spouse.identity_number == "900002"
-        assert application.attached_documents == ["A1", "B1"]
+        assert application.attached_documents == ["A1", "B1", "B11", "C1", "C2", "D1", "D2", "D3", "D4", "D5", "E1", "E4", "E6"]
         assert application.family_income_total == Decimal("45000")
         assert application.family_members_count == 3
         assert application.eligibility_result == "pass"
@@ -291,7 +331,7 @@ class TestViews:
     def test_single_parent_ignores_spouse_and_reuses_person(self, staff_client, cycle, available_plot):
         existing = _person("900001", born=date(1992, 3, 4))
         data = _post_data(
-            cycle, **{"main-family_status": "single_parent", "main-single_parent_status": "widowed"}
+            cycle, **{"main-family_status": "single_parent", "main-single_parent_status": "unmarried"}
         )
         for name in ("first_name", "last_name", "date_of_birth", "birth_place"):
             data[f"applicant-{name}"] = ""
@@ -300,7 +340,23 @@ class TestViews:
         application = PlotApplication.objects.get()
         assert application.applicant == existing
         assert application.spouse is None
+        assert application.single_parent_status == "unmarried"
         assert not application.incomes.filter(member="spouse").exists()
+
+    def test_family_status_and_single_parent_status_choices(self, staff_client):
+        response = staff_client.get(reverse("plot_applications:create"))
+        main = response.context["forms"].main
+        assert main.fields["family_status"].choices == [
+            ("couple_with_children", "Ζεύγος με τέκνα"),
+            ("couple_without_children", "Ζεύγος χωρίς τέκνα"),
+            ("single_parent", "Μονογονεϊκή οικογένεια"),
+        ]
+        assert main.fields["single_parent_status"].choices == [
+            ("unmarried", "Άγαμος/η"),
+            ("widowed", "Χήρος/α"),
+            ("divorced", "Διαζευγμένος/η"),
+            ("other", "Άλλο"),
+        ]
 
     @pytest.mark.parametrize("category", ["autochthon", "displaced", "repatriated"])
     def test_residence_community_locked_to_application_community(
@@ -383,6 +439,13 @@ class TestViews:
                      "applicant_party-mobile_phone", "main-email"):
             assert f'class="required" for="id_{name}"' in html or f'for="id_{name}" class="required"' in html, name
 
+    def test_main_form_fields_do_not_repeat_labels_as_help_text(self, staff_client):
+        response = staff_client.get(reverse("plot_applications:create"))
+        form = response.context["forms"].main
+        assert all(not field.help_text for field in form.fields.values())
+        html = response.content.decode()
+        assert html.count("Αναλυτική περιγραφή / λοιπές πληροφορίες") == 1
+
     def test_appendix1_covers_all_districts(self):
         from core.appendix1 import appendix1_choices, appendix1_communities
 
@@ -436,3 +499,623 @@ class TestViews:
         application = _application(cycle)
         assert delete_refusal(application.applicant)
         assert delete_refusal(application.spouse)
+
+    def test_draft_save_requires_only_five_fields_and_can_be_completed_later(
+        self, staff_client, cycle, available_plot
+    ):
+        html = staff_client.get(reverse("plot_applications:create")).content.decode()
+        assert "Προσωρινή αποθήκευση" in html
+        assert 'name="save_draft"' in html
+
+        draft_data = {
+            "save_draft": "1",
+            "main-community": cycle.communities.get().pk,
+            "applicant-identity_number": "900001",
+            "applicant-first_name": "Ανδρέας",
+            "applicant-last_name": "Ανδρέου",
+            "applicant_party-mobile_phone": "99123456",
+        }
+        response = staff_client.post(reverse("plot_applications:create"), draft_data)
+        assert response.status_code == 302
+        application = PlotApplication.objects.get()
+        assert application.protocol_number == "Π3-007-001"
+        assert application.applicant.identity_number == "900001"
+        assert application.applicant.first_name == "Ανδρέας"
+        assert application.applicant.last_name == "Ανδρέου"
+        assert application.applicant.date_of_birth is None
+        assert application.applicant_party.mobile_phone == "99123456"
+        assert application.submitted_on is None
+        assert staff_client.get(reverse("plot_applications:detail", args=[application.pk])).status_code == 200
+
+        # Completing the temporarily saved application with full save updates the person and application.
+        full_data = _post_data(cycle)
+        response = staff_client.post(reverse("plot_applications:edit", args=[application.pk]), full_data)
+        assert response.status_code == 302
+        application.refresh_from_db()
+        application.applicant.refresh_from_db()
+        assert application.applicant.date_of_birth == date(1992, 3, 4)
+        assert application.applicant.birth_place == "Λευκωσία"
+        assert application.eligibility_result == "pass"
+
+    @pytest.mark.parametrize(
+        ("missing_field", "error_form"),
+        [
+            ("main-community", "main"),
+            ("applicant-identity_number", "applicant"),
+            ("applicant-first_name", "applicant"),
+            ("applicant-last_name", "applicant"),
+            ("applicant_party-mobile_phone", "applicant_party"),
+        ],
+    )
+    def test_draft_save_validates_the_five_required_fields(
+        self, staff_client, cycle, available_plot, missing_field, error_form
+    ):
+        draft_data = {
+            "save_draft": "1",
+            "main-community": cycle.communities.get().pk,
+            "applicant-identity_number": "900001",
+            "applicant-first_name": "Ανδρέας",
+            "applicant-last_name": "Ανδρέου",
+            "applicant_party-mobile_phone": "99123456",
+            missing_field: "",
+        }
+        response = staff_client.post(reverse("plot_applications:create"), draft_data)
+        assert response.status_code == 200
+        field_name = missing_field.split("-", 1)[1]
+        assert field_name in getattr(response.context["forms"], error_form).errors
+        assert not PlotApplication.objects.exists()
+
+    def test_same_person_can_submit_multiple_applications_for_same_community(
+        self, staff_client, cycle, available_plot
+    ):
+        community = cycle.communities.get()
+        for expected_protocol in ("Π3-007-001", "Π3-007-002"):
+            response = staff_client.post(reverse("plot_applications:create"), _post_data(cycle))
+            assert response.status_code == 302
+            assert PlotApplication.objects.order_by("-id").first().protocol_number == expected_protocol
+
+        draft_data = {
+            "save_draft": "1",
+            "main-community": community.pk,
+            "applicant-identity_number": "900001",
+            "applicant-first_name": "Ανδρέας",
+            "applicant-last_name": "Ανδρέου",
+            "applicant_party-mobile_phone": "99123456",
+        }
+        response = staff_client.post(reverse("plot_applications:create"), draft_data)
+        assert response.status_code == 302
+        assert PlotApplication.objects.filter(community=community, applicant__identity_number="900001").count() == 3
+        assert PlotApplication.objects.order_by("-id").first().protocol_number == "Π3-007-003"
+
+    def test_children_formset_renders_as_table(self, staff_client):
+        html = staff_client.get(reverse("plot_applications:create")).content.decode()
+        assert 'class="data-table data-table--inline-edit" data-formset-table' in html
+        assert "data-formset-edit" in html
+        assert "data-formset-remove" in html
+        assert "data-child-modal" in html
+        assert "data-income-modal" in html
+        for header in ("Όνομα", "Επίθετο", "Ημερομηνία Γέννησης", "Αρ. Δελτίου Ταυτότητας", "Φύλο", "Κατάσταση", "Ενέργειες"):
+            assert f">{header}<" in html
+
+    def test_child_and_income_validations(self, staff_client, cycle, available_plot):
+        # 1. Minor child aged >= 18 is rejected
+        overage_minor = _post_data(cycle, **{"children-0-date_of_birth": "2005-01-01", "children-0-status": "minor"})
+        resp = staff_client.post(reverse("plot_applications:create"), overage_minor)
+        assert resp.status_code == 200
+        assert "date_of_birth" in resp.context["forms"].children.forms[0].errors
+
+        # 2. Student without sex or exceeding sex-specific age limit (23F / 25M) is rejected
+        student_no_sex = _post_data(
+            cycle, **{"children-0-date_of_birth": "2005-01-01", "children-0-status": "student", "children-0-sex": ""}
+        )
+        resp = staff_client.post(reverse("plot_applications:create"), student_no_sex)
+        assert resp.status_code == 200
+        assert "sex" in resp.context["forms"].children.forms[0].errors
+
+        student_female_24 = _post_data(
+            cycle, **{"children-0-date_of_birth": "2002-01-01", "children-0-status": "student", "children-0-sex": "F"}
+        )
+        resp = staff_client.post(reverse("plot_applications:create"), student_female_24)
+        assert resp.status_code == 200
+        assert "date_of_birth" in resp.context["forms"].children.forms[0].errors
+
+        # 3. Adult disability child aged < 18 is rejected
+        minor_as_adult_disability = _post_data(
+            cycle, **{"children-0-date_of_birth": "2015-01-01", "children-0-status": "adult_disability"}
+        )
+        resp = staff_client.post(reverse("plot_applications:create"), minor_as_adult_disability)
+        assert resp.status_code == 200
+        assert "date_of_birth" in resp.context["forms"].children.forms[0].errors
+
+        # 4. Future date of birth (after submitted_on) is rejected
+        future_dob = _post_data(cycle, **{"children-0-date_of_birth": "2027-01-01", "children-0-status": "minor"})
+        resp = staff_client.post(reverse("plot_applications:create"), future_dob)
+        assert resp.status_code == 200
+        assert "date_of_birth" in resp.context["forms"].children.forms[0].errors
+
+        # 5. Child identity number matching applicant or spouse is rejected
+        dup_parent_id = _post_data(cycle, **{"children-0-identity_number": "900001"})
+        resp = staff_client.post(reverse("plot_applications:create"), dup_parent_id)
+        assert resp.status_code == 200
+        assert "identity_number" in resp.context["forms"].children.forms[0].errors
+
+        # 6. Income row without employment_type or with 0 amount for employee is rejected
+        missing_emp_type = _post_data(cycle, **{"incomes-0-employment_type": ""})
+        resp = staff_client.post(reverse("plot_applications:create"), missing_emp_type)
+        assert resp.status_code == 200
+        assert "employment_type" in resp.context["forms"].incomes.forms[0].errors
+
+        zero_employee_income = _post_data(cycle, **{"incomes-0-gross_annual_income": "0"})
+        resp = staff_client.post(reverse("plot_applications:create"), zero_employee_income)
+        assert resp.status_code == 200
+        assert "gross_annual_income" in resp.context["forms"].incomes.forms[0].errors
+
+        # 7. Income row with "other" source without description is rejected
+        other_no_desc = _post_data(cycle, **{"incomes-2-description": " "})
+        resp = staff_client.post(reverse("plot_applications:create"), other_no_desc)
+        assert resp.status_code == 200
+        assert "description" in resp.context["forms"].incomes.forms[2].errors
+
+    def test_incomes_table_supports_multiple_incomes_per_member_and_child_linkage(
+        self, staff_client, cycle, available_plot
+    ):
+        data = _post_data(
+            cycle,
+            **{
+                "incomes-TOTAL_FORMS": "5",
+                "incomes-INITIAL_FORMS": "0",
+                "incomes-0-member": "applicant",
+                "incomes-0-employment_type": "employee",
+                "incomes-0-description": "Κύριος μισθός",
+                "incomes-0-gross_annual_income": "20000",
+                "incomes-1-member": "applicant",
+                "incomes-1-employment_type": "other",
+                "incomes-1-description": "Μερίσματα",
+                "incomes-1-gross_annual_income": "3000",
+                "incomes-2-member": "spouse",
+                "incomes-2-employment_type": "employee",
+                "incomes-2-description": "Μισθός",
+                "incomes-2-gross_annual_income": "12000",
+                "incomes-3-member": "spouse",
+                "incomes-3-employment_type": "other",
+                "incomes-3-description": "Ενοίκια",
+                "incomes-3-gross_annual_income": "2000",
+                "incomes-4-member": "child:0",
+                "incomes-4-employment_type": "employee",
+                "incomes-4-description": "Μερική απασχόληση",
+                "incomes-4-gross_annual_income": "1500",
+                "main-attached_documents": [
+                    "A1", "B1", "B11", "C1", "C2", "D1", "D2", "D3", "D4", "D5",
+                    "E1", "E3", "E4", "E6", "E7",
+                ],
+            },
+        )
+        response = staff_client.post(reverse("plot_applications:create"), data)
+        assert response.status_code == 302
+        application = PlotApplication.objects.get()
+        assert application.incomes.count() == 5
+        assert application.incomes.filter(member="applicant").count() == 2
+        assert application.incomes.filter(member="spouse").count() == 2
+        child_income = application.incomes.get(member="child")
+        assert child_income.child == application.children.get()
+        assert child_income.member_label == "Τέκνο: Νίκος Ανδρέου"
+        assert application.family_income_total == Decimal("38500")
+        assert application.eligibility_result == "pass"
+
+        detail_html = staff_client.get(reverse("plot_applications:detail", args=[application.pk])).content.decode()
+        assert "Τέκνο: Νίκος Ανδρέου" in detail_html
+        assert "Μερίσματα" in detail_html
+        assert "Ενοίκια" in detail_html
+        assert "Οικογένεια 3 ατόμων" in detail_html
+        assert "50.000,00" in detail_html
+
+    @pytest.mark.parametrize(
+        ("couple", "children_count", "expected_members", "expected_limit"),
+        [
+            (True, 0, 2, Decimal("45000")),
+            (False, 1, 2, Decimal("45000")),
+            (True, 1, 3, Decimal("50000")),
+            (False, 2, 3, Decimal("50000")),
+            (True, 2, 4, Decimal("55000")),
+            (True, 3, 5, Decimal("65000")),
+            (True, 4, 6, Decimal("65000")),
+        ],
+    )
+    def test_income_criterion_by_family_composition(
+        self, cycle, couple, children_count, expected_members, expected_limit
+    ):
+        application = _application(cycle, couple=couple, income=Decimal("0"))
+        application.incomes.all().delete()
+        for idx in range(children_count):
+            ApplicationChild.objects.create(
+                application=application,
+                first_name=f"Τ{idx}",
+                last_name="Τ",
+                date_of_birth=date(2015, 1, 1),
+                status=ApplicationChild.Status.MINOR,
+            )
+        # Split income across multiple entries summing to exactly expected_limit
+        IncomeDeclaration.objects.create(
+            application=application,
+            member=IncomeDeclaration.Member.APPLICANT,
+            employment_type=IncomeDeclaration.EmploymentType.EMPLOYEE,
+            gross_annual_income=expected_limit - Decimal("5000"),
+        )
+        IncomeDeclaration.objects.create(
+            application=application,
+            member=IncomeDeclaration.Member.APPLICANT,
+            employment_type=IncomeDeclaration.EmploymentType.OTHER_SOURCE,
+            description="Ενοίκια",
+            gross_annual_income=Decimal("5000"),
+        )
+        outcome = evaluate(application)
+        assert outcome["family_members_count"] == expected_members
+        assert outcome["family_income_total"] == expected_limit
+        assert outcome["income_limit"] == expected_limit
+        assert outcome["income_criterion"].result == "pass"
+
+        # Exceeding the limit by €0.01 fails the income criterion
+        IncomeDeclaration.objects.create(
+            application=application,
+            member=IncomeDeclaration.Member.OTHER,
+            employment_type=IncomeDeclaration.EmploymentType.OTHER_SOURCE,
+            description="Μερίσματα",
+            gross_annual_income=Decimal("0.01"),
+        )
+        outcome = evaluate(application)
+        assert outcome["family_income_total"] == expected_limit + Decimal("0.01")
+        assert outcome["income_criterion"].result == "fail"
+
+    def test_form_renders_live_income_criterion_summary(self, staff_client):
+        html = staff_client.get(reverse("plot_applications:create")).content.decode()
+        assert "data-income-summary" in html
+        assert "data-income-composition" in html
+        assert "data-income-limit" in html
+        assert "data-income-criterion-badge" in html
+        assert 'id="income-parameters"' in html
+
+    def test_alienated_property_is_section_10_and_subsequent_sections_renumbered(self, staff_client):
+        html = staff_client.get(reverse("plot_applications:create")).content.decode()
+        assert "Υποβολή άλλης αίτησης στο πλαίσιο του Σχεδίου" not in html
+        assert "Υπογραφές αιτητή / αιτητών" not in html
+        assert "email_declaration_accepted" not in html
+        assert "Για επίσημη χρήση" not in html
+        for removed_field in ("received_at", "received_by", "district_file_number", "comments"):
+            assert f'name="main-{removed_field}"' not in html
+        expected_headings = (
+            "9. Άλλη ακίνητη ιδιοκτησία",
+            "10. Αποξένωση ακίνητης ιδιοκτησίας",
+            "11. Παραχώρηση άλλης κρατικής στεγαστικής βοήθειας",
+            "12. Υπεύθυνη δήλωση για τη δηλωθείσα ηλεκτρονική διεύθυνση",
+        )
+        positions = [html.index(heading) for heading in expected_headings]
+        assert positions == sorted(positions)
+
+    def test_document_labels_have_no_condition_prefixes_and_a3_removed(self):
+        from plot_applications.documents import DOCUMENT_LABELS
+
+        assert "A3" not in DOCUMENT_LABELS
+        assert "C7" in DOCUMENT_LABELS
+        forbidden_prefixes = (
+            "Ζεύγος:",
+            "Εκτοπισμένος/η:",
+            "Επαναπατρισθείς:",
+            "Πολίτης ΕΕ",
+            "Μονογονεϊκή:",
+            "Άγαμος/η γονέας:",
+            "Διαζευγμένος/η:",
+            "Σύζυγος που εκτίει ποινή:",
+            "Χήρος/α ή θάνατος έτερου γονέα:",
+            "Αφάνεια συζύγου:",
+            "Πολύτεκνος:",
+            "Άτομο με αναπηρία (αιτητής/σύζυγος):",
+            "Τέκνα:",
+            "Τέκνο φοιτητής/τρια:",
+            "Τέκνο εθνοφρουρός:",
+            "Ενήλικο τέκνο με αναπηρία:",
+            "Διακοπή διαμονής:",
+            "Απόδημος Εσωτερικού:",
+            "Γειτονική Κοινότητα:",
+            "Αιτητής μισθωτός:",
+            "Αιτητής αυτοτελώς εργαζόμενος:",
+            "Αιτητής:",
+            "Σύζυγος μισθωτός:",
+            "Σύζυγος αυτοτελώς εργαζόμενος:",
+            "Σύζυγος:",
+            "Άλλο μέλος μισθωτός:",
+            "Άλλο μέλος αυτοτελώς εργαζόμενος:",
+            "Άλλο μέλος:",
+        )
+        for code, label in DOCUMENT_LABELS.items():
+            for prefix in forbidden_prefixes:
+                assert not label.startswith(prefix), f"{code} still has prefix {prefix!r}: {label!r}"
+
+    def test_applicable_documents_follow_sections_data(self):
+        from plot_applications.documents import DocumentContext, applicable_codes_from_context
+
+        # Couple, autochthon, 1 student child, applicant employee (via section 4), property = False
+        couple_ctx = DocumentContext(
+            family_status="couple_with_children",
+            residence_category="autochthon",
+            applicant_citizenship="cypriot",
+            applicant_is_employee=True,
+            spouse_citizenship="other",
+            children_count=1,
+            child_statuses={"student"},
+            has_dwelling=False,
+            has_residential_land=False,
+            has_alienated_property=False,
+        )
+        codes = applicable_codes_from_context(couple_ctx)
+        assert {"A1", "A4", "B1", "B2", "B11", "B12", "C1", "C2", "C3", "C4", "C5", "D1", "D2", "D3", "D4", "D5", "E1"} <= codes
+        assert not {"A2", "B3", "B4", "B5", "B6", "B7", "B8", "B9", "B10", "B13", "B14", "C6", "C7", "C8", "C9", "C10", "E4"} & codes
+
+        # Single parent with "other" status, repatriated, 4 children (large family), property = True
+        single_other_ctx = DocumentContext(
+            family_status="single_parent",
+            single_parent_status="other",
+            residence_category="repatriated",
+            applicant_citizenship="cypriot",
+            applicant_has_disability=True,
+            children_count=4,
+            child_statuses={"minor", "national_guard", "adult_disability"},
+            has_dwelling=True,
+            has_residential_land=True,
+            has_alienated_property=True,
+            income_pairs={("applicant", "self_employed"), ("other_member", "other")},
+        )
+        codes2 = applicable_codes_from_context(single_other_ctx)
+        assert codes2 == {
+            "A1",
+            "B3", "B6", "B7", "B8", "B9", "B10", "B11", "B13", "B14",
+            "C1", "C2", "C7", "C8",
+            "E2", "E9",
+        }
+
+    def test_form_and_save_filter_non_applicable_documents(self, staff_client, cycle, available_plot):
+        data = _post_data(
+            cycle,
+            **{
+                "main-family_status": "single_parent",
+                "main-single_parent_status": "unmarried",
+                "main-attached_documents": ["A1", "B1", "B3", "B4", "B11", "C1", "C2", "D1", "D2", "D3", "D4", "D5", "E1", "E4"],
+            },
+        )
+        response = staff_client.post(reverse("plot_applications:create"), data)
+        assert response.status_code == 302
+        application = PlotApplication.objects.get()
+        # B1 and E4 are couple-only documents and are stripped on save for a single_parent application
+        assert "B1" not in application.attached_documents
+        assert "E4" not in application.attached_documents
+        assert {"A1", "B3", "B4", "B11", "C1", "C2", "E1"} <= set(application.attached_documents)
+
+        edit_html = staff_client.get(reverse("plot_applications:edit", args=[application.pk])).content.decode()
+        assert 'class="checkbox-label" data-document-code="B3">' in edit_html
+        assert 'class="checkbox-label" data-document-code="B4">' in edit_html
+        assert 'class="checkbox-label is-disabled" data-document-code="B1">' in edit_html
+        assert 'class="checkbox-label is-disabled" data-document-code="B5">' in edit_html
+        assert 'value="B1"' in edit_html and 'disabled' in edit_html.split('data-document-code="B1">')[1].split("</label>")[0]
+        assert 'disabled' not in edit_html.split('data-document-code="B3">')[1].split("</label>")[0]
+        assert 'data-document-code="B1" hidden>' not in edit_html
+        assert 'data-document-group hidden' not in edit_html
+
+    def test_save_and_draft_save_redirect_to_edit_and_render_save_tooltip(
+        self, staff_client, cycle, available_plot
+    ):
+        create_html = staff_client.get(reverse("plot_applications:create")).content.decode()
+        assert "data-save-button-wrapper" in create_html
+        assert "data-save-button" in create_html
+        assert "data-save-tooltip" in create_html
+
+        draft_data = {
+            "save_draft": "1",
+            "main-community": cycle.communities.get().pk,
+            "applicant-identity_number": "900001",
+            "applicant-first_name": "Ανδρέας",
+            "applicant-last_name": "Ανδρέου",
+            "applicant_party-mobile_phone": "99123456",
+        }
+        draft_resp = staff_client.post(reverse("plot_applications:create"), draft_data)
+        assert draft_resp.status_code == 302
+        application = PlotApplication.objects.get()
+        assert draft_resp.url == reverse("plot_applications:edit", args=[application.pk])
+
+        full_resp = staff_client.post(
+            reverse("plot_applications:edit", args=[application.pk]), _post_data(cycle)
+        )
+        assert full_resp.status_code == 302
+        assert full_resp.url == reverse("plot_applications:edit", args=[application.pk])
+
+    def test_send_email_with_missing_checkboxes_manual_edit_and_history(
+        self, staff_client, cycle, available_plot, mailoutbox
+    ):
+        from core.models import ActionHistory, Communication
+        from core.services import set_setting
+        from plot_applications.services import (
+            missing_documents_email_text,
+            missing_documents_for_application,
+        )
+
+        set_setting("smtpHost", "smtp.example.org")
+        set_setting("smtpFromEmail", "stegastiko@example.org")
+
+        # Create an application with some missing checkboxes (e.g. C1 and D3 not checked)
+        data = _post_data(
+            cycle,
+            **{
+                "main-attached_documents": ["A1", "A4", "B1", "B2", "B11", "C2", "C3", "C4", "C5", "D1", "D2", "D4", "D5", "E1", "E4", "E6"],
+            },
+        )
+        response = staff_client.post(reverse("plot_applications:create"), data)
+        assert response.status_code == 302
+        application = PlotApplication.objects.get()
+
+        missing_codes = [code for code, _ in missing_documents_for_application(application)]
+        assert missing_codes == ["C1", "D3"]
+        missing_text = missing_documents_email_text(application)
+        assert "Ελλείποντα δικαιολογητικά έγγραφα:" in missing_text
+        assert "- Λογαριασμός ΑΗΚ στο όνομα αιτητή" in missing_text
+        assert "- Πιστοποιητικό έρευνας ακίνητης ιδιοκτησίας — γονείς αιτητή" in missing_text
+        # Checked documents and non-applicable documents are not in the missing text
+        assert "Αντίγραφο πιστοποιητικού γάμου" not in missing_text
+        assert "Διακανονισμός φύλαξης τέκνων" not in missing_text
+
+        # Detail and Edit pages render the email button, modal, prefilled missing checkboxes, insert button, and sticky bars
+        detail_html = staff_client.get(reverse("plot_applications:detail", args=[application.pk])).content.decode()
+        assert 'id="plot-application-email-dialog"' in detail_html
+        assert "data-insert-missing-documents" in detail_html
+        assert "Λογαριασμός ΑΗΚ στο όνομα αιτητή" in detail_html
+        assert "data-sticky-toolbar" in detail_html
+        assert "toolbar--sticky" in detail_html
+
+        edit_html = staff_client.get(reverse("plot_applications:edit", args=[application.pk])).content.decode()
+        assert 'id="plot-application-email-dialog"' in edit_html
+        assert 'data-collect-live-missing="1"' in edit_html
+        assert "data-sticky-form-actions" in edit_html
+        assert "form-actions--sticky" in edit_html
+
+        # Send email with manually edited body containing the missing checkboxes
+        custom_body = (
+            "Αγαπητέ/ή κ. Ανδρέου,\n\n"
+            + missing_text
+            + "\n\nΠαρακαλούμε επικοινωνήστε με την Επαρχιακή Διοίκηση."
+        )
+        send_url = reverse("plot_applications:email_send", args=[application.pk])
+        send_resp = staff_client.post(
+            send_url,
+            {
+                "recipient": application.email,
+                "subject": f"Ελλείποντα δικαιολογητικά — {application.protocol_number}",
+                "body": custom_body,
+            },
+            HTTP_ACCEPT="application/json",
+        )
+        assert send_resp.status_code == 200
+        payload = send_resp.json()
+        assert payload["ok"] is True
+        assert application.email in payload["message"]
+        assert "Ελλείποντα δικαιολογητικά" in payload["log_html"]
+
+        assert len(mailoutbox) == 1
+        sent_mail = mailoutbox[0]
+        assert sent_mail.to == ["couple@example.org"]
+        assert sent_mail.subject == f"Ελλείποντα δικαιολογητικά — {application.protocol_number}"
+        assert "Παρακαλούμε επικοινωνήστε με την Επαρχιακή Διοίκηση." in sent_mail.body
+        assert "- Λογαριασμός ΑΗΚ στο όνομα αιτητή" in sent_mail.body
+
+        comm = Communication.objects.get(object_id=application.pk)
+        assert comm.status == "sent"
+        assert comm.sent_at is not None
+        assert comm.recipient == "couple@example.org"
+        assert ActionHistory.objects.filter(
+            entity_type="Communication", entity_id=str(comm.pk), application_id=application.pk
+        ).exists()
+
+        # Duplicate double-submit within 120s is rejected
+        dup_resp = staff_client.post(
+            send_url,
+            {
+                "recipient": application.email,
+                "subject": f"Ελλείποντα δικαιολογητικά — {application.protocol_number}",
+                "body": custom_body,
+            },
+            HTTP_ACCEPT="application/json",
+        )
+        assert dup_resp.status_code == 400
+        assert dup_resp.json()["ok"] is False
+
+        # Communication detail JSON endpoint returns the full email for the history modal
+        detail_comm_resp = staff_client.get(
+            reverse("plot_applications:communication_detail", args=[application.pk, comm.pk]),
+            HTTP_ACCEPT="application/json",
+        )
+        assert detail_comm_resp.status_code == 200
+        comm_data = detail_comm_resp.json()
+        assert comm_data["ok"] is True
+        assert comm_data["recipient"] == "couple@example.org"
+        assert comm_data["body"] == custom_body
+        assert comm_data["status"] == "sent"
+
+        # Person detail page also displays the sent email history and send action
+        person_html = staff_client.get(
+            reverse("persons:detail", args=[application.applicant.pk])
+        ).content.decode()
+        assert "Ιστορικό απεσταλμένων email" in person_html
+        assert f"Ελλείποντα δικαιολογητικά — {application.protocol_number}" in person_html
+        assert reverse("plot_applications:communication_detail", args=[application.pk, comm.pk]) in person_html
+
+    def test_subsection_visibility_in_view_and_edit_and_delete_action(
+        self, cycle, available_plot, staff_client, client, make_user
+    ):
+        from core.models import ActionHistory, Role
+
+        resp = staff_client.post(reverse("plot_applications:create"), _post_data(cycle))
+        assert resp.status_code == 302
+        application = PlotApplication.objects.get()
+        original_applicant_id = application.applicant_id
+        original_income_count = application.incomes.count()
+
+        # Role that only views section_1 and section_8, and only edits section_2
+        role = Role.objects.create(
+            name="Περιορισμένος Λειτουργός Αιτήσεων",
+            grants=[
+                "plot_applications:view",
+                "plot_app_section_1:view",
+                "plot_app_section_8:view",
+                "plot_applications:edit",
+                "plot_app_section_2:edit",
+            ],
+        )
+        limited_user = make_user("limited_plot_user")
+        role.members.add(limited_user)
+        client.force_login(limited_user)
+
+        detail_html = client.get(
+            reverse("plot_applications:detail", args=[application.pk])
+        ).content.decode()
+        assert "1. Προσωπικά στοιχεία αιτητή/αιτήτριας" in detail_html
+        assert "8. Εισοδήματα" in detail_html
+        assert "2. Τόπος διαμονής" not in detail_html
+        assert "7. Τέκνα" not in detail_html
+        assert "Κατ' αρχήν έλεγχος κριτηρίων" not in detail_html
+
+        edit_html = client.get(
+            reverse("plot_applications:edit", args=[application.pk])
+        ).content.decode()
+        assert "2. Τόπος διαμονής αιτητή/αιτήτριας" in edit_html
+        assert "1. Προσωπικά στοιχεία αιτητή/αιτήτριας" not in edit_html
+        assert "8. Εισοδήματα" not in edit_html
+
+        # Submitting edit with only section_2 updates section_2 and preserves all other subsections
+        edit_resp = client.post(
+            reverse("plot_applications:edit", args=[application.pk]),
+            {
+                "main-residence_category": ResidenceCategory.AUTOCHTHON,
+                "main-residence_street": "Οδός Ανανεωμένη",
+                "main-residence_number": "99",
+                "main-residence_postal_code": "2000",
+                "main-residence_notes": "Νέα σημείωση διαμονής",
+            },
+        )
+        assert edit_resp.status_code == 302
+        application.refresh_from_db()
+        assert application.residence_street == "Οδός Ανανεωμένη"
+        assert application.residence_number == "99"
+        assert application.applicant_id == original_applicant_id
+        assert application.incomes.count() == original_income_count
+
+        # User without plot_applications:delete cannot delete
+        delete_url = reverse("plot_applications:delete", args=[application.pk])
+        assert client.post(delete_url).status_code == 403
+        assert PlotApplication.objects.filter(pk=application.pk).exists()
+
+        # Staff user (with plot_applications:delete) deletes the application
+        client.force_login(make_user("supervisor_del", "Προϊστάμενος ελέγχου"))
+        del_resp = client.post(delete_url)
+        assert del_resp.status_code == 302
+        assert not PlotApplication.objects.filter(pk=application.pk).exists()
+        assert ActionHistory.objects.filter(
+            entity_type="PlotApplication", action="DELETE"
+        ).exists()
+
+

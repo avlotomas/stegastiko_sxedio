@@ -67,10 +67,12 @@
         fill(person) {
             FIXED_FIELDS.forEach((name) => {
                 const input = this.fixedInput(name);
-                input.value = person[name] || "";
-                input.readOnly = true;
+                const value = person[name] || "";
+                input.value = value;
+                input.readOnly = Boolean(value);
             });
             this.locked = true;
+            form.dispatchEvent(new Event("change", { bubbles: true }));
         }
 
         release({ clear }) {
@@ -82,6 +84,7 @@
             this.locked = false;
             this.editButton.hidden = true;
             this.editUrl = "";
+            form.dispatchEvent(new Event("change", { bubbles: true }));
         }
 
         apply(data) {

@@ -90,8 +90,7 @@ def test_user_without_role_only_reaches_home_and_account(client, make_user, case
     for url in (
         reverse("cases:list"),
         reverse("cases:detail", args=[case.pk]),
-        reverse("applications:list"),
-        reverse("applications:import"),
+        reverse("plot_applications:list"),
         reverse("reminders"),
         reverse("system_configuration"),
     ):
@@ -136,7 +135,7 @@ def test_technical_role_edits_section_4_only(client, make_user, case):
     assert client.get(reverse("cases:section_edit", args=[case.pk, "4"])).status_code == 200
     assert client.post(reverse("cases:section_edit", args=[case.pk, "1"]), {}).status_code == 403
     assert client.get(reverse("cases:section_4_blank_pdf", args=[case.pk])).status_code == 200
-    assert client.get(reverse("applications:list")).status_code == 403
+    assert client.get(reverse("plot_applications:list")).status_code == 403
 
 
 @pytest.mark.django_db
@@ -175,8 +174,12 @@ def test_superuser_has_every_access():
 def test_admin_creates_role_from_matrix_and_history_is_kept(client, make_user):
     _login(client, make_user, "sysadmin", "Διαχειριστής συστήματος")
     page = client.get(reverse("settings_role_create")).content.decode()
-    assert "data-access-matrix" in page
-    assert "Ενότητα 4 — Τεχνική αξιολόγηση" in page
+    assert "data-role-function-select" in page
+    assert '<option value="plot_applications">Αίτηση παραχώρησης οικοπέδου</option>' in page
+    for action_label in ("Δημιουργία", "Διαγραφή", "Εμφάνιση", "Επεξεργασία", "Αποστολή emails"):
+        assert action_label in page
+    assert 'data-subsection-all="view"' in page
+    assert 'data-subsection-all="edit"' in page
 
     grants = ["cases:view", "case_section_4:view", "case_section_4:export"]
     response = client.post(reverse("settings_role_create"), _role_post("Εξαγωγή Ενότητας 4", grants))
@@ -192,6 +195,75 @@ def test_admin_creates_role_from_matrix_and_history_is_kept(client, make_user):
     assert ActionHistory.objects.filter(entity_type="Role", entity_id=str(role.pk), field_name="grants").exists()
     history = client.get(reverse("settings_role_edit", args=[role.pk])).content.decode()
     assert "Ενότητα 6 — Απόφαση καταλληλότητας: Εξαγωγή PDF" in history
+
+
+@pytest.mark.django_db
+def test_plot_applications_role_setup_per_function_and_subsections(client, make_user):
+    _login(client, make_user, "sysadmin", "Διαχειριστής συστήματος")
+
+    # Enabling Εμφάνιση without selecting any subsection is rejected
+    bad_post = {
+        "name": "Ρόλος χωρίς υποενότητα",
+        "description": "",
+        "is_active": "on",
+        "configured_functions": "plot_applications",
+        "grant__plot_applications__view": "on",
+    }
+    resp = client.post(reverse("settings_role_create"), bad_post)
+    assert resp.status_code == 200
+    assert "επιλέξτε τουλάχιστον μία υποενότητα για την «Εμφάνιση»" in resp.content.decode()
+    assert not Role.objects.filter(name="Ρόλος χωρίς υποενότητα").exists()
+
+    # Creating a role with specific view and edit subsections, plus create/delete/send
+    valid_post = {
+        "name": "Ειδικός Ρόλος Αίτησης Οικοπέδου",
+        "description": "Μόνο επιλεγμένες υποενότητες",
+        "is_active": "on",
+        "configured_functions": "plot_applications",
+        "grant__plot_applications__create": "on",
+        "grant__plot_applications__delete": "on",
+        "grant__plot_applications__view": "on",
+        "grant__plot_app_section_1__view": "on",
+        "grant__plot_app_section_8__view": "on",
+        "grant__plot_applications__edit": "on",
+        "grant__plot_app_section_2__edit": "on",
+        "grant__plot_applications__send": "on",
+    }
+    resp = client.post(reverse("settings_role_create"), valid_post)
+    assert resp.status_code == 302
+    role = Role.objects.get(name="Ειδικός Ρόλος Αίτησης Οικοπέδου")
+    assert set(role.grants) == {
+        "plot_applications:create",
+        "plot_applications:delete",
+        "plot_applications:view",
+        "plot_app_section_1:view",
+        "plot_app_section_8:view",
+        "plot_applications:edit",
+        "plot_app_section_2:edit",
+        "plot_applications:send",
+    }
+
+    # Editing an existing role via the single-function UI preserves grants of other functions
+    admin_role = Role.objects.get(name="Διαχειριστής συστήματος")
+    non_plot_grants = {
+        g for g in admin_role.grants if not (g.startswith("plot_applications:") or g.startswith("plot_app_"))
+    }
+    edit_resp = client.post(
+        reverse("settings_role_edit", args=[admin_role.pk]),
+        {
+            "name": admin_role.name,
+            "description": admin_role.description,
+            "is_active": "on",
+            "configured_functions": "plot_applications",
+            "grant__plot_applications__view": "on",
+            "grant__plot_app_basic__view": "on",
+        },
+    )
+    assert edit_resp.status_code == 302
+    admin_role.refresh_from_db()
+    assert non_plot_grants <= set(admin_role.grants)
+    assert "plot_app_basic:view" in admin_role.grants
+    assert "plot_app_section_1:view" not in admin_role.grants
 
 
 @pytest.mark.django_db
@@ -220,8 +292,8 @@ def test_admin_creates_user_with_roles_and_assignment_is_audited(client, make_us
             "email": "reader@example.org",
             "is_active": "on",
             "roles": [reader.pk],
-            "password1": "Gr8-Passw0rd!",
-            "password2": "Gr8-Passw0rd!",
+            "password1": "123",
+            "password2": "123",
         },
     )
     assert response.status_code == 302
@@ -236,7 +308,7 @@ def test_admin_creates_user_with_roles_and_assignment_is_audited(client, make_us
 
     page = client.get(reverse("settings_user_edit", args=[created.pk])).content.decode()
     assert "Μόνο ανάγνωση" in page
-    assert client.login(username="new.reader", password="Gr8-Passw0rd!")
+    assert client.login(username="new.reader", password="123")
 
 
 @pytest.mark.django_db

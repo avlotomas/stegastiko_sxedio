@@ -9,7 +9,7 @@ from django.db import IntegrityError, connection, transaction
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
-from applications.models import Application, Person
+from applications.models import Person
 from cases import services
 from cases.models import (
     ApprovedDesignPlot,
@@ -30,6 +30,7 @@ from core.services import (
     set_setting,
 )
 from tests.fixtures.cycles import make_cycle
+from tests.fixtures.plot_applications import make_plot_application
 
 JSON = {"HTTP_ACCEPT": "application/json"}
 STAFF_ROLE = "Προϊστάμενος ελέγχου"
@@ -109,18 +110,7 @@ def _allocate(plot, community):
     completed.copy_from(plot)
     completed.save()
 
-    cycle = make_cycle(
-        community,
-        announcement_date=date(2027, 6, 1),
-    )
-    application = Application.objects.create(
-        community=community,
-        person=_make_person(),
-        folder_number="12001001",
-        submitted_on=date(2027, 6, 10),
-        family_type=Application.FamilyType.OTHER,
-        applicant_email="a@example.org",
-    )
+    application = make_plot_application(community, _make_person())
     return Allocation.objects.create(application=application, parcel=completed)
 
 

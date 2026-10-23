@@ -145,13 +145,16 @@ class Communication(AuditedModel):
     def _audit_context(self):
         # Emails about a case belong to its aggregate history (§Β.1.3).
         case_id = None
+        application_id = None
         model_ref = (self.content_type.app_label, self.content_type.model)
         if model_ref == ("cases", "case"):
             case_id = self.object_id
         elif model_ref in (("cases", "completenesscheck"), ("cases", "landplot")):
             owner = self.content_object
             case_id = getattr(owner, "case_id", None)
-        return case_id, None, getattr(self, "_section_ref", "")
+        elif model_ref == ("plot_applications", "plotapplication"):
+            application_id = self.object_id
+        return case_id, application_id, getattr(self, "_section_ref", "")
 
 
 class Community(AuditedModel):
@@ -229,6 +232,37 @@ class Role(AuditedModel):
 
     def __str__(self):
         return self.name
+
+
+class UserSecurityProfile(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="security_profile",
+    )
+    must_change_password = models.BooleanField(
+        default=False,
+        help_text="Υποχρεωτική αλλαγή κωδικού στην επόμενη σύνδεση",
+    )
+
+    def __str__(self):
+        return f"security:{self.user_id}"
+
+
+def user_must_change_password(user) -> bool:
+    if not user or not user.is_authenticated or not user.pk:
+        return False
+    try:
+        return bool(user.security_profile.must_change_password)
+    except UserSecurityProfile.DoesNotExist:
+        return False
+
+
+def set_must_change_password(user, value: bool) -> None:
+    profile, _ = UserSecurityProfile.objects.get_or_create(user=user)
+    if profile.must_change_password != bool(value):
+        profile.must_change_password = bool(value)
+        profile.save(update_fields=["must_change_password"])
 
 
 class DocumentCatalogItem(AuditedModel):

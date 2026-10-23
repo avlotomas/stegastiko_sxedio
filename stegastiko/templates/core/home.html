@@ -64,19 +64,13 @@
         </p>
     </a>
     {% endif %}
-    {% if access.applications.view %}
-    <a href="{% url 'applications:list' %}" class="tile">
-        <p class="tile__title">Αιτήσεις Πολιτών — Οικόπεδο</p>
+    {% if access.plot_applications.any %}
+    <a href="{% url 'plot_applications:list' %}" class="tile">
+        <p class="tile__title">Αιτήσεις παραχώρησης οικοπέδου</p>
         <p class="tile__desc">
-            Φάκελοι αιτητών για απόκτηση οικοπέδου μετά τη γνωστοποίηση, με έλεγχο κριτηρίων
-            (Ενότητα 10).
+            Αιτήσεις πολιτών (Παράρτημα 3) για απόκτηση οικοπέδου, με αυτόματο κατ' αρχήν έλεγχο
+            κριτηρίων επιλεξιμότητας (Ενότητες 10, 20) και προτεραιοποίηση (Ενότητα 11).
         </p>
-    </a>
-    {% endif %}
-    {% if access.application_import.import %}
-    <a href="{% url 'applications:import' %}" class="tile">
-        <p class="tile__title">Εισαγωγή από Excel</p>
-        <p class="tile__desc">Ανάλυση αρχείου Παραρτήματος 3 και προεπισκόπηση πριν την αποθήκευση.</p>
     </a>
     {% endif %}
     {% if access.settings.view %}

@@ -63,12 +63,21 @@
             <th>Τέκνα</th>
             <th>Προτεραιότητα</th>
             <th>Κατ' αρχήν έλεγχος</th>
+            {% if access.plot_applications.delete %}<th><span class="visually-hidden">Ενέργειες</span></th>{% endif %}
         </tr>
         </thead>
         <tbody>
         {% for a in applications %}
         <tr>
-            <td><a href="{% url 'plot_applications:detail' a.pk %}">{{ a.protocol_number }}</a></td>
+            <td>
+                {% if access.plot_applications.view %}
+                <a href="{% url 'plot_applications:detail' a.pk %}">{{ a.protocol_number }}</a>
+                {% elif access.plot_applications.edit %}
+                <a href="{% url 'plot_applications:edit' a.pk %}">{{ a.protocol_number }}</a>
+                {% else %}
+                {{ a.protocol_number }}
+                {% endif %}
+            </td>
             <td>{{ a.submitted_on|date:"d/m/Y" }}</td>
             <td>{{ a.community.name }}</td>
             <td>{{ a.applicant.first_name }} {{ a.applicant.last_name }}<br><span class="text-muted">{{ a.applicant.identity_number }}</span></td>
@@ -77,9 +86,18 @@
             <td>{{ a.recognized_children_count }}</td>
             <td>{{ a.priority_label|default:"—" }}</td>
             <td><span class="badge badge--{{ a.eligibility_result }}">{{ a.get_eligibility_result_display }}</span></td>
+            {% if access.plot_applications.delete %}
+            <td class="data-table__actions">
+                <form method="post" action="{% url 'plot_applications:delete' a.pk %}" class="inline-form"
+                      data-confirm="Διαγραφή της αίτησης {{ a.protocol_number }};">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger btn-sm">Διαγραφή</button>
+                </form>
+            </td>
+            {% endif %}
         </tr>
         {% empty %}
-        <tr><td colspan="9" class="text-muted">Δεν βρέθηκαν αιτήσεις.</td></tr>
+        <tr><td colspan="{% if access.plot_applications.delete %}10{% else %}9{% endif %}" class="text-muted">Δεν βρέθηκαν αιτήσεις.</td></tr>
         {% endfor %}
         </tbody>
     </table>

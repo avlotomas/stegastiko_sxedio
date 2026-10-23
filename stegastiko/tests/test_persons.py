@@ -5,11 +5,12 @@ from datetime import date
 import pytest
 from django.urls import reverse
 
-from applications.models import Application, Person
+from applications.models import Person
 from cases.models import SubmissionCycle
 from core.models import Community
+from plot_applications.models import PlotApplication
 from plots.models import Plot
-from tests.fixtures.cycles import make_cycle
+from tests.fixtures.plot_applications import make_plot_application
 
 
 @pytest.fixture
@@ -58,20 +59,8 @@ def _payload(identity="ID-200", **overrides):
     return data
 
 
-def _application(community, person, person2=None):
-    cycle = make_cycle(
-        community,
-        announcement_date=date(2027, 6, 1),
-    )
-    return Application.objects.create(
-        community=community,
-        person=person,
-        person2=person2,
-        folder_number=f"12001{Application.objects.count() + 1:03d}",
-        submitted_on=date(2027, 6, 10),
-        family_type=Application.FamilyType.OTHER,
-        applicant_email="a@example.org",
-    )
+def _application(community, person, spouse=None):
+    return make_plot_application(community, person, spouse)
 
 
 @pytest.mark.django_db
@@ -124,7 +113,7 @@ def test_edit_changes_details_but_never_the_identity_number(community, staff_cli
     person.refresh_from_db()
     assert person.first_name == "Μαρίνα"
     assert person.identity_number == "ID-100"
-    assert Application.objects.get().person == person
+    assert PlotApplication.objects.get().applicant == person
 
 
 @pytest.mark.django_db
@@ -169,3 +158,55 @@ def test_read_only_role_cannot_change_persons(client, make_user):
     assert client.get(reverse("persons:create")).status_code == 403
     assert client.post(reverse("persons:delete", args=[person.pk])).status_code == 403
     assert Person.objects.filter(pk=person.pk).exists()
+
+
+@pytest.mark.django_db
+def test_person_screen_shows_applications_and_reorders_priority_via_drag_and_drop(
+    community, staff_client, client, make_user
+):
+    second_community = Community.objects.create(
+        district="ΛΕΥΚΩΣΙΑΣ",
+        name="ΔΕΖ",
+        contact_email="ks.dez@example.org",
+        community_folder_code="002",
+    )
+    person = _person("ID-100")
+    app1 = make_plot_application(community, person, preference_order=1)
+    app2 = make_plot_application(second_community, person, preference_order=2)
+
+    detail_url = reverse("persons:detail", args=[person.pk])
+    reorder_url = reverse("persons:applications_reorder", args=[person.pk])
+
+    html = staff_client.get(detail_url).content.decode()
+    assert 'data-person-applications-sortable' in html
+    assert f'data-reorder-url="{reorder_url}"' in html
+    assert 'draggable="true"' in html
+    assert html.index(app1.protocol_number) < html.index(app2.protocol_number)
+
+    # Reorder so app2 becomes 1st priority and app1 becomes 2nd priority
+    response = staff_client.post(
+        reorder_url,
+        data=f'{{"order": [{app2.pk}, {app1.pk}]}}',
+        content_type="application/json",
+    )
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+
+    app1.refresh_from_db()
+    app2.refresh_from_db()
+    assert app2.preference_order == 1
+    assert app1.preference_order == 2
+
+    html_after = staff_client.get(detail_url).content.decode()
+    assert html_after.index(app2.protocol_number) < html_after.index(app1.protocol_number)
+
+    # Read-only user cannot reorder
+    client.force_login(make_user("reader_order", "Μόνο ανάγνωση"))
+    assert (
+        client.post(
+            reorder_url,
+            data=f'{{"order": [{app1.pk}, {app2.pk}]}}',
+            content_type="application/json",
+        ).status_code
+        == 403
+    )

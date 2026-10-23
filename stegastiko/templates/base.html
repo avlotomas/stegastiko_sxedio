@@ -5,9 +5,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}{{ app_title }}{% endblock %}</title>
-    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=18">
+    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=21">
     <script src="{% static 'vendor/htmx.min.js' %}" defer></script>
-    <script src="{% static 'js/app.js' %}?v=12" defer></script>
+    <script src="{% static 'js/app.js' %}?v=14" defer></script>
     {% block extra_head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
@@ -24,20 +24,17 @@
         <nav class="site-nav" data-site-nav aria-label="Κύρια πλοήγηση">
             {% with namespace=request.resolver_match.namespace %}
             <a href="{% url 'home' %}" class="site-nav__link{% if request.resolver_match.url_name == 'home' %} is-active{% endif %}">{{ menu.home }}</a>
-            {% if access.cases.view or access.applications.view or access.plot_applications.view %}
+            {% if access.cases.view or access.plot_applications.any %}
             <div class="site-nav__group" data-nav-group>
-                <button type="button" class="site-nav__link site-nav__group-toggle{% if namespace == 'cases' or namespace == 'applications' or namespace == 'plot_applications' %} is-active{% endif %}" aria-haspopup="true" aria-expanded="false" data-nav-group-toggle>
+                <button type="button" class="site-nav__link site-nav__group-toggle{% if namespace == 'cases' or namespace == 'plot_applications' %} is-active{% endif %}" aria-haspopup="true" aria-expanded="false" data-nav-group-toggle>
                     {{ menu.applications }}<span class="site-nav__caret" aria-hidden="true">▾</span>
                 </button>
                 <div class="site-nav__submenu">
                     {% if access.cases.view %}
                     <a href="{% url 'cases:list' %}" class="site-nav__sublink{% if namespace == 'cases' %} is-active{% endif %}">{{ menu.applications_division }}</a>
                     {% endif %}
-                    {% if access.applications.view %}
-                    <a href="{% url 'applications:list' %}" class="site-nav__sublink{% if namespace == 'applications' %} is-active{% endif %}">{{ menu.applications_plot }}</a>
-                    {% endif %}
-                    {% if access.plot_applications.view %}
-                    <a href="{% url 'plot_applications:list' %}" class="site-nav__sublink{% if namespace == 'plot_applications' %} is-active{% endif %}">{{ menu.applications_plot_appendix3 }}</a>
+                    {% if access.plot_applications.any %}
+                    <a href="{% url 'plot_applications:list' %}" class="site-nav__sublink{% if namespace == 'plot_applications' %} is-active{% endif %}">{{ menu.applications_plot }}</a>
                     {% endif %}
                 </div>
             </div>

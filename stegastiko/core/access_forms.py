@@ -1,17 +1,25 @@
 """Forms of the Χρήστες and Ρόλοι και δικαιώματα settings screens (§Β.3)."""
 
 from django import forms
-from django.contrib.auth import get_user_model, password_validation
+from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 
 from core.function_catalog import (
     ACCESS_TYPES,
+    CONFIGURABLE_FUNCTION_CODES,
     EDIT,
     FUNCTIONS,
+    FUNCTIONS_BY_CODE,
+    PLOT_APPLICATION_ACTION_LABELS,
+    PLOT_APPLICATION_SUBFUNCTION_CODES,
+    PLOT_APPLICATION_SUBSECTIONS,
+    VIEW,
+    action_label_for,
     function_label,
     grant_key,
+    plot_app_subsection_code,
 )
-from core.models import Role
+from core.models import Role, set_must_change_password, user_must_change_password
 from core.permissions import (
     grant_dependency_errors,
     grants_allow,
@@ -56,6 +64,12 @@ class UserForm(forms.ModelForm):
         strip=False,
         widget=forms.PasswordInput(attrs={"autocomplete": "new-password"}),
     )
+    must_change_password = forms.BooleanField(
+        label="Υποχρεωτική αλλαγή κωδικού στην επόμενη σύνδεση",
+        required=False,
+        help_text="Αν ενεργοποιηθεί, ο χρήστης θα πρέπει να ορίσει νέο κωδικό πρόσβασης αμέσως μόλις συνδεθεί.",
+        widget=forms.CheckboxInput(attrs={"class": "checkbox"}),
+    )
 
     class Meta:
         model = get_user_model()
@@ -82,6 +96,7 @@ class UserForm(forms.ModelForm):
         else:
             self.fields["username"].disabled = True
             self.fields["roles"].initial = list(self.instance.app_roles.values_list("pk", flat=True))
+            self.fields["must_change_password"].initial = user_must_change_password(self.instance)
             self.fields["password1"].label = "Νέος κωδικός πρόσβασης"
             self.fields["password1"].help_text = "Συμπληρώστε μόνο για αλλαγή κωδικού."
             self.fields["password2"].label = "Επιβεβαίωση νέου κωδικού"
@@ -98,11 +113,6 @@ class UserForm(forms.ModelForm):
         if password1 or password2:
             if password1 != password2:
                 self.add_error("password2", "Οι δύο κωδικοί δεν ταιριάζουν.")
-            else:
-                try:
-                    password_validation.validate_password(password1, self.instance)
-                except ValidationError as exc:
-                    self.add_error("password1", exc)
 
         if self.instance.pk and self.instance.pk == self.acting_user.pk and not self.acting_user.is_superuser:
             if not cleaned.get("is_active", True):
@@ -117,6 +127,7 @@ class UserForm(forms.ModelForm):
         if self.password_changed:
             user.set_password(self.cleaned_data["password1"])
         user.save()
+        set_must_change_password(user, bool(self.cleaned_data.get("must_change_password")))
         set_user_roles(user, self.cleaned_data.get("roles") or [])
         return user
 
@@ -147,17 +158,77 @@ class RoleForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.acting_user = acting_user
         grants = set(self.instance.grants or ()) if initial_grants is None else set(initial_grants)
+        self._base_grants = set(grants)
+
+        implicit_subsections = set()
+        for action in (VIEW, EDIT):
+            if grant_key("plot_applications", action) in grants and not any(
+                grant_key(sub_code, action) in grants
+                for sub_code in PLOT_APPLICATION_SUBFUNCTION_CODES
+            ):
+                for sub_code in PLOT_APPLICATION_SUBFUNCTION_CODES:
+                    implicit_subsections.add(grant_key(sub_code, action))
+        effective_initial_grants = grants | implicit_subsections
+
         for function in FUNCTIONS:
             for action in function.actions:
+                attrs = {"class": "checkbox"}
+                if function.code == "plot_applications" and action in (VIEW, EDIT):
+                    attrs["data-action-with-subsections"] = action
                 self.fields[grant_field_name(function.code, action)] = forms.BooleanField(
                     required=False,
-                    initial=grant_key(function.code, action) in grants,
-                    label=f"{function_label(function)}: {dict(ACCESS_TYPES)[action]}",
+                    initial=grant_key(function.code, action) in effective_initial_grants,
+                    label=f"{function_label(function)}: {action_label_for(function.code, action)}",
+                    widget=forms.CheckboxInput(attrs=attrs),
                 )
         _style(self)
 
     def detail_fields(self):
         return [self[name] for name in ("name", "description", "is_active")]
+
+    def function_panels(self):
+        panels = []
+        for code in CONFIGURABLE_FUNCTION_CODES:
+            function = FUNCTIONS_BY_CODE[code]
+            if code == "plot_applications":
+                action_items = []
+                for action, action_label in PLOT_APPLICATION_ACTION_LABELS:
+                    field = self[grant_field_name(code, action)]
+                    subsections = []
+                    if action in (VIEW, EDIT):
+                        for sub_code, sub_label in PLOT_APPLICATION_SUBSECTIONS:
+                            sub_func_code = plot_app_subsection_code(sub_code)
+                            sub_field = self[grant_field_name(sub_func_code, action)]
+                            subsections.append(
+                                {
+                                    "code": sub_code,
+                                    "label": sub_label,
+                                    "field": sub_field,
+                                }
+                            )
+                    is_checked = bool(field.value())
+                    all_checked = bool(subsections) and all(
+                        bool(item["field"].value()) for item in subsections
+                    )
+                    action_items.append(
+                        {
+                            "action": action,
+                            "label": action_label,
+                            "field": field,
+                            "is_checked": is_checked,
+                            "subsections": subsections,
+                            "all_checked": all_checked,
+                        }
+                    )
+                panels.append(
+                    {
+                        "code": code,
+                        "label": function_label(function),
+                        "description": function.description,
+                        "actions": action_items,
+                    }
+                )
+        return panels
 
     def access_columns(self):
         used = {action for function in FUNCTIONS for action in function.actions}
@@ -183,16 +254,55 @@ class RoleForm(forms.ModelForm):
         return rows
 
     def selected_grants(self) -> list:
-        return sorted(
-            grant_key(function.code, action)
-            for function in FUNCTIONS
-            for action in function.actions
-            if self.cleaned_data.get(grant_field_name(function.code, action))
-        )
+        configured = set(self.data.getlist("configured_functions")) if self.is_bound else set()
+        partial_mode = bool(configured)
+        selected = set()
+
+        for function in FUNCTIONS:
+            if partial_mode and function.code not in configured and (
+                function.parent not in configured
+            ):
+                continue
+            for action in function.actions:
+                if self.cleaned_data.get(grant_field_name(function.code, action)):
+                    selected.add(grant_key(function.code, action))
+
+        for action in (VIEW, EDIT):
+            if grant_key("plot_applications", action) not in selected:
+                selected = {
+                    g
+                    for g in selected
+                    if not (
+                        g.partition(":")[0] in PLOT_APPLICATION_SUBFUNCTION_CODES
+                        and g.endswith(f":{action}")
+                    )
+                }
+
+        if partial_mode:
+            for existing in self._base_grants:
+                code, _, _ = existing.partition(":")
+                func = FUNCTIONS_BY_CODE.get(code)
+                if func is None:
+                    continue
+                if func.code not in configured and func.parent not in configured:
+                    selected.add(existing)
+
+        return sorted(selected)
 
     def clean(self):
         cleaned = super().clean()
+        configured = set(self.data.getlist("configured_functions")) if self.is_bound else set()
         grants = set(self.selected_grants())
+        if "plot_applications" in configured:
+            for action, action_label in ((VIEW, "Εμφάνιση"), (EDIT, "Επεξεργασία")):
+                if grant_key("plot_applications", action) in grants and not any(
+                    grant_key(sub_code, action) in grants
+                    for sub_code in PLOT_APPLICATION_SUBFUNCTION_CODES
+                ):
+                    self.add_error(
+                        None,
+                        f"«Αίτηση παραχώρησης οικοπέδου»: επιλέξτε τουλάχιστον μία υποενότητα για την «{action_label}».",
+                    )
         for message in grant_dependency_errors(grants):
             self.add_error(None, message)
 

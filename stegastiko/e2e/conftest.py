@@ -9,7 +9,6 @@ from django.contrib.auth import get_user_model
 from django.db import connection, connections
 
 from core.models import Role
-from tests.fixtures.golden_application import seed_application_cycle
 
 E2E_PASSWORD = "e2e-secret"
 E2E_USERNAME = "e2e_clerk"
@@ -43,11 +42,6 @@ def make_user(db):
         return user
 
     return _make_user
-
-
-@pytest.fixture
-def application_cycle(db):
-    return seed_application_cycle()
 
 
 @pytest.fixture

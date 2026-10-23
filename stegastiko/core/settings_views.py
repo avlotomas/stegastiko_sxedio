@@ -51,11 +51,10 @@ def _settings_form_view(
 
 @access_required("settings")
 def system_configuration(request):
-    return render(
-        request,
-        "core/settings/overview.html",
-        {"settings_nav": settings_nav(request.user, "overview")},
-    )
+    nav = settings_nav(request.user, "")
+    if not nav:
+        raise PermissionDenied("Δεν έχετε πρόσβαση σε αυτή τη λειτουργία.")
+    return redirect(nav[0]["url_name"])
 
 
 @access_required("settings_branding", post_action=EDIT)

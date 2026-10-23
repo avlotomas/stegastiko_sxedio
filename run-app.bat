@@ -12,7 +12,7 @@ if errorlevel 1 (
 echo Housing Scheme (stegastiko)
 echo   Home:         http://127.0.0.1:8000/
 echo   Admin:        http://127.0.0.1:8000/admin/
-echo   Applications: http://127.0.0.1:8000/applications/
+echo   Applications: http://127.0.0.1:8000/plot-applications/
 echo.
 echo Press Ctrl+C to stop the server.
 echo.

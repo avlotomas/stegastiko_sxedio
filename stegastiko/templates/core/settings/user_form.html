@@ -47,6 +47,7 @@
     <div class="form-grid">
         {% include "includes/form_field.html" with field=form.password1 %}
         {% include "includes/form_field.html" with field=form.password2 %}
+        {% include "includes/form_field.html" with field=form.must_change_password wide=True %}
     </div>
 
     <div class="form-actions form-span-all">

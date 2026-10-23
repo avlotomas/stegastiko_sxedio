@@ -34,7 +34,12 @@ def test_system_configuration_requires_admin(staff_client):
 
 @pytest.mark.django_db
 def test_system_configuration_accessible_to_admin(admin_client):
-    assert admin_client.get(reverse("system_configuration")).status_code == 200
+    response = admin_client.get(reverse("system_configuration"))
+    assert response.status_code == 302
+    assert response.url == reverse("settings_users")
+    followed = admin_client.get(reverse("system_configuration"), follow=True)
+    assert followed.status_code == 200
+    assert "Επισκόπηση" not in followed.content.decode()
 
 
 def _form_post_data(form_class, **overrides):
@@ -248,9 +253,11 @@ def test_utility_service_catalog_is_linked_from_settings(admin_client):
     url = reverse("utility_service_types")
     html = admin_client.get(url).content.decode()
     assert "Κατάλογος υπηρεσιών κοινής ωφέλειας (4.2)" in html
-    overview = admin_client.get(reverse("system_configuration")).content.decode()
-    assert reverse("utility_service_types") in overview
-    assert "case-actions-nav" in overview
+    assert "Επισκόπηση" not in html
+    landing = admin_client.get(reverse("system_configuration"), follow=True).content.decode()
+    assert reverse("utility_service_types") in landing
+    assert "case-actions-nav" in landing
+    assert "Επισκόπηση" not in landing
 
 
 @pytest.mark.django_db

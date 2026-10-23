@@ -22,6 +22,7 @@ FIELD_LABELS = {
     "email": "Email",
     "is_active": "Ενεργός",
     "password": "Κωδικός πρόσβασης",
+    "must_change_password": "Υποχρεωτική αλλαγή κωδικού",
     "name": "Ονομασία ρόλου",
     "description": "Περιγραφή",
     "grants": "Δικαιώματα",

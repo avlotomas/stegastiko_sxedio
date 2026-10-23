@@ -3,7 +3,7 @@ from decimal import Decimal
 from django import forms
 from django.core.validators import MinValueValidator
 
-from applications.rules import INCOME_LIMIT_SETTINGS, income_limit_setting
+from plot_applications.parameters import INCOME_LIMIT_SETTINGS, income_limit_setting
 
 from cases.section_labels import (
     CASE_SECTION_LABEL_KEYS,

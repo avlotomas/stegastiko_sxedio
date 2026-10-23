@@ -8,8 +8,10 @@ from django.shortcuts import redirect, render
 
 from cases.forms import UtilityServiceTypeFormSet
 from cases.models import UtilityServiceType
+from core.audit import record_user_changes, user_audit_snapshot
 from core.forms import AppPasswordChangeForm
 from core.function_catalog import EDIT
+from core.models import set_must_change_password, user_must_change_password
 from core.permissions import access_required, has_access
 from core.reminders import (
     CONSULTATION_DUE_REMINDER_TYPE,
@@ -34,6 +36,11 @@ class AppLoginView(LoginView):
     template_name = "core/login.html"
     redirect_authenticated_user = True
 
+    def get_success_url(self):
+        if user_must_change_password(self.request.user):
+            return redirect("account").url
+        return super().get_success_url()
+
 
 class AppLogoutView(LogoutView):
     next_page = "login"
@@ -57,16 +64,25 @@ def home(request):
 
 @login_required
 def account(request):
+    must_change = user_must_change_password(request.user)
     if request.method == "POST":
+        previous = user_audit_snapshot(request.user)
         form = AppPasswordChangeForm(request.user, request.POST)
         if form.is_valid():
-            user = form.save()
+            with transaction.atomic():
+                user = form.save()
+                set_must_change_password(user, False)
+                record_user_changes(user, previous, password_changed=True)
             update_session_auth_hash(request, user)
             messages.success(request, "Ο κωδικός πρόσβασης ενημερώθηκε.")
-            return redirect("account")
+            return redirect("home" if must_change else "account")
     else:
         form = AppPasswordChangeForm(request.user)
-    return render(request, "core/account.html", {"form": form})
+    return render(
+        request,
+        "core/account.html",
+        {"form": form, "must_change_password": must_change},
+    )
 
 
 @access_required("reminders")

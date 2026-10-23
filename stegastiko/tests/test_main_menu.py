@@ -22,7 +22,7 @@ def test_menu_groups_requests_and_settings(client, make_user):
         "Αρχική",
         "Αιτήσεις",
         "Διαχωρισμού",
-        "Απόκτησης οικοπέδου",
+        "Παραχώρησης οικοπέδου (Παρ. 3)",
         "Υπενθυμίσεις",
         "Ρυθμίσεις",
         "Βασικές",
@@ -30,7 +30,7 @@ def test_menu_groups_requests_and_settings(client, make_user):
     positions = [nav.index(label) for label in order]
     assert positions == sorted(positions)
     assert reverse("cases:list") in nav
-    assert reverse("applications:list") in nav
+    assert reverse("plot_applications:list") in nav
     assert reverse("system_configuration") in nav
     assert "Εισαγωγή Excel" not in nav
     assert "/admin/" not in nav

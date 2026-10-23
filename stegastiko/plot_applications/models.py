@@ -1,8 +1,8 @@
 """Αίτηση για Παραχώρηση Οικοπέδου — Παράρτημα 3 του Σχεδίου (Ενότ. 5).
 
 A separate model from `applications.Application`: it follows the official form the
-citizens fill in, section by section (1–13 + Ένορκη Δήλωση + Κατάλογος Δικαιολογητικών
-+ «Για Επίσημη Χρήση»). Persons are shared with the «Άτομα» registry (`Person`).
+citizens fill in, section by section (1–12 + Ένορκη Δήλωση + Κατάλογος Δικαιολογητικών).
+Persons are shared with the «Άτομα» registry (`Person`).
 """
 
 from decimal import Decimal
@@ -31,18 +31,18 @@ class EligibilityResult(models.TextChoices):
 
 class PlotApplication(AuditedModel):
     class FamilyStatus(models.TextChoices):
-        MARRIED = "married", "Ζεύγος — Έγγαμος/η"
-        CIVIL_PARTNERSHIP = "civil_partnership", "Ζεύγος — Σύμφωνο Συμβίωσης"
-        SINGLE_PARENT = "single_parent", "Μονογονεϊκή Οικογένεια"
+        COUPLE_WITH_CHILDREN = "couple_with_children", "Ζεύγος με τέκνα"
+        COUPLE_WITHOUT_CHILDREN = "couple_without_children", "Ζεύγος χωρίς τέκνα"
+        SINGLE_PARENT = "single_parent", "Μονογονεϊκή οικογένεια"
 
     class SingleParentStatus(models.TextChoices):
+        UNMARRIED = "unmarried", "Άγαμος/η"
         WIDOWED = "widowed", "Χήρος/α"
         DIVORCED = "divorced", "Διαζευγμένος/η"
         OTHER = "other", "Άλλο"
 
-    COUPLE_STATUSES = (FamilyStatus.MARRIED, FamilyStatus.CIVIL_PARTNERSHIP)
+    COUPLE_STATUSES = (FamilyStatus.COUPLE_WITH_CHILDREN, FamilyStatus.COUPLE_WITHOUT_CHILDREN)
 
-    # «Για Επίσημη Χρήση»
     community = models.ForeignKey(
         Community,
         on_delete=models.PROTECT,
@@ -50,10 +50,7 @@ class PlotApplication(AuditedModel):
         help_text="Κοινότητα στην οποία ζητείται η παραχώρηση οικοπέδου (Παράρτημα 3, Ενότ. 5)",
     )
     protocol_number = models.CharField(max_length=32, unique=True)
-    submitted_on = models.DateField(help_text="Ημερομηνία υποβολής (Ενότ. 5)")
-    received_at = models.DateTimeField(null=True, blank=True)
-    received_by = models.CharField(max_length=255, blank=True)
-    district_file_number = models.CharField(max_length=64, blank=True)
+    submitted_on = models.DateField(null=True, blank=True, help_text="Ημερομηνία υποβολής (Ενότ. 5)")
 
     # 1. Προσωπικά στοιχεία αιτητή/αιτήτριας + 5. συζύγου/συμβίου (σταθερά στοιχεία στο μητρώο Ατόμων)
     applicant = models.ForeignKey(
@@ -67,7 +64,8 @@ class PlotApplication(AuditedModel):
         related_name="plot_applications_as_spouse",
     )
     email = models.EmailField(
-        help_text="Έγκυρη ηλεκτρονική διεύθυνση για την επίσημη επικοινωνία (Ενότ. 6, 7)"
+        blank=True,
+        help_text="Έγκυρη ηλεκτρονική διεύθυνση για την επίσημη επικοινωνία (Ενότ. 6, 7)",
     )
     correspondence_street = models.CharField(max_length=255, blank=True)
     correspondence_number = models.CharField(max_length=32, blank=True)
@@ -77,13 +75,17 @@ class PlotApplication(AuditedModel):
     correspondence_district = models.CharField(max_length=128, blank=True)
 
     # 2. Τόπος διαμονής αιτητή/αιτήτριας
-    residence_category = models.CharField(max_length=32, choices=ResidenceCategory.choices)
+    residence_category = models.CharField(
+        max_length=32, choices=ResidenceCategory.choices, blank=True
+    )
     residence_street = models.CharField(max_length=255, blank=True)
     residence_number = models.CharField(max_length=32, blank=True)
     residence_apartment = models.CharField(max_length=32, blank=True)
     residence_postal_code = models.CharField(max_length=16, blank=True)
     residence_community = models.CharField(
-        max_length=255, help_text="Κοινότητα / Δ.Δ. διαμονής (για (Δ): η Γειτονική Κοινότητα)"
+        max_length=255,
+        blank=True,
+        help_text="Κοινότητα / Δ.Δ. διαμονής (για (Δ): η Γειτονική Κοινότητα)",
     )
     origin_parent_description = models.TextField(
         blank=True, help_text="(Β) Καταγωγή από την Κοινότητα ως προς ποιο γονέα"
@@ -91,42 +93,37 @@ class PlotApplication(AuditedModel):
     previous_residence_address = models.CharField(
         max_length=255, blank=True, help_text="(Β) Διεύθυνση κατά την περίοδο μόνιμης κατοίκησης"
     )
-    previous_residence_from = models.DateField(null=True, blank=True)
-    previous_residence_to = models.DateField(null=True, blank=True)
-    community_residence_since = models.DateField(
-        null=True, blank=True, help_text="(Γ) Έναρξη μόνιμης διαμονής στην Κοινότητα μετά την επιστροφή"
-    )
-    abroad_from = models.DateField(null=True, blank=True, help_text="(Γ) Παραμονή στο εξωτερικό από")
-    abroad_to = models.DateField(null=True, blank=True, help_text="(Γ) Παραμονή στο εξωτερικό μέχρι")
     residence_notes = models.TextField(blank=True, help_text="Αναλυτική περιγραφή / λοιπές πληροφορίες")
 
     # 3. Οικογενειακή κατάσταση
-    family_status = models.CharField(max_length=32, choices=FamilyStatus.choices)
+    family_status = models.CharField(max_length=32, choices=FamilyStatus.choices, blank=True)
     single_parent_status = models.CharField(
         max_length=16, choices=SingleParentStatus.choices, blank=True
     )
     single_parent_other = models.CharField(max_length=255, blank=True)
 
-    # 9. Άλλη ακίνητη ιδιοκτησία (Ενότ. 10.Δ, 10.Ε)
+    # 9. Άλλη ακίνητη ιδιοκτησία (Ενότ. 10.Δ)
     has_dwelling = models.BooleanField(null=True)
     has_dwelling_details = models.TextField(blank=True)
     has_residential_land = models.BooleanField(null=True)
     has_residential_land_details = models.TextField(blank=True)
+
+    # 10. Αποξένωση ακίνητης ιδιοκτησίας (Ενότ. 10.Ε)
     has_alienated_property = models.BooleanField(null=True)
     has_alienated_property_details = models.TextField(blank=True)
 
-    # 10. Παραχώρηση άλλης κρατικής στεγαστικής βοήθειας (Ενότ. 20.3)
+    # 11. Παραχώρηση άλλης κρατικής στεγαστικής βοήθειας (Ενότ. 20.3)
     previous_housing_aid = models.BooleanField(null=True)
     previous_housing_aid_details = models.TextField(blank=True)
 
-    # 11. Υποβολή άλλης αίτησης στο πλαίσιο του Σχεδίου
-    other_application_choice_1 = models.CharField(max_length=255, blank=True)
-    other_application_choice_2 = models.CharField(max_length=255, blank=True)
-    other_application_choice_3 = models.CharField(max_length=255, blank=True)
-    other_applications_notes = models.TextField(blank=True)
+    # Σειρά προτεραιότητας μεταξύ των αιτήσεων του ατόμου (ορίζεται στην καρτέλα «Άτομα»)
+    preference_order = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        help_text="Σειρά προτεραιότητας μεταξύ των αιτήσεων παραχώρησης οικοπέδου του ατόμου",
+    )
 
-    # 12. Υπεύθυνη δήλωση email · 13. Υπογραφές (Ενότ. 5) · Ένορκη δήλωση
-    email_declaration_accepted = models.BooleanField(default=False)
+    # 12. Υπογραφές (Ενότ. 5) · Ένορκη δήλωση
     applicant_signed = models.BooleanField(default=False)
     spouse_signed = models.BooleanField(default=False)
     sworn_declaration_date = models.DateField(null=True, blank=True)
@@ -137,8 +134,6 @@ class PlotApplication(AuditedModel):
     # Κατάλογος απαιτούμενων δικαιολογητικών (κωδικοί του documents.DOCUMENT_CATALOG)
     attached_documents = models.JSONField(default=list, blank=True)
     other_documents = models.TextField(blank=True, help_text="Άλλα πιστοποιητικά που επισυνάπτονται")
-
-    comments = models.TextField(blank=True)
 
     # Αποτέλεσμα αυτόματου ελέγχου (υπολογίζεται σε κάθε αποθήκευση — rules.evaluate)
     children_count = models.PositiveIntegerField(default=0)
@@ -191,7 +186,7 @@ class ApplicationParty(AuditedModel):
     social_insurance_number = models.CharField(max_length=32, blank=True)
     refugee_identity_number = models.CharField(max_length=64, blank=True)
     alien_registration_number = models.CharField(max_length=64, blank=True)
-    citizenship = models.CharField(max_length=16, choices=Citizenship.choices)
+    citizenship = models.CharField(max_length=16, choices=Citizenship.choices, blank=True)
     citizenship_other = models.CharField(max_length=128, blank=True)
     mobile_phone = models.CharField(max_length=32, blank=True)
     landline_phone = models.CharField(max_length=32, blank=True)
@@ -247,48 +242,46 @@ class IncomeDeclaration(AuditedModel):
     class Member(models.TextChoices):
         APPLICANT = "applicant", "Αιτητής/τρια"
         SPOUSE = "spouse", "Σύζυγος/Συμβίος"
+        CHILD = "child", "Τέκνο"
         OTHER = "other", "Άλλο μέλος της οικογένειας"
 
     class EmploymentType(models.TextChoices):
         EMPLOYEE = "employee", "Μισθωτός Εργαζόμενος"
         SELF_EMPLOYED = "self_employed", "Αυτοτελώς Εργαζόμενος"
         UNEMPLOYED = "unemployed", "Άνεργος"
+        OTHER_SOURCE = "other", "Άλλη πηγή εισοδήματος"
 
     application = models.ForeignKey(PlotApplication, on_delete=models.CASCADE, related_name="incomes")
-    member = models.CharField(max_length=16, choices=Member.choices)
-    member_description = models.CharField(
-        max_length=255, blank=True, help_text="Δήλωση μέλους οικογένειας (για «Άλλο μέλος»)"
+    member = models.CharField(max_length=16, choices=Member.choices, default=Member.APPLICANT)
+    child = models.ForeignKey(
+        ApplicationChild,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="incomes",
     )
     employment_type = models.CharField(max_length=16, choices=EmploymentType.choices, blank=True)
+    description = models.CharField(
+        max_length=255, blank=True, help_text="Περιγραφή / πηγή εισοδήματος"
+    )
     gross_annual_income = models.DecimalField(
-        max_digits=12, decimal_places=2, default=Decimal("0"),
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0"),
         help_text="Ετήσιο ακαθάριστο εισόδημα (συμπ. 13ου, 14ου, άλλου μισθού)",
     )
-    other_income_1_description = models.CharField(max_length=255, blank=True)
-    other_income_1_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
-    other_income_2_description = models.CharField(max_length=255, blank=True)
-    other_income_2_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
-    other_income_3_description = models.CharField(max_length=255, blank=True)
-    other_income_3_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
 
     class Meta:
-        ordering = ("application", "member")
-        unique_together = ("application", "member")
-
-    OTHER_INCOME_SLOTS = (1, 2, 3)
+        ordering = ("application", "id")
 
     @property
-    def other_incomes(self):
-        rows = []
-        for slot in self.OTHER_INCOME_SLOTS:
-            description = getattr(self, f"other_income_{slot}_description")
-            amount = getattr(self, f"other_income_{slot}_amount")
-            if description or amount:
-                rows.append((description, amount or Decimal("0")))
-        return rows
+    def member_label(self) -> str:
+        if self.member == self.Member.CHILD and self.child_id:
+            full_name = f"{self.child.first_name} {self.child.last_name}".strip()
+            if full_name:
+                return f"Τέκνο: {full_name}"
+        return self.get_member_display()
 
     @property
     def total(self) -> Decimal:
-        return (self.gross_annual_income or Decimal("0")) + sum(
-            (amount for _, amount in self.other_incomes), Decimal("0")
-        )
+        return self.gross_annual_income or Decimal("0")

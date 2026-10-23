@@ -18,7 +18,7 @@ class ChildInline(admin.TabularInline):
     extra = 0
 
 
-class IncomeInline(admin.StackedInline):
+class IncomeInline(admin.TabularInline):
     model = IncomeDeclaration
     extra = 0
 

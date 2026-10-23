@@ -9,10 +9,13 @@ from dataclasses import asdict, dataclass
 from datetime import date
 from decimal import Decimal
 
-from applications.rules import age_at, income_limit_setting
+from plot_applications.parameters import age_at, income_limit_setting
 from core.services import get_setting
+from plot_applications.documents import DOCUMENT_LABELS
 from plot_applications.models import (
     ApplicationChild,
+    ApplicationParty,
+    IncomeDeclaration,
     EligibilityResult,
     PlotApplication,
     ResidenceCategory,
@@ -28,8 +31,6 @@ PARAMETER_SETTINGS: tuple[tuple[str, int, str], ...] = (
     ("plotApp.minorMaxAge", 18, "Ενότ. 10.Α — ανήλικα τέκνα (ηλικία μικρότερη από)"),
     ("plotApp.studentMaxAgeFemale", 23, "Ενότ. 10.Α — σπουδάζοντα τέκνα θήλυ μέχρι (ετών)"),
     ("plotApp.studentMaxAgeMale", 25, "Ενότ. 10.Α — σπουδάζοντα τέκνα άρρενα μέχρι (ετών)"),
-    ("plotApp.repatriatedAbroadYears", 10, "Ενότ. 11.IV — ελάχιστα έτη παραμονής στο εξωτερικό"),
-    ("plotApp.repatriatedResidenceYears", 3, "Ενότ. 11.IV — ελάχιστα έτη διαμονής στην Κοινότητα"),
     ("plotApp.largeFamilyChildren", 4, "Ενότ. 11 — ελάχιστος αριθμός τέκνων πολύτεκνης"),
 )
 PARAMETER_DEFAULTS = {key: default for key, default, _ in PARAMETER_SETTINGS}
@@ -56,19 +57,19 @@ class CriterionResult:
 @dataclass
 class ChildAssessment:
     child: ApplicationChild
-    age: int
+    age: int | None
     recognized: bool | None  # None = δεν κρίνεται ακόμη (λείπει στοιχείο)
     note: str = ""
 
 
-def years_between(start: date, end: date) -> int:
-    return age_at(end, start)
-
-
-def assess_child(child: ApplicationChild, on: date) -> ChildAssessment:
+def assess_child(child: ApplicationChild, on: date | None) -> ChildAssessment:
     """Αν το τέκνο εμπίπτει στον ορισμό «Τέκνα» της Ενότ. 10.Α κατά την υποβολή."""
-    age = age_at(on, child.date_of_birth)
     status = child.status
+    if on is None or child.date_of_birth is None:
+        if status == ApplicationChild.Status.NATIONAL_GUARD:
+            return ChildAssessment(child, None, True)
+        return ChildAssessment(child, None, None, "Δεν δηλώθηκε ημερομηνία υποβολής ή γέννησης.")
+    age = age_at(on, child.date_of_birth)
     if status == ApplicationChild.Status.MINOR:
         limit = parameter("plotApp.minorMaxAge")
         if age < limit:
@@ -101,6 +102,31 @@ def _income_limit(members: int) -> Decimal:
     return income_limit_setting(key)
 
 
+def income_tier_label(members: int) -> str:
+    if members <= 2:
+        return "Ζεύγος και Μονογονεϊκή οικογένεια (έως 2 μέλη)"
+    if members == 3:
+        return "Οικογένεια 3 ατόμων"
+    if members == 4:
+        return "Οικογένεια 4 ατόμων"
+    return f"Οικογένεια 5+ ατόμων ({members} μέλη)"
+
+
+def income_evaluation_parameters() -> dict:
+    return {
+        "limits": {
+            "2": str(_income_limit(2)),
+            "3": str(_income_limit(3)),
+            "4": str(_income_limit(4)),
+            "5": str(_income_limit(5)),
+        },
+        "minor_max_age": parameter("plotApp.minorMaxAge"),
+        "student_max_age_female": parameter("plotApp.studentMaxAgeFemale"),
+        "student_max_age_male": parameter("plotApp.studentMaxAgeMale"),
+        "large_family_children": parameter("plotApp.largeFamilyChildren"),
+    }
+
+
 def _money(value: Decimal) -> str:
     return f"{value:,.2f}".replace(",", " ").replace(".", ",").replace(" ", ".")
 
@@ -117,34 +143,13 @@ def _yes_no_criterion(
 
 def _residence_detail_check(category, application: PlotApplication, applicant_party) -> tuple[str, str]:
     """Έλεγχος στοιχείων κατηγορίας διαμονής (Ενότ. 11) — κοινός για (Α)–(Γ) και (Δ) κατ' αναλογία."""
-    on = application.submitted_on
     if category == ResidenceCategory.DISPLACED:
         if not (applicant_party and applicant_party.refugee_identity_number):
             return PENDING, "Εκτοπισθείς χωρίς Αρ. Προσφυγικής Ταυτότητας."
         return PASS, ""
     if category == ResidenceCategory.INTERNAL_EMIGRANT:
-        missing = []
         if not application.origin_parent_description.strip():
-            missing.append("καταγωγή ως προς γονέα")
-        if not (application.previous_residence_from and application.previous_residence_to):
-            missing.append("περίοδος μόνιμης κατοίκησης")
-        if missing:
-            return PENDING, "Λείπουν: " + ", ".join(missing) + "."
-        return PASS, ""
-    if category == ResidenceCategory.REPATRIATED:
-        if not (application.abroad_from and application.abroad_to and application.community_residence_since):
-            return PENDING, "Λείπουν οι περίοδοι παραμονής στο εξωτερικό / διαμονής στην Κοινότητα."
-        abroad_years = years_between(application.abroad_from, application.abroad_to)
-        residence_years = years_between(application.community_residence_since, on)
-        need_abroad = parameter("plotApp.repatriatedAbroadYears")
-        need_residence = parameter("plotApp.repatriatedResidenceYears")
-        problems = []
-        if abroad_years < need_abroad:
-            problems.append(f"παραμονή στο εξωτερικό {abroad_years} έτη (< {need_abroad})")
-        if residence_years < need_residence:
-            problems.append(f"διαμονή στην Κοινότητα {residence_years} έτη (< {need_residence})")
-        if problems:
-            return FAIL, "Επαναπατρισθείς: " + "; ".join(problems) + "."
+            return PENDING, "Λείπουν: καταγωγή ως προς γονέα."
         return PASS, ""
     return PASS, ""
 
@@ -163,6 +168,96 @@ def _residence_criterion(application: PlotApplication, applicant_party) -> Crite
         )
     result, note = _residence_detail_check(category, application, applicant_party)
     return CriterionResult(code, label, section, result, note)
+
+
+def required_documents(application: PlotApplication) -> list[tuple[tuple[str, ...], str]]:
+    """Δικαιολογητικά που απαιτούνται για την αίτηση (Ενότ. 5, 10, 20.2).
+
+    Κάθε στοιχείο είναι (κωδικοί που ικανοποιούν την απαίτηση — αρκεί ένας, περιγραφή).
+    """
+    required: list[tuple[tuple[str, ...], str]] = []
+
+    def need(*codes: str):
+        required.append((codes, DOCUMENT_LABELS[codes[0]]))
+
+    category = application.residence_category
+    applicant_party = application.applicant_party
+    has_spouse = application.is_couple and application.spouse_id is not None
+    need("A1")
+    if category == ResidenceCategory.DISPLACED or (applicant_party and applicant_party.refugee_identity_number):
+        need("A2")
+    if application.is_couple:
+        required.append((("B1", "B2"), DOCUMENT_LABELS["B1"]))
+    children = list(application.children.all())
+    if children:
+        need("B11")
+    statuses = {child.status for child in children}
+    if ApplicationChild.Status.STUDENT in statuses:
+        need("B12")
+    if ApplicationChild.Status.NATIONAL_GUARD in statuses:
+        need("B13")
+    if ApplicationChild.Status.ADULT_DISABILITY in statuses:
+        need("B14")
+    if any(party.has_disability for party in application.parties.all()):
+        need("B10")
+    # Ενότ. 10.Γ — λογαριασμός ΑΗΚ και βεβαίωση Κοινότητας ταυτόχρονα με την αίτηση
+    if category == ResidenceCategory.NEIGHBOURING:
+        need("C9")
+        need("C10")
+    else:
+        need("C1")
+        need("C2")
+    if category == ResidenceCategory.INTERNAL_EMIGRANT:
+        need("C6")
+    if category == ResidenceCategory.REPATRIATED:
+        required.append((("C7", "A3"), DOCUMENT_LABELS["C7"]))
+        need("C8")
+    # Ενότ. 10.Δ, 10.Ε — πιστοποιητικά ΤΚΧ (όταν δεν δηλώθηκε «Ναι»)
+    if application.has_dwelling is not True or application.has_residential_land is not True:
+        need("D1")
+        need("D2")
+    if application.has_residential_land is not True:
+        need("D3")
+    if application.has_alienated_property is not True:
+        need("D4")
+        need("D5")
+    # Ενότ. 10.Στ — αποδεικτικά εισοδήματος ανά μέλος που δηλώνει εισόδημα
+    income_codes = {
+        IncomeDeclaration.Member.APPLICANT: ("E1", "E2", "E3"),
+        IncomeDeclaration.Member.SPOUSE: ("E4", "E5", "E6"),
+        IncomeDeclaration.Member.CHILD: ("E7", "E8", "E9"),
+        IncomeDeclaration.Member.OTHER: ("E7", "E8", "E9"),
+    }
+    needed_income_codes: set[str] = set()
+    for income in application.incomes.all():
+        employee, self_employed, other = income_codes.get(
+            income.member, ("E7", "E8", "E9")
+        )
+        if income.member == IncomeDeclaration.Member.SPOUSE and not has_spouse:
+            continue
+        code_to_need = None
+        if income.employment_type == IncomeDeclaration.EmploymentType.EMPLOYEE:
+            code_to_need = employee
+        elif income.employment_type == IncomeDeclaration.EmploymentType.SELF_EMPLOYED:
+            code_to_need = self_employed
+        elif income.employment_type == IncomeDeclaration.EmploymentType.OTHER_SOURCE:
+            code_to_need = other
+        if code_to_need and code_to_need not in needed_income_codes:
+            needed_income_codes.add(code_to_need)
+            need(code_to_need)
+    return required
+
+
+def _documents_criterion(application: PlotApplication) -> CriterionResult:
+    attached = set(application.attached_documents or [])
+    missing = [label for codes, label in required_documents(application) if not attached.intersection(codes)]
+    if missing:
+        return CriterionResult(
+            "documents", "Δικαιολογητικά", "5, 20.2", FAIL,
+            "Λείπουν δικαιολογητικά (η αίτηση που χρειάζεται συμπλήρωση απορρίπτεται): "
+            + "; ".join(missing),
+        )
+    return CriterionResult("documents", "Δικαιολογητικά", "5, 20.2", PASS)
 
 
 NEIGHBOURING_PRIORITY = 5
@@ -220,18 +315,26 @@ def evaluate(application: PlotApplication) -> dict:
 
     # Ενότ. 10 — Κύπριοι πολίτες (τουλάχιστον ένα πρόσωπο του Ζεύγους)
     cypriot = bool(applicant_party and applicant_party.is_cypriot) or bool(spouse_party and spouse_party.is_cypriot)
+    has_declared_citizenship = bool(applicant_party and applicant_party.citizenship) or bool(
+        spouse_party and spouse_party.citizenship
+    )
+    if cypriot:
+        cit_result, cit_note = PASS, ""
+    elif not has_declared_citizenship:
+        cit_result, cit_note = PENDING, "Δεν δηλώθηκε υπηκοότητα."
+    else:
+        cit_result, cit_note = FAIL, "Κανένα πρόσωπο δεν είναι Κύπριος πολίτης."
     criteria.append(
-        CriterionResult(
-            "citizenship", "Κυπριακή υπηκοότητα", "10", PASS if cypriot else FAIL,
-            "" if cypriot else "Κανένα πρόσωπο δεν είναι Κύπριος πολίτης.",
-        )
+        CriterionResult("citizenship", "Κυπριακή υπηκοότητα", "10", cit_result, cit_note)
     )
 
     # Ενότ. 10.Α — Οικογενειακή κατάσταση και Τέκνα
     children = [assess_child(child, on) for child in application.children.all()]
     recognized = sum(1 for item in children if item.recognized)
     undecided = any(item.recognized is None for item in children)
-    if application.is_couple:
+    if not application.family_status:
+        family = (PENDING, "Δεν δηλώθηκε οικογενειακή κατάσταση.")
+    elif application.is_couple:
         if has_spouse:
             family = (PASS, "")
         else:
@@ -255,17 +358,28 @@ def evaluate(application: PlotApplication) -> dict:
 
     # Ενότ. 10.Β — ηλικία (τουλάχιστον ένα πρόσωπο)
     max_age = parameter("plotApp.maxAge")
-    ages = [age_at(on, application.applicant.date_of_birth)]
-    if has_spouse:
-        ages.append(age_at(on, application.spouse.date_of_birth))
+    persons_for_age = [application.applicant] + ([application.spouse] if has_spouse else [])
+    ages = [
+        age_at(on, person.date_of_birth)
+        for person in persons_for_age
+        if on is not None and person is not None and person.date_of_birth is not None
+    ]
+    missing_age_data = on is None or len(ages) < len(persons_for_age)
     age_ok = any(age < max_age for age in ages)
-    criteria.append(
-        CriterionResult(
-            "age", "Ηλικία", "10.Β", PASS if age_ok else FAIL,
-            "Ηλικίες κατά την υποβολή: " + ", ".join(str(a) for a in ages)
-            + ("" if age_ok else f" — κανένα πρόσωπο κάτω των {max_age}."),
+    if age_ok:
+        age_result = PASS
+        age_note = "Ηλικίες κατά την υποβολή: " + ", ".join(str(a) for a in ages)
+    elif missing_age_data:
+        age_result = PENDING
+        age_note = "Δεν δηλώθηκε ημερομηνία υποβολής ή γέννησης."
+    else:
+        age_result = FAIL
+        age_note = (
+            "Ηλικίες κατά την υποβολή: "
+            + ", ".join(str(a) for a in ages)
+            + f" — κανένα πρόσωπο κάτω των {max_age}."
         )
-    )
+    criteria.append(CriterionResult("age", "Ηλικία", "10.Β", age_result, age_note))
 
     # Ενότ. 10.Γ / 11 — διαμονή
     criteria.append(_residence_criterion(application, applicant_party))
@@ -286,16 +400,29 @@ def evaluate(application: PlotApplication) -> dict:
     )
 
     # Ενότ. 10.Στ — εισόδημα
-    members = 1 + (1 if has_spouse else 0) + recognized
+    adults = 2 if application.is_couple else 1
+    members = adults + recognized
     total = sum((income.total for income in application.incomes.all()), Decimal("0"))
     limit = _income_limit(members)
-    income_ok = total <= limit
-    criteria.append(
-        CriterionResult(
-            "income", "Οικογενειακό ακαθάριστο εισόδημα", "10.Στ", PASS if income_ok else FAIL,
-            f"Σύνολο € {_money(total)} — όριο € {_money(limit)} για {members} μέλη.",
+    tier_label = income_tier_label(members)
+    if not application.family_status:
+        income_criterion = CriterionResult(
+            "income",
+            "Οικογενειακό ακαθάριστο εισόδημα",
+            "10.Στ",
+            PENDING,
+            f"Σύνολο € {_money(total)} — δεν δηλώθηκε οικογενειακή κατάσταση για τον καθορισμό του ορίου εισοδήματος.",
         )
-    )
+    else:
+        income_ok = total <= limit
+        income_criterion = CriterionResult(
+            "income",
+            "Οικογενειακό ακαθάριστο εισόδημα",
+            "10.Στ",
+            PASS if income_ok else FAIL,
+            f"Σύνολο € {_money(total)} — όριο € {_money(limit)} για {members} μέλη ({tier_label}).",
+        )
+    criteria.append(income_criterion)
 
     # Ενότ. 20.3 — προηγούμενη κρατική στεγαστική ενίσχυση
     criteria.append(
@@ -304,6 +431,9 @@ def evaluate(application: PlotApplication) -> dict:
                           "Δηλώθηκε προηγούμενη ενίσχυση (εξαιρούνται μόνο επιδότηση ενοικίου/επιτοκίου).",
                           "Δηλώθηκε «Όχι» (και στην Ένορκη Δήλωση).")
     )
+
+    # Ενότ. 5, 20.2 — όλα τα δικαιολογητικά κατά την υποβολή
+    criteria.append(_documents_criterion(application))
 
     results = {item.result for item in criteria}
     overall = FAIL if FAIL in results else PENDING if PENDING in results else PASS
@@ -316,6 +446,9 @@ def evaluate(application: PlotApplication) -> dict:
         "recognized_children_count": recognized,
         "family_members_count": members,
         "family_income_total": total,
+        "income_limit": limit,
+        "income_tier_label": tier_label,
+        "income_criterion": income_criterion,
         "priority_primary": primary,
         "priority_secondary": secondary,
         "priority_label": priority_label,

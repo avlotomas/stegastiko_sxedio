@@ -714,11 +714,83 @@ bindFilePickers(document);
 
 
 
-    // 2.2 deficiencies email dialog, sent without reloading so unsaved section edits survive.
+    // 2.2 deficiencies email dialog & plot application email dialog, sent without reloading so unsaved edits survive.
+
+    function collectLiveMissingDocumentsText() {
+        const plotForm = document.querySelector("[data-plot-application-form]");
+        if (!plotForm) {
+            return null;
+        }
+        const missing = [];
+        plotForm.querySelectorAll("[data-document-code]:not([hidden])").forEach(function (label) {
+            const checkbox = label.querySelector('input[type="checkbox"]');
+            if (checkbox && !checkbox.disabled && !checkbox.checked) {
+                const textEl = label.querySelector("span");
+                const text = (textEl ? textEl.textContent : label.textContent || "").trim();
+                if (text) {
+                    missing.push("- " + text);
+                }
+            }
+        });
+        if (!missing.length) {
+            return "";
+        }
+        return ["Ελλείποντα δικαιολογητικά έγγραφα:", ...missing].join("\n");
+    }
 
     (function () {
 
         document.addEventListener("click", function (event) {
+
+            const insertBtn = event.target.closest("[data-insert-missing-documents]");
+
+            if (insertBtn) {
+
+                const dialog = insertBtn.closest("dialog");
+
+                if (!dialog) {
+
+                    return;
+
+                }
+
+                const body = dialog.querySelector("[data-email-body]");
+
+                if (!body) {
+
+                    return;
+
+                }
+
+                const liveMissing = dialog.dataset.collectLiveMissing === "1"
+                    ? collectLiveMissingDocumentsText()
+                    : null;
+
+                const missingText = liveMissing !== null
+                    ? liveMissing
+                    : (dialog.dataset.missingDocuments || "");
+
+                if (missingText) {
+
+                    const current = (body.value || "").trim();
+
+                    if (!current) {
+
+                        body.value = missingText;
+
+                    } else if (!current.includes(missingText)) {
+
+                        body.value = current + "\n\n" + missingText;
+
+                    }
+
+                }
+
+                body.focus();
+
+                return;
+
+            }
 
             const button = event.target.closest("[data-dialog-open]");
 
@@ -760,13 +832,35 @@ bindFilePickers(document);
 
             }
 
-            const source = button.dataset.copyText || "";
+            dialog.dataset.collectLiveMissing = button.dataset.collectLiveMissing || "";
+
+            const liveMissing = button.dataset.collectLiveMissing === "1"
+                ? collectLiveMissingDocumentsText()
+                : null;
+
+            const source = liveMissing !== null ? liveMissing : (button.dataset.copyText || "");
+
+            dialog.dataset.missingDocuments = source;
 
             const body = dialog.querySelector("[data-email-body]");
 
             if (body) {
 
                 body.value = source;
+
+            }
+
+            const recipientInput = form.querySelector("[data-email-recipient-input]");
+
+            if (recipientInput) {
+
+                const liveEmail = document.querySelector('#id_main-email');
+
+                const emailValue = liveEmail && button.dataset.collectLiveMissing === "1"
+                    ? liveEmail.value
+                    : (button.dataset.emailRecipient || "");
+
+                recipientInput.value = emailValue;
 
             }
 
@@ -1546,6 +1640,89 @@ bindFilePickers(document);
         syncAll();
     });
     syncAll();
+})();
+
+// Role setup per function (Ρυθμίσεις → Ρόλοι και δικαιώματα):
+// function selector, expandable subsection panels under «Εμφάνιση» and «Επεξεργασία», and «Όλα» toggle.
+(function () {
+    const functionSelect = document.querySelector("[data-role-function-select]");
+    if (functionSelect) {
+        const syncPanels = function () {
+            const selected = functionSelect.value;
+            document.querySelectorAll("[data-role-function-panel]").forEach(function (panel) {
+                panel.hidden = panel.getAttribute("data-role-function-panel") !== selected;
+            });
+        };
+        functionSelect.addEventListener("change", syncPanels);
+        syncPanels();
+    }
+
+    document.querySelectorAll("[data-role-function-panel]").forEach(function (panel) {
+        const getSubBoxes = function (action) {
+            const subPanel = panel.querySelector('[data-subsections-panel="' + action + '"]');
+            if (!subPanel) {
+                return [];
+            }
+            return Array.from(
+                subPanel.querySelectorAll('[data-subsection-item="' + action + '"] input[type="checkbox"]')
+            );
+        };
+
+        const syncAllToggle = function (action) {
+            const subPanel = panel.querySelector('[data-subsections-panel="' + action + '"]');
+            if (!subPanel) {
+                return;
+            }
+            const allToggle = subPanel.querySelector('[data-subsection-all="' + action + '"]');
+            if (!allToggle) {
+                return;
+            }
+            const boxes = getSubBoxes(action);
+            allToggle.checked = boxes.length > 0 && boxes.every(function (b) { return b.checked; });
+            allToggle.indeterminate = !allToggle.checked && boxes.some(function (b) { return b.checked; });
+        };
+
+        const syncActionPanel = function (action, clearIfUnchecked) {
+            const actionToggle = panel.querySelector(
+                'input[type="checkbox"][data-action-with-subsections="' + action + '"]'
+            );
+            const subPanel = panel.querySelector('[data-subsections-panel="' + action + '"]');
+            if (!actionToggle || !subPanel) {
+                return;
+            }
+            if (actionToggle.checked) {
+                subPanel.hidden = false;
+            } else {
+                subPanel.hidden = true;
+                if (clearIfUnchecked) {
+                    getSubBoxes(action).forEach(function (b) { b.checked = false; });
+                }
+            }
+            syncAllToggle(action);
+        };
+
+        panel.addEventListener("change", function (event) {
+            const target = event.target;
+            if (target.hasAttribute("data-action-with-subsections")) {
+                const action = target.getAttribute("data-action-with-subsections");
+                syncActionPanel(action, true);
+            } else if (target.hasAttribute("data-subsection-all")) {
+                const action = target.getAttribute("data-subsection-all");
+                const checked = target.checked;
+                getSubBoxes(action).forEach(function (b) { b.checked = checked; });
+                syncAllToggle(action);
+            } else {
+                const itemLabel = target.closest("[data-subsection-item]");
+                if (itemLabel) {
+                    syncAllToggle(itemLabel.getAttribute("data-subsection-item"));
+                }
+            }
+        });
+
+        ["view", "edit"].forEach(function (action) {
+            syncActionPanel(action, false);
+        });
+    });
 })();
 
 (function () {
