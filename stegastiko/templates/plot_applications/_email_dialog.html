@@ -33,7 +33,24 @@
                     </button>
                 </div>
             </div>
-            {% include "includes/form_field.html" with field=plot_application_email_form.body wide=True %}
+            <div class="form-field form-field--wide">
+                {{ plot_application_email_form.body.label_tag }}
+                <div class="input email-rich-body"
+                     contenteditable="true"
+                     role="textbox"
+                     aria-multiline="true"
+                     aria-label="{{ plot_application_email_form.body.label }}"
+                     data-email-rich-body
+                     data-ui-skip></div>
+                <div hidden>
+                    {{ plot_application_email_form.body }}
+                </div>
+                {% if plot_application_email_form.body.errors %}
+                <ul class="errorlist">
+                    {% for error in plot_application_email_form.body.errors %}<li>{{ error }}</li>{% endfor %}
+                </ul>
+                {% endif %}
+            </div>
         </div>
 
         <div class="form-actions">

@@ -324,3 +324,87 @@ def test_utility_service_in_use_cannot_be_deleted(admin_client):
     rows = [(item, {"DELETE": "on"} if item == unused else {}) for item in UtilityServiceType.objects.all()]
     assert admin_client.post(url, _service_types_post(rows)).status_code == 302
     assert not UtilityServiceType.objects.filter(pk=unused.pk).exists()
+
+
+@pytest.mark.django_db
+def test_in_place_ui_edit_mode_and_text_save(client, make_user):
+    from cases.section_labels import DEFAULT_CASE_SECTION_LABELS
+    from core.branding import APP_TITLE_DEFAULT, get_app_title
+    from core.menu_labels import DEFAULT_MENU_LABELS, get_menu_labels
+    from core.ui_texts import get_ui_text_overrides
+
+    # Officer without settings edit permissions cannot toggle or save UI texts
+    client.force_login(make_user("officer_ui", "Λειτουργός καταχώρισης"))
+    assert client.post(reverse("ui_edit_mode_toggle")).status_code == 403
+    assert (
+        client.post(
+            reverse("ui_text_save"),
+            {"key": "uiText.btn_test", "value": "Δοκιμή"},
+        ).status_code
+        == 403
+    )
+
+    # Admin can toggle Edit Mode and save/reset both uiText.* and existing settings keys
+    client.force_login(make_user("sysadmin_ui", "Διαχειριστής συστήματος"))
+    toggle_resp = client.post(reverse("ui_edit_mode_toggle"))
+    assert toggle_resp.status_code == 200
+    assert toggle_resp.json() == {"ok": True, "ui_edit_mode": True}
+
+    html = client.get(reverse("home")).content.decode()
+    assert "ui-edit-mode" in html
+    assert 'id="ui-text-edit-dialog"' in html
+    assert 'id="ui-text-overrides"' in html
+
+    save_url = reverse("ui_text_save")
+    resp = client.post(
+        save_url,
+        {"key": "uiText.h1_announcements", "value": "Ανακοινώσεις Κοινοτήτων"},
+    )
+    assert resp.status_code == 200
+    assert get_ui_text_overrides()["uiText.h1_announcements"] == "Ανακοινώσεις Κοινοτήτων"
+
+    # Resetting removes the custom override
+    reset_resp = client.post(
+        save_url,
+        {"key": "uiText.h1_announcements", "reset": "1"},
+    )
+    assert reset_resp.status_code == 200
+    assert "uiText.h1_announcements" not in get_ui_text_overrides()
+
+    # Sync with menuLabel, appTitle, and caseSectionLabel
+    assert (
+        client.post(
+            save_url, {"key": "menuLabel.announcements", "value": "Προκηρύξεις"}
+        ).status_code
+        == 200
+    )
+    assert get_menu_labels()["announcements"] == "Προκηρύξεις"
+    assert (
+        client.post(
+            save_url, {"key": "menuLabel.announcements", "reset": "1"}
+        ).status_code
+        == 200
+    )
+    assert get_menu_labels()["announcements"] == DEFAULT_MENU_LABELS["announcements"]
+
+    assert (
+        client.post(save_url, {"key": "appTitle", "value": "Νέος Τίτλος"}).status_code
+        == 200
+    )
+    assert get_app_title() == "Νέος Τίτλος"
+    assert client.post(save_url, {"key": "appTitle", "reset": "1"}).status_code == 200
+    assert get_app_title() == APP_TITLE_DEFAULT
+
+    assert (
+        client.post(
+            save_url, {"key": "caseSectionLabel.1", "value": "Ενότητα 1 Νέα"}
+        ).status_code
+        == 200
+    )
+    assert get_case_section_label("1") == "Ενότητα 1 Νέα"
+    assert (
+        client.post(save_url, {"key": "caseSectionLabel.1", "reset": "1"}).status_code
+        == 200
+    )
+    assert get_case_section_label("1") == DEFAULT_CASE_SECTION_LABELS["1"]
+

@@ -15,9 +15,12 @@ from core.settings_views import (
     system_settings_case_labels,
     system_settings_email,
     system_settings_menu_labels,
+    system_settings_plot_application_labels,
     system_settings_section_labels,
     system_settings_subsection_labels,
     system_settings_workflow,
+    ui_edit_mode_toggle,
+    ui_text_save,
 )
 from core.views import (
     AppLoginView,
@@ -61,7 +64,22 @@ urlpatterns = [
         system_settings_subsection_labels,
         name="system_settings_subsection_labels",
     ),
+    path(
+        "settings/plot-application-labels/",
+        system_settings_plot_application_labels,
+        name="system_settings_plot_application_labels",
+    ),
     path("settings/email/", system_settings_email, name="system_settings_email"),
+    path(
+        "settings/ui-texts/toggle/",
+        ui_edit_mode_toggle,
+        name="ui_edit_mode_toggle",
+    ),
+    path(
+        "settings/ui-texts/save/",
+        ui_text_save,
+        name="ui_text_save",
+    ),
     path(
         "settings/utility-services/",
         utility_service_types,

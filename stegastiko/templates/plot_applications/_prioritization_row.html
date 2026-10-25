@@ -1,0 +1,46 @@
+{% with app=row.application %}
+<tr data-application-id="{{ app.pk }}"
+    data-auto-position="{{ row.auto_position }}"
+    data-sortable-row
+    {% if movable %}draggable="true"{% endif %}>
+    <td>
+        {% if movable %}<span class="drag-handle" aria-hidden="true" title="Σύρετε για αλλαγή σειράς">⋮⋮</span>{% endif %}
+        <strong data-priority-position>{{ row.position }}</strong>
+        {% if movable %}
+        <span class="priority-move" data-ui-skip>
+            <button type="button" class="btn-link" data-priority-move="up" aria-label="Μετακίνηση πάνω" title="Μετακίνηση πάνω">▲</button>
+            <button type="button" class="btn-link" data-priority-move="down" aria-label="Μετακίνηση κάτω" title="Μετακίνηση κάτω">▼</button>
+        </span>
+        {% endif %}
+    </td>
+    <td>
+        {% if access.plot_applications.view %}
+        <a href="{% url 'plot_applications:detail' app.pk %}"><strong>{{ app.protocol_number }}</strong></a>
+        {% else %}<strong>{{ app.protocol_number }}</strong>{% endif %}
+        <br><span class="text-muted">{{ app.submitted_on|date:"d/m/Y"|default:"—" }}</span>
+    </td>
+    <td>
+        {{ app.applicant.first_name }} {{ app.applicant.last_name }} <span class="text-muted">({{ app.applicant.identity_number }})</span>
+        {% if app.spouse %}<br>{{ app.spouse.first_name }} {{ app.spouse.last_name }} <span class="text-muted">({{ app.spouse.identity_number }})</span>{% endif %}
+    </td>
+    {% if row.group == "beneficiaries" %}
+    <td>{{ row.primary_label }}</td>
+    <td>{{ row.secondary_label }}</td>
+    <td>{{ app.recognized_children_count }}</td>
+    <td>{{ row.auto_position }}</td>
+    <td>
+        <span class="badge badge--pending" data-priority-moved {% if not row.is_moved %}hidden{% endif %}>Χειροκίνητη σειρά</span>
+        {% if row.tied_with %}<div>Ισοψηφία με {{ row.tied_with|join:", " }} — κλήρωση (Ενότ. 8, 11.3)</div>{% endif %}
+        {% if app.eligibility_override == "pass" %}<div>Χειροκίνητα ΔΙΚΑΙΟΥΧΟΣ: {{ app.eligibility_override_reason }}</div>{% endif %}
+    </td>
+    {% else %}
+    <td><span class="badge badge--{{ app.beneficiary_status }}">{{ app.beneficiary_label }}</span></td>
+    <td>{% for reason in row.reasons %}<div>{{ reason }}</div>{% endfor %}</td>
+    {% endif %}
+    <td class="data-table__actions">
+        {% if access.plot_applications.view %}
+        <a href="{% url 'plot_applications:detail' app.pk %}" class="btn btn-secondary btn-sm">Κατάσταση</a>
+        {% endif %}
+    </td>
+</tr>
+{% endwith %}

@@ -11,53 +11,133 @@
 </nav>
 
 <div class="page-header">
-    <h1>Αίτηση {{ application.protocol_number }}</h1>
+    <h1><span data-ui-text>Αίτηση</span> {{ application.protocol_number }}</h1>
     {% if sub_view.basic %}
-    <p class="page-header__lead" data-plot-subsection="basic">Κοινότητα {{ application.community.name }} · υποβολή {{ application.submitted_on|date:"d/m/Y"|default:"—" }}</p>
+    <p class="page-header__lead" data-plot-subsection="basic" data-ui-skip>Κοινότητα {{ application.community.name }} · υποβολή {{ application.submitted_on|date:"d/m/Y"|default:"—" }}</p>
     {% endif %}
 </div>
 
 <div class="toolbar toolbar--sticky" data-sticky-toolbar>
-    {% if access.plot_applications.edit %}
-    <a href="{% url 'plot_applications:edit' application.pk %}" class="btn btn-primary">Επεξεργασία</a>
-    {% endif %}
-    {% if can_send_email %}
-    <button type="button"
-            class="btn btn-secondary"
-            data-dialog-open="plot-application-email-dialog"
-            data-email-action="{% url 'plot_applications:email_send' application.pk %}"
-            data-email-subject="{{ email_subject }}"
-            data-email-recipient="{{ application.email }}"
-            data-copy-text="{{ missing_documents_text }}"
-            data-check-label="Αίτηση {{ application.protocol_number }}">
-        Αποστολή Email
-    </button>
-    {% endif %}
+    <div class="toolbar__group">
+        {% if access.plot_applications.edit %}
+        <a href="{% url 'plot_applications:edit' application.pk %}" class="btn btn-primary">Επεξεργασία</a>
+        {% endif %}
+        <a href="{% url 'plot_applications:list' %}" class="btn btn-secondary">Πίσω στον κατάλογο</a>
+    </div>
+    <div class="toolbar__group">
+        {% if sub_view.documents %}
+        <button type="button"
+                class="btn btn-secondary"
+                data-dialog-open="plot-application-documents-dialog"
+                data-documents-modal-open
+                aria-controls="plot-application-documents-dialog">
+            <span>Απαιτούμενα δικαιολογητικά</span>
+            <span class="badge {% if outcome.documents_completeness == 'complete' %}badge--pass{% else %}badge--fail{% endif %}"
+                  data-ui-skip>
+                {{ outcome.documents_completeness_label }}
+            </span>
+        </button>
+        {% endif %}
+        {% if sub_view.eligibility %}
+        <a href="{% url 'plot_applications:eligibility_report_pdf' application.pk %}"
+           class="btn btn-secondary"
+           data-eligibility-report-pdf-link>
+            Εξαγωγή PDF ελέγχου κριτηρίων
+        </a>
+        {% endif %}
+        {% if can_send_email %}
+        <button type="button"
+                class="btn btn-secondary"
+                data-dialog-open="plot-application-email-dialog"
+                data-email-action="{% url 'plot_applications:email_send' application.pk %}"
+                data-email-subject="{{ email_subject }}"
+                data-email-recipient="{{ application.email }}"
+                data-copy-text="{{ missing_documents_text }}"
+                data-check-label="Αίτηση {{ application.protocol_number }}"
+                data-collect-live-missing="1">
+            Αποστολή Email
+        </button>
+        {% endif %}
+        {% if sub_view.change_history %}
+        <button type="button"
+                class="btn btn-secondary"
+                data-history-timeline-open="{% url 'plot_applications:history' application.pk %}"
+                aria-controls="history-timeline-dialog">
+            Ιστορικό αλλαγών
+        </button>
+        {% endif %}
+    </div>
     {% if access.plot_applications.delete %}
-    <form method="post" action="{% url 'plot_applications:delete' application.pk %}" class="inline-form"
-          data-confirm="Διαγραφή της αίτησης {{ application.protocol_number }};">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-danger"{% if delete_refusal %} disabled title="{{ delete_refusal }}"{% endif %}>Διαγραφή</button>
-    </form>
+    <div class="toolbar__group toolbar__group--end">
+        <form method="post" action="{% url 'plot_applications:delete' application.pk %}" class="inline-form"
+              data-confirm="Διαγραφή της αίτησης {{ application.protocol_number }};">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger"{% if delete_refusal %} disabled title="{{ delete_refusal }}"{% endif %}>Διαγραφή</button>
+        </form>
+    </div>
     {% endif %}
-    <a href="{% url 'plot_applications:list' %}" class="btn btn-secondary">Πίσω στον κατάλογο</a>
 </div>
 
 {% if sub_view.eligibility %}
 <div class="card" data-plot-subsection="eligibility">
     <h2 class="card__title">Κατ' αρχήν έλεγχος κριτηρίων</h2>
-    <p class="card__lead">Αυτόματος έλεγχος βάσει των δηλώσεων· την τελική κρίση κάνει η Επιτροπή Εξέτασης Αιτήσεων (Ενότ. 6).</p>
+    <p class="card__lead">Κάθε αίτηση ελέγχεται σε δύο ανεξάρτητες ομάδες κριτηρίων: (1) Κριτήρια πληρότητας της αίτησης (υποχρεωτικά πεδία, υπογραφές, δικαιολογητικά — Ενότ. 5, 20.2) και (2) Κριτήρια επιλεξιμότητας δικαιούχου (Ενότ. 10, 11, 20.3). Την τελική κρίση κάνει η Επιτροπή Εξέτασης Αιτήσεων (Ενότ. 6).</p>
+
+    <div class="application-stages" data-application-stages>
+        {% for stage_code, stage_label in application_stages %}
+        <div class="application-stages__step {% if outcome.application_stage == stage_code %}is-current{% endif %}"
+             data-stage-step="{{ stage_code }}">
+            <span class="application-stages__num">{{ forloop.counter }}</span>
+            <span class="application-stages__label" data-ui-key="applicationStageLabel.{{ stage_code }}">{{ stage_label }}</span>
+        </div>
+        {% endfor %}
+    </div>
+
+    <h3 class="form-section-subtitle">1. Κριτήρια πληρότητας αίτησης</h3>
     <dl class="detail-grid">
-        <div><dt>Αποτέλεσμα</dt><dd><span class="badge badge--{{ outcome.overall }}">{{ application.get_eligibility_result_display }}</span></dd></div>
-        <div><dt>Προτεραιότητα (Ενότ. 11)</dt><dd>{{ application.priority_label|default:"—" }}</dd></div>
-        <div><dt>Μέλη οικογένειας</dt><dd>{{ outcome.family_members_count }} ({{ outcome.recognized_children_count }} από {{ outcome.children_count }} τέκνα κατά 10.Α)</dd></div>
-        <div><dt>Οικογενειακό ακαθάριστο εισόδημα</dt><dd>€ {{ outcome.family_income_total|floatformat:2 }}</dd></div>
+        <div>
+            <dt>Στάδιο αίτησης</dt>
+            <dd>
+                <span class="badge badge--{{ outcome.application_stage_badge }}" data-application-stage-badge>
+                    {{ outcome.application_stage_label }}
+                </span>
+            </dd>
+        </div>
+        <div>
+            <dt>Πληρότητα αίτησης</dt>
+            <dd>
+                <span class="badge badge--{{ outcome.completeness_badge }}"
+                      data-application-completeness-badge>
+                    {{ outcome.completeness_label }}
+                </span>
+            </dd>
+        </div>
+        {% if outcome.completeness_overall != 'complete' %}
+        <div data-incomplete-decision>
+            <dt>Απόφαση για ελλιπή αίτηση (Ενότ. 5(β))</dt>
+            <dd>
+                {% if outcome.is_rejected_incomplete %}
+                Απορρίφθηκε{% if application.incomplete_rejected_on %} στις {{ application.incomplete_rejected_on|date:"d/m/Y" }}{% endif %}:
+                {{ application.incomplete_rejection_reason|linebreaksbr }}
+                {% else %}
+                Εκκρεμεί λόγω ελλείψεων
+                {% endif %}
+            </dd>
+        </div>
+        {% endif %}
+        <div>
+            <dt>Κατάσταση δικαιολογητικών</dt>
+            <dd>
+                <span class="badge {% if outcome.documents_completeness == 'complete' %}badge--pass{% else %}badge--fail{% endif %}">{{ outcome.documents_completeness_label }}</span>
+                {% if application.documents_complete_override %}(Ορίστηκε ότι τα πιστοποιητικά είναι εντάξει{% if application.documents_complete_reason %}: {{ application.documents_complete_reason }}{% endif %}){% endif %}
+            </dd>
+        </div>
     </dl>
     <div class="table-wrap">
-        <table class="data-table">
-            <thead><tr><th>Κριτήριο</th><th>Ενότ.</th><th>Αποτέλεσμα</th><th>Σημείωση</th></tr></thead>
+        <table class="data-table" data-completeness-criteria-table>
+            <thead><tr><th>Κριτήριο πληρότητας</th><th>Ενότ.</th><th>Αποτέλεσμα</th><th>Σημείωση</th></tr></thead>
             <tbody>
-            {% for c in outcome.criteria %}
+            {% for c in outcome.completeness_criteria %}
             <tr>
                 <td>{{ c.label }}</td>
                 <td>{{ c.section }}</td>
@@ -68,6 +148,100 @@
             </tbody>
         </table>
     </div>
+
+    {% if can_reject_incomplete %}
+    <h3 class="form-section-subtitle">Απόρριψη λόγω ελλείψεων (Ενότ. 5(β), 20.2)</h3>
+    <p class="helptext">Η ελλιπής αίτηση παραμένει στο στάδιο συλλογής πληροφοριών και πιστοποιητικών μέχρι να συμπληρωθεί. Ο λειτουργός μπορεί να την απορρίψει λόγω έλλειψης στοιχείων ή πιστοποιητικών, με υποχρεωτική αιτιολογία· ο αιτητής υποβάλλει νέα αίτηση, εφόσον η προθεσμία υποβολής είναι ανοικτή.</p>
+    <form method="post"
+          action="{% url 'plot_applications:incomplete_reject' application.pk %}"
+          class="app-form"
+          data-incomplete-reject-form
+          data-confirm="Απόρριψη της αίτησης {{ application.protocol_number }} λόγω ελλείψεων;">
+        {% csrf_token %}
+        <div class="form-grid">
+            {% include "plot_applications/_field.html" with field=incomplete_rejection_form.incomplete_rejection_reason wide=True %}
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-danger btn-sm">Απόρριψη αίτησης λόγω ελλείψεων</button>
+        </div>
+    </form>
+    {% elif can_revoke_incomplete_rejection %}
+    <form method="post"
+          action="{% url 'plot_applications:incomplete_reject_revoke' application.pk %}"
+          class="inline-form"
+          data-incomplete-reject-revoke-form
+          data-confirm="Ανάκληση της απόρριψης λόγω ελλείψεων της αίτησης {{ application.protocol_number }};">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-secondary btn-sm">Ανάκληση απόρριψης</button>
+    </form>
+    {% endif %}
+
+    <h3 class="form-section-subtitle">2. Κριτήρια επιλεξιμότητας δικαιούχου</h3>
+    <dl class="detail-grid">
+        <div><dt>Δικαιούχος</dt><dd><span class="badge badge--{{ outcome.beneficiary_status }}" data-application-beneficiary-badge>{{ outcome.beneficiary_label }}</span></dd></div>
+        <div><dt>Παραχώρηση οικοπέδου</dt><dd><span class="badge badge--{{ outcome.plot_allocation_badge }}" data-application-plot-allocation-badge>{{ outcome.plot_allocation_label }}</span></dd></div>
+        <div><dt>Αποτέλεσμα επιλεξιμότητας</dt><dd><span class="badge badge--{{ outcome.eligibility_overall }}" data-application-eligibility-badge>{{ outcome.eligibility_label }}</span></dd></div>
+        <div>
+            <dt>Αποτέλεσμα λογισμικού</dt>
+            <dd>
+                <span class="badge badge--{{ outcome.eligibility_auto_overall }}" data-application-eligibility-auto-badge>{{ outcome.eligibility_auto_label }}</span>
+                {% if outcome.eligibility_overridden %}
+                <div data-eligibility-override-summary>
+                    Χειροκίνητη αλλαγή σε <strong>{{ outcome.eligibility_override_label }}</strong>: {{ outcome.eligibility_override_reason|linebreaksbr }}
+                </div>
+                {% endif %}
+            </dd>
+        </div>
+        <div><dt>Κατηγορία προτεραιότητας (Ενότ. 11)</dt><dd>{{ application.priority_label|default:"—" }}</dd></div>
+        {% if prioritization_row %}
+        <div>
+            <dt>Κατάλογος προτεραιοποίησης</dt>
+            <dd data-prioritization-position>
+                {% if prioritization_row.group == "beneficiaries" %}Θέση {{ prioritization_row.position }} στους δικαιούχους{% else %}Α/Α {{ prioritization_row.position }} στους μη δικαιούχους / εκκρεμείς{% endif %}
+                · <a href="{% url 'plot_applications:prioritization' %}?community_id={{ application.community_id }}">Προβολή καταλόγου</a>
+            </dd>
+        </div>
+        {% endif %}
+        <div><dt>Μέλη οικογένειας</dt><dd>{{ outcome.family_members_count }} ({{ outcome.recognized_children_count }} από {{ outcome.children_count }} τέκνα κατά 10.Α)</dd></div>
+        <div><dt>Οικογενειακό ακαθάριστο εισόδημα</dt><dd>€ {{ outcome.family_income_total|floatformat:2 }}</dd></div>
+    </dl>
+    <div class="table-wrap">
+        <table class="data-table" data-eligibility-criteria-table>
+            <thead><tr><th>Κριτήριο επιλεξιμότητας</th><th>Ενότ.</th><th>Αποτέλεσμα</th><th>Σημείωση</th></tr></thead>
+            <tbody>
+            {% for c in outcome.eligibility_criteria %}
+            <tr>
+                <td>{{ c.label }}</td>
+                <td>{{ c.section }}</td>
+                <td><span class="badge badge--{{ c.result }}">{% if c.result == 'pass' %}ΠΛΗΡΟΥΤΑΙ{% elif c.result == 'fail' %}ΔΕΝ ΠΛΗΡΟΥΤΑΙ{% else %}ΕΚΚΡΕΜΕΙ{% endif %}</span></td>
+                <td>{{ c.note }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if can_override_eligibility %}
+    <h3 class="form-section-subtitle">Χειροκίνητη αλλαγή αποτελέσματος (Ενότ. 6)</h3>
+    <p class="helptext">Ο λειτουργός μπορεί να αλλάξει το αποτέλεσμα του λογισμικού κατά πόσο ο αιτητής είναι δικαιούχος, με υποχρεωτική αιτιολογία. Η αλλαγή καταγράφεται στο ιστορικό αλλαγών.</p>
+    <form method="post"
+          action="{% url 'plot_applications:eligibility_override_save' application.pk %}"
+          class="app-form"
+          data-eligibility-override-form>
+        {% csrf_token %}
+        <div class="form-grid">
+            {% include "plot_applications/_field.html" with field=eligibility_override_form.eligibility_override %}
+            <div class="form-span-all"
+                 data-eligibility-override-reason-wrap
+                 {% if not application.eligibility_override %}hidden{% endif %}>
+                {% include "plot_applications/_field.html" with field=eligibility_override_form.eligibility_override_reason wide=True %}
+            </div>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary btn-sm">Αποθήκευση αποτελέσματος επιλεξιμότητας</button>
+        </div>
+    </form>
+    {% endif %}
 </div>
 {% endif %}
 
@@ -105,6 +279,7 @@
     <dl class="detail-grid">
         <div><dt>Κατηγορία</dt><dd>{{ application.get_residence_category_display }}</dd></div>
         <div><dt>Διεύθυνση</dt><dd>{{ application.residence_street }} {{ application.residence_number }}{% if application.residence_apartment %}, {{ application.residence_apartment }}{% endif %}, {{ application.residence_postal_code }} {{ application.residence_community }}</dd></div>
+        <div><dt>Διαμένει σε ελεγχόμενες από την Κυπριακή Δημοκρατία περιοχές</dt><dd>{{ application.resides_in_controlled_areas|yesno:"Ναι,Όχι" }}</dd></div>
         {% if application.origin_parent_description %}<div><dt>Καταγωγή ως προς γονέα</dt><dd>{{ application.origin_parent_description|linebreaksbr }}</dd></div>{% endif %}
         {% if application.previous_residence_address %}<div><dt>Προηγούμενη μόνιμη κατοίκηση</dt><dd>{{ application.previous_residence_address }}</dd></div>{% endif %}
         {% if application.residence_notes %}<div><dt>Περιγραφή</dt><dd>{{ application.residence_notes|linebreaksbr }}</dd></div>{% endif %}
@@ -243,30 +418,81 @@
     {% if sub_view.documents %}
     <div data-plot-subsection="documents">
         <h2 class="card__title">Δικαιολογητικά ({{ attached_count }} επισυναπτόμενα)</h2>
+        <dl class="detail-grid" data-documents-completeness-summary>
+            <div>
+                <dt>Κατάσταση δικαιολογητικών</dt>
+                <dd>
+                    <span class="badge {% if outcome.documents_completeness == 'complete' %}badge--pass{% else %}badge--fail{% endif %}"
+                          data-documents-completeness-badge>
+                        {% if outcome.documents_completeness == 'complete' %}ΟΛΟΚΛΗΡΩΜΕΝΗ{% else %}ΕΛΛΙΠΗΣ{% endif %}
+                    </span>
+                </dd>
+            </div>
+            <div>
+                <dt>Απαιτούμενα / Επισυναπτόμενα</dt>
+                <dd>
+                    {{ satisfied_required_count }} από {{ required_documents_count }} απαιτούμενα
+                    ({% if missing_documents_count %}{{ missing_documents_count }} ελλείποντα{% else %}χωρίς ελλείψεις{% endif %})
+                </dd>
+            </div>
+            {% if application.documents_complete_override %}
+            <div>
+                <dt>Λόγος ολοκλήρωσης παρά τις ελλείψεις</dt>
+                <dd>{{ application.documents_complete_reason|linebreaksbr|default:"—" }}</dd>
+            </div>
+            {% endif %}
+        </dl>
+        {% if can_edit_documents %}
+        <form method="post"
+              action="{% url 'plot_applications:documents_completeness_save' application.pk %}"
+              class="app-form"
+              data-documents-completeness-form>
+            {% csrf_token %}
+            <div class="form-grid">
+                {% include "plot_applications/_field.html" with field=documents_completeness_form.documents_complete_override wide=True %}
+                <div class="form-span-all"
+                     data-documents-override-reason-wrap
+                     {% if not application.documents_complete_override %}hidden{% endif %}>
+                    {% include "plot_applications/_field.html" with field=documents_completeness_form.documents_complete_reason wide=True %}
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary btn-sm">Αποθήκευση κατάστασης δικαιολογητικών</button>
+            </div>
+        </form>
+        {% endif %}
         {% for title, items in document_groups %}
         <h3 class="form-section-subtitle">{{ title }}</h3>
         <ul class="document-status-list">
-            {% for code, label, attached in items %}
-            <li class="{% if attached %}is-attached{% else %}text-muted{% endif %}">{% if attached %}☑{% else %}☐{% endif %} {{ label }}</li>
+            {% for code, label, attached, note in items %}
+            <li class="document-checklist__row {% if attached %}is-attached{% else %}text-muted{% endif %}" data-document-row="{{ code }}">
+                <div class="document-checklist__item">
+                    <span data-document-code="{{ code }}" data-document-missing="{% if not attached %}1{% else %}0{% endif %}">{% if attached %}☑{% else %}☐{% endif %} <span data-document-label>{{ label }}</span></span>
+                    <button type="button"
+                            class="document-note-btn{% if note %} has-note{% endif %}"
+                            data-document-note-toggle="{{ code }}"
+                            data-ui-skip
+                            aria-label="Σημείωση για το πιστοποιητικό"
+                            aria-expanded="false"
+                            title="{% if note %}Σημείωση: {{ note }}{% else %}Προσθήκη σημείωσης{% endif %}">
+                        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+                            <path fill="currentColor" d="M2.5 1A1.5 1.5 0 0 0 1 2.5v8A1.5 1.5 0 0 0 2.5 12H5v2.5a.5.5 0 0 0 .85.35L8.7 12h4.8A1.5 1.5 0 0 0 15 10.5v-8A1.5 1.5 0 0 0 13.5 1h-11zm0 1h11a.5.5 0 0 1 .5.5v8a.5.5 0 0 1-.5.5H8.5a.5.5 0 0 0-.35.15L6 13.29V11.5a.5.5 0 0 0-.5-.5h-3a.5.5 0 0 1-.5-.5v-8a.5.5 0 0 1 .5-.5zm2 2a.5.5 0 0 0 0 1h7a.5.5 0 0 0 0-1h-7zm0 2.5a.5.5 0 0 0 0 1h7a.5.5 0 0 0 0-1h-7zm0 2.5a.5.5 0 0 0 0 1h4a.5.5 0 0 0 0-1h-4z"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="document-checklist__note" data-document-note-wrap="{{ code }}" hidden>
+                    <input type="text"
+                           name="document_note_{{ code }}"
+                           value="{{ note }}"
+                           class="input document-note-input"
+                           data-document-note-input="{{ code }}"
+                           placeholder="Σημείωση για το πιστοποιητικό…">
+                </div>
+            </li>
             {% endfor %}
         </ul>
         {% endfor %}
         {% if application.other_documents %}<p><strong>Άλλα πιστοποιητικά:</strong> {{ application.other_documents|linebreaksbr }}</p>{% endif %}
-
-        {% if can_send_email %}
-        <div class="form-actions">
-            <button type="button"
-                    class="btn btn-secondary"
-                    data-dialog-open="plot-application-email-dialog"
-                    data-email-action="{% url 'plot_applications:email_send' application.pk %}"
-                    data-email-subject="{{ email_subject }}"
-                    data-email-recipient="{{ application.email }}"
-                    data-copy-text="{{ missing_documents_text }}"
-                    data-check-label="Αίτηση {{ application.protocol_number }}">
-                Αποστολή Email
-            </button>
-        </div>
-        {% endif %}
     </div>
     {% endif %}
     <div data-plot-application-email-status></div>
@@ -281,8 +507,104 @@
 <div data-plot-application-email-status></div>
 {% endif %}
 
+{% if sub_view.documents %}
+<dialog id="plot-application-documents-dialog"
+        class="modal modal--wide modal--documents"
+        aria-labelledby="plot-application-documents-dialog-title"
+        data-documents-modal>
+    <div class="approved-design-plots-workspace__header">
+        <div>
+            <h2 class="card__title" id="plot-application-documents-dialog-title">Κατάλογος απαιτούμενων δικαιολογητικών εγγράφων ({{ attached_count }} επισυναπτόμενα)</h2>
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" data-dialog-close>Κλείσιμο</button>
+    </div>
+    <dl class="detail-grid">
+        <div>
+            <dt>Κατάσταση δικαιολογητικών</dt>
+            <dd>
+                <span class="badge {% if outcome.documents_completeness == 'complete' %}badge--pass{% else %}badge--fail{% endif %}">
+                    {% if outcome.documents_completeness == 'complete' %}ΟΛΟΚΛΗΡΩΜΕΝΗ{% else %}ΕΛΛΙΠΗΣ{% endif %}
+                </span>
+            </dd>
+        </div>
+        <div>
+            <dt>Απαιτούμενα / Επισυναπτόμενα</dt>
+            <dd>
+                {{ satisfied_required_count }} από {{ required_documents_count }} απαιτούμενα
+                ({% if missing_documents_count %}{{ missing_documents_count }} ελλείποντα{% else %}χωρίς ελλείψεις{% endif %})
+            </dd>
+        </div>
+        {% if application.documents_complete_override %}
+        <div>
+            <dt>Λόγος ολοκλήρωσης παρά τις ελλείψεις</dt>
+            <dd>{{ application.documents_complete_reason|linebreaksbr|default:"—" }}</dd>
+        </div>
+        {% endif %}
+    </dl>
+    {% for title, items in document_groups %}
+    <h3 class="form-section-subtitle">{{ title }}</h3>
+    <ul class="document-status-list">
+        {% for code, label, attached, note in items %}
+        <li class="document-checklist__row {% if attached %}is-attached{% else %}text-muted{% endif %}" data-document-row="{{ code }}">
+            <div class="document-checklist__item">
+                <span data-document-code="{{ code }}" data-document-missing="{% if not attached %}1{% else %}0{% endif %}">{% if attached %}☑{% else %}☐{% endif %} <span data-document-label>{{ label }}</span></span>
+                <button type="button"
+                        class="document-note-btn{% if note %} has-note{% endif %}"
+                        data-document-note-toggle="{{ code }}"
+                        data-ui-skip
+                        aria-label="Σημείωση για το πιστοποιητικό"
+                        aria-expanded="false"
+                        title="{% if note %}Σημείωση: {{ note }}{% else %}Προσθήκη σημείωσης{% endif %}">
+                    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+                        <path fill="currentColor" d="M2.5 1A1.5 1.5 0 0 0 1 2.5v8A1.5 1.5 0 0 0 2.5 12H5v2.5a.5.5 0 0 0 .85.35L8.7 12h4.8A1.5 1.5 0 0 0 15 10.5v-8A1.5 1.5 0 0 0 13.5 1h-11zm0 1h11a.5.5 0 0 1 .5.5v8a.5.5 0 0 1-.5.5H8.5a.5.5 0 0 0-.35.15L6 13.29V11.5a.5.5 0 0 0-.5-.5h-3a.5.5 0 0 1-.5-.5v-8a.5.5 0 0 1 .5-.5zm2 2a.5.5 0 0 0 0 1h7a.5.5 0 0 0 0-1h-7zm0 2.5a.5.5 0 0 0 0 1h7a.5.5 0 0 0 0-1h-7zm0 2.5a.5.5 0 0 0 0 1h4a.5.5 0 0 0 0-1h-4z"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="document-checklist__note" data-document-note-wrap="{{ code }}" hidden>
+                <input type="text"
+                       name="document_note_{{ code }}"
+                       value="{{ note }}"
+                       class="input document-note-input"
+                       data-document-note-input="{{ code }}"
+                       placeholder="Σημείωση για το πιστοποιητικό…">
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
+    {% endfor %}
+    {% if application.other_documents %}<p><strong>Άλλα πιστοποιητικά:</strong> {{ application.other_documents|linebreaksbr }}</p>{% endif %}
+    {% if can_edit_documents %}
+    <form method="post"
+          action="{% url 'plot_applications:documents_completeness_save' application.pk %}"
+          class="app-form"
+          data-documents-completeness-form>
+        {% csrf_token %}
+        <div class="form-grid">
+            {% include "plot_applications/_field.html" with field=documents_completeness_form.documents_complete_override wide=True %}
+            <div class="form-span-all"
+                 data-documents-override-reason-wrap
+                 {% if not application.documents_complete_override %}hidden{% endif %}>
+                {% include "plot_applications/_field.html" with field=documents_completeness_form.documents_complete_reason wide=True %}
+            </div>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Αποθήκευση κατάστασης δικαιολογητικών</button>
+            <button type="button" class="btn btn-secondary" data-dialog-close>Κλείσιμο</button>
+        </div>
+    </form>
+    {% else %}
+    <div class="form-actions">
+        <button type="button" class="btn btn-primary" data-dialog-close>Κλείσιμο</button>
+    </div>
+    {% endif %}
+</dialog>
+{% endif %}
+
 {% if can_send_email %}
 {% include "plot_applications/_email_dialog.html" %}
+{% endif %}
+{% if sub_view.change_history %}
+{% include "core/_history_timeline_dialog.html" with timeline_subject=application.protocol_number %}
 {% endif %}
 
 {% if other_applications and sub_view.other_applications %}
@@ -290,7 +612,7 @@
     <h2 class="card__title">Άλλες αιτήσεις των ίδιων προσώπων</h2>
     <div class="table-wrap">
         <table class="data-table">
-            <thead><tr><th>Σειρά προτεραιότητας</th><th>Αρ. Πρωτοκόλλου</th><th>Ημ. υποβολής</th><th>Κοινότητα</th><th>Αιτητής</th><th>Σύζυγος</th></tr></thead>
+            <thead><tr><th>Σειρά προτεραιότητας</th><th>Αρ. Πρωτοκόλλου</th><th>Ημ. υποβολής</th><th>Κοινότητα</th><th>Αιτητής</th><th>Σύζυγος</th><th>Στάδιο αίτησης</th><th>Δικαιούχος</th><th>Παραχώρηση οικοπέδου</th><th>Ενέργειες</th></tr></thead>
             <tbody>
             {% for other in other_applications %}
             <tr>
@@ -300,6 +622,17 @@
                 <td>{{ other.community.name }}</td>
                 <td>{{ other.applicant.first_name }} {{ other.applicant.last_name }}</td>
                 <td>{% if other.spouse %}{{ other.spouse.first_name }} {{ other.spouse.last_name }}{% else %}—{% endif %}</td>
+                <td><span class="badge badge--{{ other.stage_badge }}">{{ other.application_stage_label }}</span></td>
+                <td><span class="badge badge--{{ other.beneficiary_status }}">{{ other.beneficiary_label }}</span></td>
+                <td><span class="badge badge--{{ other.plot_allocation_badge }}">{{ other.get_plot_allocation_status_display }}</span></td>
+                <td class="data-table__actions">
+                    {% if access.plot_applications.view %}
+                    <a href="{% url 'plot_applications:detail' other.pk %}" class="btn btn-secondary btn-sm">Κατάσταση</a>
+                    {% endif %}
+                    {% if access.plot_applications.edit %}
+                    <a href="{% url 'plot_applications:edit' other.pk %}" class="btn btn-primary btn-sm">Επεξεργασία</a>
+                    {% endif %}
+                </td>
             </tr>
             {% endfor %}
             </tbody>
@@ -307,5 +640,34 @@
     </div>
 </div>
 {% endif %}
+<script>
+(function () {
+    "use strict";
+    document.querySelectorAll("[data-documents-completeness-form]").forEach(function (formEl) {
+        const box = formEl.querySelector('input[name="documents_complete_override"]');
+        const wrap = formEl.querySelector("[data-documents-override-reason-wrap]");
+        const textarea = formEl.querySelector('textarea[name="documents_complete_reason"]');
+        if (!box || !wrap) return;
+        const sync = function () {
+            wrap.hidden = !box.checked;
+            if (textarea) textarea.required = box.checked;
+        };
+        box.addEventListener("change", sync);
+        sync();
+    });
+    document.querySelectorAll("[data-eligibility-override-form]").forEach(function (formEl) {
+        const select = formEl.querySelector('select[name="eligibility_override"]');
+        const wrap = formEl.querySelector("[data-eligibility-override-reason-wrap]");
+        const textarea = formEl.querySelector('textarea[name="eligibility_override_reason"]');
+        if (!select || !wrap) return;
+        const sync = function () {
+            wrap.hidden = !select.value;
+            if (textarea) textarea.required = Boolean(select.value);
+        };
+        select.addEventListener("change", sync);
+        sync();
+    });
+})();
+</script>
 {% endwith %}
 {% endblock %}

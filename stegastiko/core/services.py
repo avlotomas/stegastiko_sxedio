@@ -1,10 +1,21 @@
+import re
 import smtplib
 import threading
 
 from django.core.exceptions import ValidationError
-from django.core.mail import EmailMessage, get_connection
+from django.core.mail import EmailMultiAlternatives, get_connection
+from django.utils.html import escape
 
 from core.models import SystemSetting
+
+_BOLD_ITALIC_NOTE_RE = re.compile(r"\*\*\*([^\n*]+?)\*\*\*")
+
+
+def email_body_to_html(body: str) -> str:
+    """Convert plain-text email body with `***note***` markers into HTML with `<strong><em>note</em></strong>`."""
+    escaped = escape(body or "")
+    formatted = _BOLD_ITALIC_NOTE_RE.sub(r"<strong><em>\1</em></strong>", escaped)
+    return formatted.replace("\n", "<br>\n")
 
 SMTP_SECURITY_CHOICES = (
     ("starttls", "STARTTLS"),
@@ -64,11 +75,30 @@ def get_setting(key: str, default_value: str = "") -> str:
     return default_value
 
 
+def get_settings_by_prefix(prefix: str) -> dict[str, str]:
+    if _settings_memo.active:
+        if _settings_memo.values is None:
+            _settings_memo.values = dict(SystemSetting.objects.values_list("key", "value"))
+        return {
+            key: value
+            for key, value in _settings_memo.values.items()
+            if key.startswith(prefix)
+        }
+    return dict(
+        SystemSetting.objects.filter(key__startswith=prefix).values_list("key", "value")
+    )
+
+
 def set_setting(key: str, value: str, description: str = "") -> None:
     defaults = {"value": value}
     if description:
         defaults["description"] = description
     SystemSetting.objects.update_or_create(key=key, defaults=defaults)
+
+
+def delete_setting(key: str) -> None:
+    for setting in SystemSetting.objects.filter(key=key):
+        setting.delete()
 
 
 def smtp_settings() -> dict:
@@ -106,13 +136,15 @@ def send_email(recipient: str, subject: str, body: str) -> None:
         use_ssl=smtp["smtpSecurity"] == "ssl",
         timeout=SMTP_TIMEOUT_SECONDS,
     )
-    message = EmailMessage(
+    message = EmailMultiAlternatives(
         subject=subject,
         body=body,
         from_email=smtp["smtpFromEmail"],
         to=[recipient],
         connection=connection,
     )
+    if _BOLD_ITALIC_NOTE_RE.search(body or ""):
+        message.attach_alternative(email_body_to_html(body), "text/html")
     try:
         message.send()
     except (smtplib.SMTPException, OSError) as exc:

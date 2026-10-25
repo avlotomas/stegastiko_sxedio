@@ -5,69 +5,84 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}{{ app_title }}{% endblock %}</title>
-    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=21">
+    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=26">
     <script src="{% static 'vendor/htmx.min.js' %}" defer></script>
-    <script src="{% static 'js/app.js' %}?v=14" defer></script>
+    <script src="{% static 'js/app.js' %}?v=18" defer></script>
     {% block extra_head %}{% endblock %}
 </head>
-<body class="{% block body_class %}{% endblock %}">
+<body class="{% block body_class %}{% endblock %}{% if ui_edit_mode %} ui-edit-mode{% endif %}">
 {% if user.is_authenticated %}
 <header class="site-header">
     <div class="site-header__inner">
         <a href="{% url 'home' %}" class="site-brand">
             <span class="site-brand__title">{{ app_title }}</span>
-            <span class="site-brand__sub">Επαρχία Λευκωσίας</span>
+            <span class="site-brand__sub" data-ui-key="appSubtitle">{{ app_subtitle }}</span>
         </a>
         <button type="button" class="nav-toggle" data-nav-toggle aria-expanded="false" aria-label="Μενού">
             ☰
         </button>
         <nav class="site-nav" data-site-nav aria-label="Κύρια πλοήγηση">
             {% with namespace=request.resolver_match.namespace %}
-            <a href="{% url 'home' %}" class="site-nav__link{% if request.resolver_match.url_name == 'home' %} is-active{% endif %}">{{ menu.home }}</a>
-            {% if access.cases.view or access.plot_applications.any %}
+            <a href="{% url 'home' %}" class="site-nav__link{% if request.resolver_match.url_name == 'home' %} is-active{% endif %}" data-ui-key="menuLabel.home">{{ menu.home }}</a>
+            {% if access.cases.view or access.plot_applications.any or access.plot_prioritization.view %}
+            {% with is_prioritization=request.resolver_match.url_name|slice:":14" %}
             <div class="site-nav__group" data-nav-group>
-                <button type="button" class="site-nav__link site-nav__group-toggle{% if namespace == 'cases' or namespace == 'plot_applications' %} is-active{% endif %}" aria-haspopup="true" aria-expanded="false" data-nav-group-toggle>
+                <button type="button" class="site-nav__link site-nav__group-toggle{% if namespace == 'cases' or namespace == 'plot_applications' %} is-active{% endif %}" aria-haspopup="true" aria-expanded="false" data-nav-group-toggle data-ui-key="menuLabel.applications">
                     {{ menu.applications }}<span class="site-nav__caret" aria-hidden="true">▾</span>
                 </button>
                 <div class="site-nav__submenu">
                     {% if access.cases.view %}
-                    <a href="{% url 'cases:list' %}" class="site-nav__sublink{% if namespace == 'cases' %} is-active{% endif %}">{{ menu.applications_division }}</a>
+                    <a href="{% url 'cases:list' %}" class="site-nav__sublink{% if namespace == 'cases' %} is-active{% endif %}" data-ui-key="menuLabel.applications_division">{{ menu.applications_division }}</a>
                     {% endif %}
                     {% if access.plot_applications.any %}
-                    <a href="{% url 'plot_applications:list' %}" class="site-nav__sublink{% if namespace == 'plot_applications' %} is-active{% endif %}">{{ menu.applications_plot }}</a>
+                    <a href="{% url 'plot_applications:list' %}" class="site-nav__sublink{% if namespace == 'plot_applications' and is_prioritization != 'prioritization' %} is-active{% endif %}" data-ui-key="menuLabel.applications_plot">{{ menu.applications_plot }}</a>
+                    {% endif %}
+                    {% if access.plot_prioritization.view %}
+                    <a href="{% url 'plot_applications:prioritization' %}" class="site-nav__sublink{% if namespace == 'plot_applications' and is_prioritization == 'prioritization' %} is-active{% endif %}" data-ui-key="menuLabel.applications_prioritization">{{ menu.applications_prioritization }}</a>
                     {% endif %}
                 </div>
             </div>
+            {% endwith %}
             {% endif %}
             {% if access.persons.view %}
-            <a href="{% url 'persons:list' %}" class="site-nav__link{% if namespace == 'persons' %} is-active{% endif %}">{{ menu.persons }}</a>
+            <a href="{% url 'persons:list' %}" class="site-nav__link{% if namespace == 'persons' %} is-active{% endif %}" data-ui-key="menuLabel.persons">{{ menu.persons }}</a>
             {% endif %}
             {% if access.plots.view %}
-            <a href="{% url 'plots:list' %}" class="site-nav__link{% if namespace == 'plots' %} is-active{% endif %}">{{ menu.plots }}</a>
+            <a href="{% url 'plots:list' %}" class="site-nav__link{% if namespace == 'plots' %} is-active{% endif %}" data-ui-key="menuLabel.plots">{{ menu.plots }}</a>
             {% endif %}
             {% if access.announcements.view %}
-            <a href="{% url 'announcements:list' %}" class="site-nav__link{% if namespace == 'announcements' %} is-active{% endif %}">{{ menu.announcements }}</a>
+            <a href="{% url 'announcements:list' %}" class="site-nav__link{% if namespace == 'announcements' %} is-active{% endif %}" data-ui-key="menuLabel.announcements">{{ menu.announcements }}</a>
             {% endif %}
             {% if access.reminders.view %}
-            <a href="{% url 'reminders' %}" class="site-nav__link{% if request.resolver_match.url_name == 'reminders' %} is-active{% endif %}">{{ menu.reminders }}</a>
+            <a href="{% url 'reminders' %}" class="site-nav__link{% if request.resolver_match.url_name == 'reminders' %} is-active{% endif %}" data-ui-key="menuLabel.reminders">{{ menu.reminders }}</a>
             {% endif %}
             {% if access.settings.view or user.is_staff %}
             <div class="site-nav__group" data-nav-group>
-                <button type="button" class="site-nav__link site-nav__group-toggle{% if settings_nav %} is-active{% endif %}" aria-haspopup="true" aria-expanded="false" data-nav-group-toggle>
+                <button type="button" class="site-nav__link site-nav__group-toggle{% if settings_nav %} is-active{% endif %}" aria-haspopup="true" aria-expanded="false" data-nav-group-toggle data-ui-key="menuLabel.settings">
                     {{ menu.settings }}<span class="site-nav__caret" aria-hidden="true">▾</span>
                 </button>
                 <div class="site-nav__submenu">
                     {% if access.settings.view %}
-                    <a href="{% url 'system_configuration' %}" class="site-nav__sublink{% if settings_nav %} is-active{% endif %}">{{ menu.settings_basic }}</a>
+                    <a href="{% url 'system_configuration' %}" class="site-nav__sublink{% if settings_nav %} is-active{% endif %}" data-ui-key="menuLabel.settings_basic">{{ menu.settings_basic }}</a>
                     {% endif %}
                     {% if user.is_staff %}
-                    <a href="/admin/" class="site-nav__sublink">{{ menu.settings_system }}</a>
+                    <a href="/admin/" class="site-nav__sublink" data-ui-key="menuLabel.settings_system">{{ menu.settings_system }}</a>
                     {% endif %}
                 </div>
             </div>
             {% endif %}
             {% endwith %}
             <div class="site-nav__user">
+                {% if can_edit_ui_texts %}
+                <button type="button"
+                        class="btn-edit-mode{% if ui_edit_mode %} is-active{% endif %}"
+                        data-ui-edit-mode-toggle="{% url 'ui_edit_mode_toggle' %}"
+                        aria-pressed="{% if ui_edit_mode %}true{% else %}false{% endif %}"
+                        aria-label="Λειτουργία επεξεργασίας κειμένων οθόνης"
+                        title="Λειτουργία επεξεργασίας κειμένων οθόνης">
+                    ✎
+                </button>
+                {% endif %}
                 <a href="{% url 'account' %}" class="site-nav__username site-nav__account{% if request.resolver_match.url_name == 'account' %} is-active{% endif %}" title="Ο λογαριασμός μου">{{ user.get_username }}</a>
                 <form method="post" action="{% url 'logout' %}">
                     {% csrf_token %}
@@ -82,7 +97,7 @@
     <div class="site-header__inner">
         <span class="site-brand site-brand--static">
             <span class="site-brand__title">{{ app_title }}</span>
-            <span class="site-brand__sub">Επαρχία Λευκωσίας</span>
+            <span class="site-brand__sub" data-ui-key="appSubtitle">{{ app_subtitle }}</span>
         </span>
     </div>
 </header>
@@ -103,6 +118,31 @@
 </main>
 {% if user.is_authenticated %}
 {% include "cases/_communication_email_view_dialog.html" %}
+{% endif %}
+{{ ui_text_overrides|json_script:"ui-text-overrides" }}
+{{ ui_text_defaults|json_script:"ui-text-defaults" }}
+{% if can_edit_ui_texts %}
+<dialog id="ui-text-edit-dialog" class="modal" aria-labelledby="ui-text-edit-dialog-title" data-ui-text-dialog>
+    <form method="post" action="{% url 'ui_text_save' %}" class="app-form" data-ui-text-form novalidate>
+        {% csrf_token %}
+        <input type="hidden" name="key" value="" data-ui-text-key>
+        <input type="hidden" name="description" value="" data-ui-text-description>
+        <h2 class="card__title" id="ui-text-edit-dialog-title">Επεξεργασία κειμένου</h2>
+        <div class="alert alert--error" data-ui-text-errors hidden></div>
+        <div class="form-grid">
+            <div class="form-field form-field--wide">
+                <label for="ui-text-edit-input">Κείμενο εμφάνισης</label>
+                <textarea id="ui-text-edit-input" name="value" rows="2" class="input" maxlength="512" data-ui-text-input required></textarea>
+                <p class="helptext" data-ui-text-default-hint></p>
+            </div>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary" data-ui-text-save>Αποθήκευση</button>
+            <button type="button" class="btn btn-secondary" data-ui-text-reset>Επαναφορά προεπιλογής</button>
+            <button type="button" class="btn btn-ghost" data-dialog-close>Ακύρωση</button>
+        </div>
+    </form>
+</dialog>
 {% endif %}
 </body>
 </html>

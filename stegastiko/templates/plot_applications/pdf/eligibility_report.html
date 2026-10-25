@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+    <meta charset="utf-8">
+    <title>{{ report_title }} — {{ application.protocol_number }}</title>
+    <style>
+        @page {
+            size: A4 portrait;
+            margin: 18mm 16mm 20mm 16mm;
+            @frame footer_frame {
+                -pdf-frame-content: report_footer;
+                left: 16mm;
+                width: 178mm;
+                bottom: 8mm;
+                height: 8mm;
+            }
+        }
+        body, p, h1, h2, h3, div, span, table, th, td {
+            font-family: "DejaVuSans", sans-serif;
+            font-size: 9pt;
+            line-height: 1.3;
+            color: #000;
+        }
+        .masthead {
+            text-align: center;
+            margin-bottom: 4mm;
+        }
+        .masthead__state {
+            font-size: 8pt;
+            margin: 2mm 0 0 0;
+        }
+        .masthead__authority {
+            font-size: 10pt;
+            font-weight: bold;
+            margin: 1mm 0 0 0;
+        }
+        h1 {
+            font-size: 11pt;
+            font-weight: bold;
+            text-decoration: underline;
+            text-align: center;
+            margin: 6mm 0 4mm 0;
+        }
+        h2 {
+            font-size: 10pt;
+            font-weight: bold;
+            margin: 5mm 0 2mm 0;
+            padding: 0 0 1mm 0;
+            border-bottom: 1px solid #000;
+            -pdf-keep-with-next: true;
+        }
+        table.case-info {
+            margin-bottom: 2mm;
+        }
+        table.case-info td {
+            padding: 1mm 2mm;
+            vertical-align: top;
+        }
+        table.case-info td.label {
+            font-weight: bold;
+            width: 32%;
+        }
+        table.kv {
+            width: 100%;
+            margin-bottom: 3mm;
+        }
+        table.kv td {
+            border: 0.5px solid #000;
+            padding: 1.2mm 1.5mm 0.6mm 1.5mm;
+            vertical-align: top;
+            font-size: 8pt;
+        }
+        table.kv td.label {
+            background-color: #e6e6e6;
+            font-weight: bold;
+            width: 32%;
+        }
+        table.grid {
+            width: 100%;
+            margin-bottom: 3mm;
+        }
+        table.grid th, table.grid td {
+            border: 0.5px solid #000;
+            padding: 1.2mm 1.2mm 0.6mm 1.2mm;
+            vertical-align: top;
+            font-size: 7.5pt;
+        }
+        table.grid th {
+            background-color: #e6e6e6;
+            font-weight: bold;
+            text-align: left;
+        }
+        td.status-pass, .badge--pass {
+            background-color: #ecfdf3;
+            color: #067647;
+            font-weight: bold;
+        }
+        td.status-fail, .badge--fail {
+            background-color: #fef3f2;
+            color: #b42318;
+            font-weight: bold;
+        }
+        td.status-pending, .badge--pending {
+            background-color: #f2f4f7;
+            color: #5c6b7a;
+            font-weight: bold;
+        }
+        td.note-pass {
+            color: #067647;
+        }
+        td.note-fail {
+            background-color: #fef3f2;
+            color: #b42318;
+            font-weight: bold;
+        }
+        td.note-pending {
+            color: #5c6b7a;
+        }
+        #report_footer {
+            font-size: 7pt;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+
+<div id="report_footer">
+    <table>
+        <tr>
+            <td style="font-size: 7pt;">Αίτηση {{ application.protocol_number }} · Έκδοση {{ issued_at|date:"d/m/Y H:i" }}</td>
+            <td style="font-size: 7pt; text-align: right;">Σελίδα <pdf:pagenumber> από <pdf:pagecount></td>
+        </tr>
+    </table>
+</div>
+
+<div class="masthead">
+    <img src="{{ logo_url }}" width="51" height="52" alt="">
+    <p class="masthead__state">ΚΥΠΡΙΑΚΗ ΔΗΜΟΚΡΑΤΙΑ</p>
+    <p class="masthead__authority">ΥΠΟΥΡΓΕΙΟ ΕΣΩΤΕΡΙΚΩΝ<br>ΕΠΑΡΧΙΑΚΗ ΔΙΟΙΚΗΣΗ</p>
+</div>
+
+<h1>{{ report_title }}</h1>
+
+<table class="case-info">
+    <tr><td class="label">Κοινότητα / Δ.Δ.</td><td>{{ application.community.name }}</td></tr>
+    <tr><td class="label">Επαρχία</td><td>{{ application.community.district|default:"—" }}</td></tr>
+    <tr><td class="label">Αρ. πρωτοκόλλου</td><td>{{ application.protocol_number }}</td></tr>
+    <tr><td class="label">Ημερομηνία υποβολής</td><td>{{ application.submitted_on|date:"d/m/Y"|default:"—" }}</td></tr>
+    <tr><td class="label">Αιτητής/τρια</td><td>{{ application.applicant.first_name }} {{ application.applicant.last_name }} (ΑΔΤ {{ application.applicant.identity_number }})</td></tr>
+    {% if application.spouse %}
+    <tr><td class="label">Σύζυγος / Συμβίος</td><td>{{ application.spouse.first_name }} {{ application.spouse.last_name }} (ΑΔΤ {{ application.spouse.identity_number }})</td></tr>
+    {% endif %}
+    <tr>
+        <td class="label">Οικογενειακή κατάσταση</td>
+        <td>{{ application.get_family_status_display|default:"—" }}{% if application.single_parent_status %} — {{ application.get_single_parent_status_display }}{% if application.single_parent_other %}: {{ application.single_parent_other }}{% endif %}{% endif %}</td>
+    </tr>
+</table>
+
+<h2>1. Κριτήρια πληρότητας αίτησης</h2>
+<table class="kv">
+    <tr>
+        <td class="label">Στάδιο αίτησης</td>
+        <td class="status-{{ outcome.application_stage_badge }}">
+            <span class="badge badge--{{ outcome.application_stage_badge }}">{{ outcome.application_stage_label }}</span>
+        </td>
+    </tr>
+    <tr>
+        <td class="label">Πληρότητα αίτησης</td>
+        <td class="status-{{ outcome.completeness_badge }}">
+            <span class="badge badge--{{ outcome.completeness_badge }}">{{ outcome.completeness_label }}</span>
+        </td>
+    </tr>
+    {% if outcome.is_rejected_incomplete %}
+    <tr>
+        <td class="label">Αιτιολογία απόρριψης λόγω ελλείψεων (Ενότ. 5(β))</td>
+        <td>{% if application.incomplete_rejected_on %}{{ application.incomplete_rejected_on|date:"d/m/Y" }}: {% endif %}{{ application.incomplete_rejection_reason|linebreaksbr }}</td>
+    </tr>
+    {% endif %}
+    <tr>
+        <td class="label">Κατάσταση δικαιολογητικών</td>
+        <td class="{% if outcome.documents_completeness == 'complete' %}status-pass{% else %}status-fail{% endif %}">
+            <span class="badge {% if outcome.documents_completeness == 'complete' %}badge--pass{% else %}badge--fail{% endif %}">{{ outcome.documents_completeness_label }}</span>{% if application.documents_complete_override %} (Ορίστηκε ότι τα πιστοποιητικά είναι εντάξει{% if application.documents_complete_reason %}: {{ application.documents_complete_reason }}{% endif %}){% endif %}
+        </td>
+    </tr>
+</table>
+
+<table class="grid" repeat="1" data-completeness-criteria-table>
+    <tr>
+        <th width="25%">Κριτήριο πληρότητας</th>
+        <th width="10%">Ενότ.</th>
+        <th width="18%">Αποτέλεσμα</th>
+        <th width="47%">Σημείωση</th>
+    </tr>
+    {% for c in outcome.completeness_criteria %}
+    <tr>
+        <td>{{ c.label }}</td>
+        <td>{{ c.section }}</td>
+        <td class="status-{{ c.result }}">
+            <span class="badge badge--{{ c.result }}">{% if c.result == 'pass' %}ΠΛΗΡΟΥΤΑΙ{% elif c.result == 'fail' %}ΔΕΝ ΠΛΗΡΟΥΤΑΙ{% else %}ΕΚΚΡΕΜΕΙ{% endif %}</span>
+        </td>
+        <td class="note-{{ c.result }}">{{ c.note|default:"—" }}</td>
+    </tr>
+    {% endfor %}
+</table>
+
+<h2>2. Κριτήρια επιλεξιμότητας δικαιούχου</h2>
+<table class="kv">
+    <tr>
+        <td class="label">Δικαιούχος</td>
+        <td class="status-{{ outcome.beneficiary_status }}">
+            <span class="badge badge--{{ outcome.beneficiary_status }}">{{ outcome.beneficiary_label }}</span>
+        </td>
+    </tr>
+    <tr>
+        <td class="label">Παραχώρηση οικοπέδου</td>
+        <td class="status-{{ outcome.plot_allocation_badge }}">
+            <span class="badge badge--{{ outcome.plot_allocation_badge }}">{{ outcome.plot_allocation_label }}</span>
+        </td>
+    </tr>
+    <tr>
+        <td class="label">Αποτέλεσμα επιλεξιμότητας</td>
+        <td class="status-{{ outcome.eligibility_overall }}">
+            <span class="badge badge--{{ outcome.eligibility_overall }}">{{ outcome.eligibility_label }}</span>
+        </td>
+    </tr>
+    <tr>
+        <td class="label">Αποτέλεσμα λογισμικού</td>
+        <td class="status-{{ outcome.eligibility_auto_overall }}">
+            <span class="badge badge--{{ outcome.eligibility_auto_overall }}">{{ outcome.eligibility_auto_label }}</span>
+        </td>
+    </tr>
+    {% if outcome.eligibility_overridden %}
+    <tr>
+        <td class="label">Χειροκίνητη αλλαγή αποτελέσματος (Ενότ. 6)</td>
+        <td>{{ outcome.eligibility_override_label }}: {{ outcome.eligibility_override_reason|linebreaksbr }}</td>
+    </tr>
+    {% endif %}
+    <tr>
+        <td class="label">Κατηγορία προτεραιότητας (Ενότ. 11)</td>
+        <td>{{ outcome.priority_label|default:"—" }}</td>
+    </tr>
+    <tr>
+        <td class="label">Μέλη οικογένειας</td>
+        <td>{{ outcome.family_members_count }} ({{ outcome.recognized_children_count }} από {{ outcome.children_count }} τέκνα κατά 10.Α)</td>
+    </tr>
+    <tr>
+        <td class="label">Οικογενειακό ακαθάριστο εισόδημα</td>
+        <td>€ {{ outcome.family_income_total|floatformat:2 }} (Ανώτατο όριο: € {{ outcome.income_limit|floatformat:2 }} — {{ outcome.income_tier_label }})</td>
+    </tr>
+</table>
+
+<table class="grid" repeat="1" data-eligibility-criteria-table>
+    <tr>
+        <th width="25%">Κριτήριο επιλεξιμότητας</th>
+        <th width="10%">Ενότ.</th>
+        <th width="18%">Αποτέλεσμα</th>
+        <th width="47%">Σημείωση</th>
+    </tr>
+    {% for c in outcome.eligibility_criteria %}
+    <tr>
+        <td>{{ c.label }}</td>
+        <td>{{ c.section }}</td>
+        <td class="status-{{ c.result }}">
+            <span class="badge badge--{{ c.result }}">{% if c.result == 'pass' %}ΠΛΗΡΟΥΤΑΙ{% elif c.result == 'fail' %}ΔΕΝ ΠΛΗΡΟΥΤΑΙ{% else %}ΕΚΚΡΕΜΕΙ{% endif %}</span>
+        </td>
+        <td class="note-{{ c.result }}">{{ c.note|default:"—" }}</td>
+    </tr>
+    {% endfor %}
+</table>
+
+</body>
+</html>

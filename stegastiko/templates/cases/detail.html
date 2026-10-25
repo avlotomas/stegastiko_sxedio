@@ -15,8 +15,8 @@
 <div class="case-work-layout__main">
 
 <div class="page-header">
-    <h1>Υπόθεση {{ case.case_number }}</h1>
-    <p class="page-header__lead">
+    <h1><span data-ui-text>Υπόθεση</span> {{ case.case_number }}</h1>
+    <p class="page-header__lead" data-ui-skip>
         {{ case.community.name }} ({{ case.community.district }}) ·
         {{ case.get_case_type_display }} · έναρξη {{ case.start_date }}
     </p>
@@ -247,7 +247,7 @@
 
     <h3 class="form-section-title">{% case_subsection_heading "6.2" %}</h3>
     {% include "cases/_plot_evaluation_grid.html" with readonly=True land_plots=suitability_summary.land_plots %}
-    <h4 class="form-section-subtitle">{% case_subsection_label "4.3" %}</h4>
+    <h4 class="form-section-subtitle" data-ui-key="caseSubsectionLabel.4.3">{% case_subsection_label "4.3" %}</h4>
     <p class="form-readonly">{{ suitability_summary.access_technical_evaluation|default:"—"|linebreaksbr }}</p>
 
     <h3 class="form-section-title">{% case_subsection_heading "6.3" %}</h3>

@@ -27,11 +27,56 @@
             </select>
         </div>
         <div>
-            <label for="result">Κατ' αρχήν έλεγχος</label>
+            <label for="stage">Στάδιο αίτησης</label>
+            <select name="stage" id="stage">
+                <option value="">Όλα</option>
+                {% for value, label in stage_choices %}
+                <option value="{{ value }}" {% if stage == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="completeness">Πληρότητα αίτησης</label>
+            <select name="completeness" id="completeness">
+                <option value="">Όλα</option>
+                {% for value, label in completeness_choices %}
+                <option value="{{ value }}" {% if completeness == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="documents_completeness">Δικαιολογητικά</label>
+            <select name="documents_completeness" id="documents_completeness">
+                <option value="">Όλα</option>
+                {% for value, label in documents_completeness_choices %}
+                <option value="{{ value }}" {% if documents_completeness == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="result">Κριτήρια επιλεξιμότητας</label>
             <select name="result" id="result">
                 <option value="">Όλα</option>
                 {% for value, label in results %}
                 <option value="{{ value }}" {% if result == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="beneficiary">Δικαιούχος</label>
+            <select name="beneficiary" id="beneficiary">
+                <option value="">Όλα</option>
+                <option value="pass" {% if beneficiary == 'pass' %}selected{% endif %}>ΔΙΚΑΙΟΥΧΟΣ</option>
+                <option value="fail" {% if beneficiary == 'fail' %}selected{% endif %}>ΜΗ ΔΙΚΑΙΟΥΧΟΣ</option>
+                <option value="pending" {% if beneficiary == 'pending' %}selected{% endif %}>ΕΚΚΡΕΜΕΙ</option>
+            </select>
+        </div>
+        <div>
+            <label for="plot_allocation">Παραχώρηση οικοπέδου</label>
+            <select name="plot_allocation" id="plot_allocation">
+                <option value="">Όλα</option>
+                {% for value, label in plot_allocation_choices %}
+                <option value="{{ value }}" {% if plot_allocation == value %}selected{% endif %}>{{ label }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -62,8 +107,13 @@
             <th>Οικογ. κατάσταση</th>
             <th>Τέκνα</th>
             <th>Προτεραιότητα</th>
-            <th>Κατ' αρχήν έλεγχος</th>
-            {% if access.plot_applications.delete %}<th><span class="visually-hidden">Ενέργειες</span></th>{% endif %}
+            <th>Στάδιο αίτησης</th>
+            <th>Πληρότητα αίτησης</th>
+            <th>Δικαιολογητικά</th>
+            <th>Επιλεξιμότητα</th>
+            <th>Δικαιούχος</th>
+            <th>Παραχώρηση οικοπέδου</th>
+            <th>Ενέργειες</th>
         </tr>
         </thead>
         <tbody>
@@ -71,11 +121,11 @@
         <tr>
             <td>
                 {% if access.plot_applications.view %}
-                <a href="{% url 'plot_applications:detail' a.pk %}">{{ a.protocol_number }}</a>
+                <a href="{% url 'plot_applications:detail' a.pk %}"><strong>{{ a.protocol_number }}</strong></a>
                 {% elif access.plot_applications.edit %}
-                <a href="{% url 'plot_applications:edit' a.pk %}">{{ a.protocol_number }}</a>
+                <a href="{% url 'plot_applications:edit' a.pk %}"><strong>{{ a.protocol_number }}</strong></a>
                 {% else %}
-                {{ a.protocol_number }}
+                <strong>{{ a.protocol_number }}</strong>
                 {% endif %}
             </td>
             <td>{{ a.submitted_on|date:"d/m/Y" }}</td>
@@ -85,19 +135,44 @@
             <td>{{ a.get_family_status_display }}</td>
             <td>{{ a.recognized_children_count }}</td>
             <td>{{ a.priority_label|default:"—" }}</td>
-            <td><span class="badge badge--{{ a.eligibility_result }}">{{ a.get_eligibility_result_display }}</span></td>
-            {% if access.plot_applications.delete %}
-            <td class="data-table__actions">
-                <form method="post" action="{% url 'plot_applications:delete' a.pk %}" class="inline-form"
-                      data-confirm="Διαγραφή της αίτησης {{ a.protocol_number }};">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-danger btn-sm">Διαγραφή</button>
-                </form>
+            <td>
+                <span class="badge badge--{{ a.stage_badge }}" data-application-stage-badge>
+                    {{ a.application_stage_label }}
+                </span>
             </td>
-            {% endif %}
+            <td>
+                <span class="badge {% if a.completeness_result == 'complete' %}badge--pass{% else %}badge--fail{% endif %}">
+                    {{ a.get_completeness_result_display }}
+                </span>
+            </td>
+            <td>
+                <span class="badge {% if a.documents_completeness == 'complete' %}badge--pass{% else %}badge--fail{% endif %}"
+                      {% if a.documents_complete_override and a.documents_complete_reason %}title="{{ a.documents_complete_reason }}"{% endif %}>
+                    {{ a.get_documents_completeness_display }}
+                </span>
+            </td>
+            <td><span class="badge badge--{{ a.eligibility_result }}">{{ a.get_eligibility_result_display }}</span></td>
+            <td>
+                <span class="badge badge--{{ a.beneficiary_status }}" data-application-beneficiary-badge>
+                    {{ a.beneficiary_label }}
+                </span>
+            </td>
+            <td>
+                <span class="badge badge--{{ a.plot_allocation_badge }}" data-application-plot-allocation-badge>
+                    {{ a.get_plot_allocation_status_display }}
+                </span>
+            </td>
+            <td class="data-table__actions">
+                {% if access.plot_applications.view %}
+                <a href="{% url 'plot_applications:detail' a.pk %}" class="btn btn-secondary btn-sm" data-grid-status-link>Κατάσταση</a>
+                {% endif %}
+                {% if access.plot_applications.edit %}
+                <a href="{% url 'plot_applications:edit' a.pk %}" class="btn btn-primary btn-sm" data-grid-edit-link>Επεξεργασία</a>
+                {% endif %}
+            </td>
         </tr>
         {% empty %}
-        <tr><td colspan="{% if access.plot_applications.delete %}10{% else %}9{% endif %}" class="text-muted">Δεν βρέθηκαν αιτήσεις.</td></tr>
+        <tr><td colspan="15" class="text-muted">Δεν βρέθηκαν αιτήσεις.</td></tr>
         {% endfor %}
         </tbody>
     </table>

@@ -1,7 +1,9 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.http import JsonResponse
 from django.shortcuts import redirect, render
+from django.views.decorators.http import require_POST
 
 from cases.case_label_groups import case_label_groups, section_toc_label
 from core.configuration_forms import (
@@ -9,6 +11,7 @@ from core.configuration_forms import (
     SystemCaseLabelSettingsForm,
     SystemEmailSettingsForm,
     SystemMenuLabelSettingsForm,
+    SystemPlotApplicationLabelSettingsForm,
     SystemSectionLabelSettingsForm,
     SystemSubsectionLabelSettingsForm,
     SystemWorkflowSettingsForm,
@@ -16,6 +19,11 @@ from core.configuration_forms import (
 from core.function_catalog import EDIT, VIEW
 from core.permissions import access_required, has_access
 from core.settings_navigation import settings_nav
+from core.ui_texts import (
+    UI_EDIT_MODE_SESSION_KEY,
+    require_ui_text_edit_access,
+    save_ui_text_entry,
+)
 
 CASE_LABEL_SECTION_FUNCTION = "settings_section_labels"
 CASE_LABEL_SUBSECTION_FUNCTION = "settings_subsection_labels"
@@ -192,6 +200,22 @@ def system_settings_case_labels(request):
     )
 
 
+@access_required("settings_plot_application_labels", post_action=EDIT)
+def system_settings_plot_application_labels(request):
+    return _settings_form_view(
+        request,
+        section_key="plot_application_labels",
+        function_code="settings_plot_application_labels",
+        form_class=SystemPlotApplicationLabelSettingsForm,
+        template_name="core/settings/form_page.html",
+        page_title="Τίτλοι αίτησης παραχώρησης οικοπέδου",
+        page_lead=(
+            "Τίτλοι των σταδίων της αίτησης παραχώρησης οικοπέδου, όπως εμφανίζονται στον κατάλογο "
+            "αιτήσεων, στην προβολή της αίτησης, στα φίλτρα, στην καρτέλα Ατόμου και στις εκθέσεις PDF."
+        ),
+    )
+
+
 @access_required("settings_section_labels", post_action=EDIT)
 def system_settings_section_labels(request):
     return redirect("system_settings_case_labels")
@@ -212,4 +236,51 @@ def system_settings_email(request):
         template_name="core/settings/form_page.html",
         page_title="Αποστολή email (SMTP)",
         page_lead="Διακομιστής για το email ελλείψεων (2.2) και προεπιλεγμένο θέμα.",
+    )
+
+
+@login_required
+@require_POST
+def ui_edit_mode_toggle(request):
+    try:
+        require_ui_text_edit_access(request.user)
+    except PermissionDenied as exc:
+        return JsonResponse({"ok": False, "message": str(exc)}, status=403)
+    explicit = request.POST.get("enabled")
+    if explicit is not None:
+        active = explicit in ("1", "true", "True", "on")
+    else:
+        active = not bool(request.session.get(UI_EDIT_MODE_SESSION_KEY))
+    request.session[UI_EDIT_MODE_SESSION_KEY] = active
+    return JsonResponse({"ok": True, "ui_edit_mode": active})
+
+
+@login_required
+@require_POST
+def ui_text_save(request):
+    key = request.POST.get("key", "")
+    value = request.POST.get("value", "")
+    description = request.POST.get("description", "")
+    reset = request.POST.get("reset") in ("1", "true", "True", "on")
+    try:
+        saved = save_ui_text_entry(
+            request.user,
+            key=key,
+            value=value,
+            description=description,
+            reset=reset,
+        )
+    except PermissionDenied as exc:
+        return JsonResponse({"ok": False, "message": str(exc)}, status=403)
+    except ValidationError as exc:
+        msg = exc.messages[0] if getattr(exc, "messages", None) else str(exc)
+        return JsonResponse({"ok": False, "message": msg}, status=400)
+    return JsonResponse(
+        {
+            "ok": True,
+            "key": key.strip(),
+            "value": saved,
+            "reset": reset,
+            "message": "Το κείμενο αποθηκεύτηκε.",
+        }
     )

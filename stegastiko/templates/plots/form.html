@@ -10,7 +10,7 @@
 </nav>
 
 <div class="page-header">
-    <h1>{% if is_create %}Νέο οικόπεδο{% else %}{{ plot.row_label }}{% endif %}</h1>
+    <h1{% if not is_create %} data-ui-skip{% endif %}>{% if is_create %}Νέο οικόπεδο{% else %}{{ plot.row_label }}{% endif %}</h1>
     <p class="page-header__lead">
         {% if is_create %}
         Χειροκίνητη καταχώριση οικοπέδου που δεν προέρχεται από αίτηση διαχωρισμού.

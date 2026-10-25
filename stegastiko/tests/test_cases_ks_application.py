@@ -368,6 +368,36 @@ def test_completeness_check_changes_reach_the_case_history(community):
     ).exists()
 
 
+@pytest.mark.django_db
+def test_case_history_timeline_ajax_and_page(community, staff_client):
+    case = _make_case(community)
+    check = CompletenessCheck.objects.create(
+        case=case, check_date=date(2026, 1, 20), result=YesNo.NO, deficiencies="Ελλείψεις"
+    )
+    check.result = YesNo.YES
+    check.save()
+
+    history_url = reverse("cases:history", args=[case.pk])
+    detail_html = staff_client.get(reverse("cases:detail", args=[case.pk])).content.decode()
+    assert f'data-history-timeline-open="{history_url}"' in detail_html
+    assert 'id="history-timeline-dialog"' in detail_html
+
+    ajax_resp = staff_client.get(history_url, HTTP_ACCEPT="application/json")
+    assert ajax_resp.status_code == 200
+    payload = ajax_resp.json()
+    assert payload["ok"] is True
+    assert "data-history-timeline" in payload["timeline_html"]
+    assert "2.1 Έλεγχος πληρότητας (1ος έλεγχος)" in payload["timeline_html"]
+    assert "ΟΧΙ" in payload["timeline_html"]
+    assert "ΝΑΙ" in payload["timeline_html"]
+
+    page_resp = staff_client.get(history_url)
+    assert page_resp.status_code == 200
+    page_html = page_resp.content.decode()
+    assert "data-history-timeline" in page_html
+    assert "2.1 Έλεγχος πληρότητας (1ος έλεγχος)" in page_html
+
+
 # --- Scenario 17: navigation reaches both lists and every case action ---
 
 

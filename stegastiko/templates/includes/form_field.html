@@ -16,7 +16,11 @@
 </div>
 {% else %}
 <div class="form-field{% if wide %} form-field--wide{% endif %}{% if field.field.widget.allow_multiple_selected %} form-field--choices{% endif %}">
+    {% if required and not field.field.required %}
+    <label class="required" for="{{ field.id_for_label }}">{{ field.label }}:</label>
+    {% else %}
     {{ field.label_tag }}
+    {% endif %}
     {{ field }}
     {% if field.errors %}
     <ul class="errorlist">

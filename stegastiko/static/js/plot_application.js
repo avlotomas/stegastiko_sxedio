@@ -28,6 +28,13 @@
         form.querySelectorAll("[data-show-when]").forEach((block) => {
             block.hidden = !matches(block.dataset.showWhen);
         });
+        ["applicant_party", "spouse_party"].forEach((prefix) => {
+            const isOther = fieldValue(`${prefix}-citizenship`) === "other";
+            const input = form.querySelector(`[name="${prefix}-citizenship_other"]`);
+            const label = form.querySelector(`label[for="id_${prefix}-citizenship_other"]`);
+            if (input) input.required = isOther;
+            if (label) label.classList.toggle("required", true);
+        });
     }
 
     // Ενότ. 11 (Ι, ΙΙ, ΙV): Αυτόχθονας / Εκτοπισθείς / Επαναπατρισθείς διαμένουν στην Κοινότητα της αίτησης,
@@ -464,14 +471,10 @@
         const largeFamilyChildren = incomeParams.large_family_children || 4;
         const incomePairs = activeIncomePairs(isCouple);
 
-        const hasDwelling = fieldValue("main-has_dwelling");
-        const hasResidentialLand = fieldValue("main-has_residential_land");
         const hasAlienatedProperty = fieldValue("main-has_alienated_property");
 
         // Α. Κυπριακή ή άλλη Υπηκοότητα και Ηλικία
-        if (applicantCitizenship === "cypriot" || (isCouple && spouseCitizenship === "cypriot")) {
-            codes.add("A1");
-        }
+        codes.add("A1");
         if (
             residenceCategory === "displaced" ||
             Boolean(applicantRefugeeId) ||
@@ -479,7 +482,10 @@
         ) {
             codes.add("A2");
         }
-        if (isCouple && (spouseCitizenship === "other" || Boolean(spouseAlienNumber))) {
+        if (
+            applicantCitizenship === "other" ||
+            (!isSingleParent && spouseCitizenship === "other")
+        ) {
             codes.add("A4");
         }
 
@@ -524,7 +530,6 @@
         // Γ. Τόπος Διαμονής
         if (["autochthon", "displaced", "internal_emigrant", "repatriated"].includes(residenceCategory)) {
             codes.add("C1");
-            codes.add("C2");
         }
         if (residenceCategory === "autochthon" || residenceCategory === "displaced") {
             codes.add("C3");
@@ -544,13 +549,9 @@
         }
 
         // Δ. Ακίνητη ιδιοκτησία (ΤΚΧ — DLS Portal, Παγκύπρια)
-        if (hasDwelling !== "True" || hasResidentialLand !== "True") {
-            codes.add("D1");
-            codes.add("D2");
-        }
-        if (hasResidentialLand !== "True") {
-            codes.add("D3");
-        }
+        codes.add("D1");
+        codes.add("D2");
+        codes.add("D3");
         if (hasAlienatedProperty !== "True") {
             codes.add("D4");
             codes.add("D5");
@@ -590,19 +591,141 @@
         return codes;
     }
 
+    function computeRequiredDocumentGroups() {
+        const required = [];
+        const need = (...codes) => required.push(codes);
+
+        const familyStatus = fieldValue("main-family_status");
+        const isCouple = familyStatus === "couple_with_children" || familyStatus === "couple_without_children";
+        const residenceCategory = fieldValue("main-residence_category");
+        const applicantRefugeeId = (fieldValue("applicant_party-refugee_identity_number") || "").trim();
+        const applicantHasDisability = checkboxChecked("applicant_party-has_disability");
+        const spouseHasDisability = checkboxChecked("spouse_party-has_disability");
+
+        const { count: childrenCount, statuses: childStatuses } = activeChildrenData();
+        const incomePairs = activeIncomePairs(isCouple);
+
+        const hasAlienatedProperty = fieldValue("main-has_alienated_property");
+
+        need("A1");
+        if (residenceCategory === "displaced" || Boolean(applicantRefugeeId)) {
+            need("A2");
+        }
+        if (isCouple) {
+            need("B1", "B2");
+        }
+        if (childrenCount > 0) {
+            need("B11");
+        }
+        if (childStatuses.has("student")) {
+            need("B12");
+        }
+        if (childStatuses.has("national_guard")) {
+            need("B13");
+        }
+        if (childStatuses.has("adult_disability")) {
+            need("B14");
+        }
+        if (applicantHasDisability || (isCouple && spouseHasDisability)) {
+            need("B10");
+        }
+        if (residenceCategory === "neighbouring") {
+            need("C9");
+            need("C10");
+        } else {
+            need("C1");
+        }
+        if (residenceCategory === "internal_emigrant") {
+            need("C6");
+        }
+        if (residenceCategory === "repatriated") {
+            need("C7");
+            need("C8");
+        }
+        need("D1");
+        need("D2");
+        need("D3");
+        if (hasAlienatedProperty !== "True") {
+            need("D4");
+            need("D5");
+        }
+        if (incomePairs.has("applicant:employee")) {
+            need("E1");
+        }
+        if (incomePairs.has("applicant:self_employed")) {
+            need("E2");
+        }
+        if (incomePairs.has("applicant:other")) {
+            need("E3");
+        }
+        if (isCouple) {
+            if (incomePairs.has("spouse:employee")) {
+                need("E4");
+            }
+            if (incomePairs.has("spouse:self_employed")) {
+                need("E5");
+            }
+            if (incomePairs.has("spouse:other")) {
+                need("E6");
+            }
+        }
+        if (incomePairs.has("other_member:employee")) {
+            need("E7");
+        }
+        if (incomePairs.has("other_member:self_employed")) {
+            need("E8");
+        }
+        if (incomePairs.has("other_member:other")) {
+            need("E9");
+        }
+
+        return required;
+    }
+
     function refreshDocumentChecklist() {
         const applicable = computeApplicableDocumentCodes();
+        const checkedCodes = new Set();
         form.querySelectorAll("[data-document-code]").forEach((label) => {
             const code = label.dataset.documentCode;
             const isApplicable = applicable.has(code);
             label.hidden = false;
             label.classList.toggle("is-disabled", !isApplicable);
             const input = label.querySelector('input[type="checkbox"]');
-            if (input) input.disabled = !isApplicable;
+            if (input) {
+                input.disabled = !isApplicable;
+                if (isApplicable && input.checked) {
+                    checkedCodes.add(code);
+                }
+            }
         });
         form.querySelectorAll("[data-document-group]").forEach((group) => {
             group.hidden = false;
         });
+
+        const requiredGroups = computeRequiredDocumentGroups();
+        const requiredCount = requiredGroups.length;
+        const satisfiedCount = requiredGroups.filter((codes) =>
+            codes.some((code) => checkedCodes.has(code))
+        ).length;
+        const missingCount = Math.max(0, requiredCount - satisfiedCount);
+        const overrideChecked = checkboxChecked("main-documents_complete_override");
+        const isComplete = missingCount === 0 || overrideChecked;
+
+        const badgeEl = form.querySelector("[data-documents-completeness-badge]");
+        if (badgeEl) {
+            badgeEl.className = `badge ${isComplete ? "badge--pass" : "badge--fail"}`;
+            badgeEl.textContent = isComplete ? "ΟΛΟΚΛΗΡΩΜΕΝΗ" : "ΕΛΛΙΠΗΣ";
+        }
+        const countsEl = form.querySelector("[data-documents-completeness-counts]");
+        if (countsEl) {
+            const missingText = missingCount > 0 ? `${missingCount} ελλείποντα` : "χωρίς ελλείψεις";
+            countsEl.textContent = `${satisfiedCount} από ${requiredCount} απαιτούμενα (${missingText})`;
+        }
+        const btnBadgeEl = form.querySelector("[data-documents-button-badge]");
+        if (btnBadgeEl) {
+            btnBadgeEl.className = `badge ${isComplete ? "badge--pass" : "badge--fail"}`;
+            btnBadgeEl.textContent = isComplete ? "Ολοκληρωμένη" : "Ελλιπής";
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -735,15 +858,10 @@
         return errors;
     }
 
-    const PERSON_REQUIRED_FIELDS = [
+    const APPLICANT_MINIMUM_FIELDS = [
         ["identity_number", "Αρ. Δελτίου Ταυτότητας"],
         ["first_name", "Όνομα"],
         ["last_name", "Επίθετο"],
-        ["date_of_birth", "Ημερομηνία Γέννησης"],
-        ["birth_place", "Τόπος Γέννησης"],
-        ["birth_country", "Χώρα Γέννησης"],
-        ["parents_birth_place", "Τόπος γέννησης γονέων"],
-        ["parents_birth_country", "Χώρα Γέννησης Γονέων"],
     ];
 
     function isValidEmail(value) {
@@ -762,85 +880,41 @@
             if (!(fieldValue("main-community") || "").trim()) {
                 errors.push("Κοινότητα στην οποία ζητείται η παραχώρηση οικοπέδου: Υποχρεωτικό πεδίο.");
             }
-            if (!(fieldValue("main-submitted_on") || "").trim()) {
-                errors.push("Ημερομηνία υποβολής: Υποχρεωτικό πεδίο.");
-            }
         }
 
         if (isSubsectionEditable("section_1")) {
-            PERSON_REQUIRED_FIELDS.forEach(([field, label]) => {
+            APPLICANT_MINIMUM_FIELDS.forEach(([field, label]) => {
                 if (!(fieldValue(`applicant-${field}`) || "").trim()) {
                     errors.push(`1. Αιτητής/τρια — ${label}: Υποχρεωτικό πεδίο.`);
                 }
             });
 
             const applicantCit = (fieldValue("applicant_party-citizenship") || "").trim();
-            if (!applicantCit) {
-                errors.push("1. Αιτητής/τρια — Υπηκοότητα / Ιδιότητα: Υποχρεωτικό πεδίο.");
-            } else if (applicantCit === "other" && !(fieldValue("applicant_party-citizenship_other") || "").trim()) {
-                errors.push("1. Αιτητής/τρια — Άλλο (υπηκοότητα): Συμπληρώστε την υπηκοότητα / ιδιότητα.");
+            if (applicantCit === "other" && !(fieldValue("applicant_party-citizenship_other") || "").trim()) {
+                errors.push("1. Αιτητής/τρια — Άλλο (περιγραφή): Συμπληρώστε την υπηκοότητα / ιδιότητα.");
             }
             if (!(fieldValue("applicant_party-mobile_phone") || "").trim()) {
                 errors.push("1. Αιτητής/τρια — Τηλέφωνο Κινητό: Υποχρεωτικό πεδίο.");
             }
 
             const email = (fieldValue("main-email") || "").trim();
-            if (!email) {
-                errors.push("1. Ηλεκτρονική Διεύθυνση: Υποχρεωτικό πεδίο.");
-            } else if (!isValidEmail(email)) {
+            if (email && !isValidEmail(email)) {
                 errors.push("1. Ηλεκτρονική Διεύθυνση: Μη έγκυρη διεύθυνση email.");
-            }
-        }
-
-        if (isSubsectionEditable("section_2")) {
-            const residenceCategory = (fieldValue("main-residence_category") || "").trim();
-            if (!residenceCategory) {
-                errors.push("2. Τόπος διαμονής — Κατηγορία: Υποχρεωτικό πεδίο.");
-            } else if (residenceCategory === "neighbouring") {
-                if (!(fieldValue("main-neighbouring_community") || "").trim()) {
-                    errors.push("2. Τόπος διαμονής — Γειτονική Κοινότητα: Επιλέξτε τη Γειτονική Κοινότητα από τον κατάλογο.");
-                }
-            } else if (!LOCKED_CATEGORIES.includes(residenceCategory)) {
-                if (!(fieldValue("main-residence_community") || "").trim()) {
-                    errors.push("2. Τόπος διαμονής — Κοινότητα / Δημοτικό Διαμέρισμα διαμονής: Υποχρεωτικό πεδίο.");
-                }
             }
         }
 
         const familyStatus = (fieldValue("main-family_status") || "").trim();
         const isCouple = familyStatus === "couple_with_children" || familyStatus === "couple_without_children";
-        if (isSubsectionEditable("section_3")) {
-            if (!familyStatus) {
-                errors.push("3. Οικογενειακή κατάσταση: Υποχρεωτικό πεδίο.");
-            } else if (familyStatus === "single_parent") {
-                const singleStatus = (fieldValue("main-single_parent_status") || "").trim();
-                if (!singleStatus) {
-                    errors.push("3. Μονογονιός: Επιλέξτε την περίπτωση μονογονιού.");
-                } else if (singleStatus === "other" && !(fieldValue("main-single_parent_other") || "").trim()) {
-                    errors.push("3. Μονογονιός — Άλλο: Περιγράψτε την περίπτωση «Άλλο».");
-                }
-            }
-        }
 
         if (isCouple && isSubsectionEditable("section_5")) {
-            PERSON_REQUIRED_FIELDS.forEach(([field, label]) => {
-                if (!(fieldValue(`spouse-${field}`) || "").trim()) {
-                    errors.push(`5. Σύζυγος/Συμβίος — ${label}: Υποχρεωτικό πεδίο.`);
-                }
-            });
             const applicantId = (fieldValue("applicant-identity_number") || "").trim();
             const spouseId = (fieldValue("spouse-identity_number") || "").trim();
             if (applicantId && spouseId && applicantId === spouseId) {
                 errors.push("5. Σύζυγος/Συμβίος — Αρ. Δελτίου Ταυτότητας: Δεν μπορεί να έχει το ίδιο ΑΔΤ με τον/την αιτητή/τρια.");
             }
             const spouseCit = (fieldValue("spouse_party-citizenship") || "").trim();
-            if (!spouseCit) {
-                errors.push("5. Σύζυγος/Συμβίος — Υπηκοότητα / Ιδιότητα: Υποχρεωτικό πεδίο.");
-            } else if (spouseCit === "other" && !(fieldValue("spouse_party-citizenship_other") || "").trim()) {
-                errors.push("5. Σύζυγος/Συμβίος — Άλλο (υπηκοότητα): Συμπληρώστε την υπηκοότητα / ιδιότητα.");
-            }
-            if (!(fieldValue("spouse_party-mobile_phone") || "").trim()) {
-                errors.push("5. Σύζυγος/Συμβίος — Τηλέφωνο Κινητό: Υποχρεωτικό πεδίο.");
+            if (spouseCit === "other" && !(fieldValue("spouse_party-citizenship_other") || "").trim()) {
+                errors.push("5. Σύζυγος/Συμβίος — Άλλο (περιγραφή): Συμπληρώστε την υπηκοότητα / ιδιότητα.");
             }
             const spouseEmail = (fieldValue("spouse_party-email") || "").trim();
             if (spouseEmail && !isValidEmail(spouseEmail)) {
@@ -1383,6 +1457,27 @@
 
         syncEmptyRowForContainer(container);
     });
+
+    const documentsDialog = form.querySelector("[data-documents-modal]");
+    form.querySelectorAll("[data-documents-modal-open]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+            refreshDocumentChecklist();
+        });
+    });
+    if (documentsDialog) {
+        documentsDialog.addEventListener("click", (event) => {
+            if (event.target !== documentsDialog) return;
+            const rect = documentsDialog.getBoundingClientRect();
+            const inside =
+                event.clientX >= rect.left &&
+                event.clientX <= rect.right &&
+                event.clientY >= rect.top &&
+                event.clientY <= rect.bottom;
+            if (!inside) {
+                documentsDialog.close();
+            }
+        });
+    }
 
     form.addEventListener("submit", () => {
         saveScrollPosition();

@@ -37,7 +37,6 @@ DOCUMENT_GROUPS = (
         "Γ. Τόπος Διαμονής",
         (
             ("C1", "Λογαριασμός ΑΗΚ στο όνομα αιτητή (ή ενός εκ του ζεύγους) για διεύθυνση στην Κοινότητα"),
-            ("C2", "Βεβαίωση Κοινότητας ότι ο αιτητής διαβιεί σε διεύθυνση εντός της Κοινότητας"),
             ("C3", "Βεβαίωση Εθνικής Φρουράς"),
             ("C4", "Βεβαίωση φοίτησης"),
             ("C5", "Ιατρική βεβαίωση νοσηλείας"),
@@ -110,16 +109,15 @@ def applicable_codes_from_context(ctx: DocumentContext) -> set[str]:
     is_single_parent = ctx.family_status == "single_parent"
 
     # Α. Κυπριακή ή άλλη Υπηκοότητα και Ηλικία
-    if ctx.applicant_citizenship == "cypriot" or (is_couple and ctx.spouse_citizenship == "cypriot"):
-        codes.add("A1")
+    codes.add("A1")
     if (
         ctx.residence_category == "displaced"
         or bool((ctx.applicant_refugee_id or "").strip())
         or (is_couple and bool((ctx.spouse_refugee_id or "").strip()))
     ):
         codes.add("A2")
-    if is_couple and (
-        ctx.spouse_citizenship == "other" or bool((ctx.spouse_alien_number or "").strip())
+    if ctx.applicant_citizenship == "other" or (
+        not is_single_parent and ctx.spouse_citizenship == "other"
     ):
         codes.add("A4")
 
@@ -151,7 +149,7 @@ def applicable_codes_from_context(ctx: DocumentContext) -> set[str]:
 
     # Γ. Τόπος Διαμονής
     if ctx.residence_category in ("autochthon", "displaced", "internal_emigrant", "repatriated"):
-        codes.update(("C1", "C2"))
+        codes.add("C1")
     if ctx.residence_category in ("autochthon", "displaced"):
         codes.update(("C3", "C4", "C5"))
     if ctx.residence_category == "internal_emigrant":
@@ -162,10 +160,7 @@ def applicable_codes_from_context(ctx: DocumentContext) -> set[str]:
         codes.update(("C9", "C10"))
 
     # Δ. Ακίνητη ιδιοκτησία (ΤΚΧ — DLS Portal, Παγκύπρια)
-    if ctx.has_dwelling is not True or ctx.has_residential_land is not True:
-        codes.update(("D1", "D2"))
-    if ctx.has_residential_land is not True:
-        codes.add("D3")
+    codes.update(("D1", "D2", "D3"))
     if ctx.has_alienated_property is not True:
         codes.update(("D4", "D5"))
 
@@ -297,7 +292,7 @@ def applicable_documents_for_forms(forms, large_family_children: int = 4) -> set
         applicant_is_employee=_checkbox_bool(ap["is_employee"].value()),
         applicant_is_self_employed=_checkbox_bool(ap["is_self_employed"].value()),
         applicant_has_disability=_checkbox_bool(ap["has_disability"].value()),
-        spouse_citizenship=str(sp["citizenship"].value() or "").strip(),
+        spouse_citizenship=str(sp["citizenship"].value() or "").strip() if forms.is_couple else "",
         spouse_refugee_id=str(sp["refugee_identity_number"].value() or "").strip(),
         spouse_alien_number=str(sp["alien_registration_number"].value() or "").strip(),
         spouse_is_employee=_checkbox_bool(sp["is_employee"].value()),

@@ -18,19 +18,27 @@
                 title="{{ item.title }}"
                 {% if item.is_active %}aria-current="page"{% endif %}
             >
-                <span class="case-actions-nav__label">{{ item.action }}</span>
+                <span class="case-actions-nav__label" data-ui-key="caseSectionLabel.{{ item.key }}" data-ui-prefix="{{ item.key }}. ">{{ item.action }}</span>
             </a>
             {% endfor %}
         </nav>
         {% case_completion_panel case %}
-        <p class="case-actions-sidebar__footer">
+        <div class="case-actions-sidebar__footer">
             <a href="{% url 'cases:detail' case.pk %}">Προβολή φακέλου</a>
             {% if access.case_history.view %}
             ·
-            <a href="{% url 'cases:history' case.pk %}">Ιστορικό</a>
+            <button type="button"
+                    class="btn btn-secondary btn-sm"
+                    data-history-timeline-open="{% url 'cases:history' case.pk %}"
+                    aria-controls="history-timeline-dialog">
+                Ιστορικό αλλαγών
+            </button>
             {% endif %}
-        </p>
+        </div>
     </div>
 </aside>
+{% endif %}
+{% if access.case_history.view %}
+{% include "core/_history_timeline_dialog.html" with timeline_subject=case.case_number %}
 {% endif %}
 {% approved_design_plot_workspace case %}

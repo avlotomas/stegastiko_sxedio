@@ -21,7 +21,7 @@
 </nav>
 
 <div class="page-header">
-    <h1>{% if is_create %}Αίτηση για παραχώρηση οικοπέδου{% else %}Επεξεργασία {{ application.protocol_number }}{% endif %}</h1>
+    <h1>{% if is_create %}Αίτηση για παραχώρηση οικοπέδου{% else %}<span data-ui-text>Επεξεργασία</span> {{ application.protocol_number }}{% endif %}</h1>
     <p class="page-header__lead">Έντυπο Παραρτήματος 3 — Στεγαστικό Σχέδιο Διάθεσης Οικοπέδων σε Οικογένειες στη βάση Εισοδηματικών Κριτηρίων.</p>
 </div>
 
@@ -58,7 +58,7 @@
             {% include "plot_applications/_field.html" with field=p.refugee_identity_number %}
             {% include "plot_applications/_field.html" with field=p.citizenship %}
             <div data-show-when="applicant_party-citizenship=other" hidden>
-                {% include "plot_applications/_field.html" with field=p.citizenship_other %}
+                {% include "plot_applications/_field.html" with field=p.citizenship_other required=True %}
             </div>
             {% include "plot_applications/_field.html" with field=p.mobile_phone %}
             {% include "plot_applications/_field.html" with field=p.landline_phone %}
@@ -96,6 +96,7 @@
             <div class="form-span-all" data-show-when="main-residence_category=neighbouring" hidden>
                 {% include "plot_applications/_field.html" with field=form.neighbouring_community wide=True %}
             </div>
+            {% include "plot_applications/_field.html" with field=form.resides_in_controlled_areas wide=True %}
         </div>
 
         <div data-show-when="main-residence_category=internal_emigrant" hidden>
@@ -142,7 +143,7 @@
                 {% include "plot_applications/_field.html" with field=p.alien_registration_number %}
                 {% include "plot_applications/_field.html" with field=p.citizenship %}
                 <div data-show-when="spouse_party-citizenship=other" hidden>
-                    {% include "plot_applications/_field.html" with field=p.citizenship_other %}
+                    {% include "plot_applications/_field.html" with field=p.citizenship_other required=True %}
                 </div>
                 {% include "plot_applications/_field.html" with field=p.mobile_phone %}
                 {% include "plot_applications/_field.html" with field=p.landline_phone %}
@@ -247,24 +248,82 @@
         </div>
     </div>
 
-    <div data-plot-subsection="documents" {% if not is_create and not sub_edit.documents %}hidden data-subsection-hidden{% endif %}>
-        {% if is_create or sub_edit.documents %}<h3 class="form-section-title">Κατάλογος απαιτούμενων δικαιολογητικών εγγράφων</h3>{% endif %}
-        <p class="helptext">Σημειώστε ό,τι επισυνάπτεται. Χωρίς τα έγγραφα που εφαρμόζονται, η αίτηση ΔΕΝ θεωρείται πλήρης (Ενότ. 5, 20.2).</p>
+    <dialog id="plot-application-documents-dialog"
+            class="modal modal--wide modal--documents"
+            aria-labelledby="plot-application-documents-dialog-title"
+            data-plot-subsection="documents"
+            data-documents-modal
+            {% if not is_create and not sub_edit.documents %}hidden data-subsection-hidden{% endif %}>
+        <div class="approved-design-plots-workspace__header">
+            <div>
+                {% if is_create or sub_edit.documents %}<h3 class="form-section-title" id="plot-application-documents-dialog-title">Κατάλογος απαιτούμενων δικαιολογητικών εγγράφων</h3>{% endif %}
+                <p class="helptext">Σημειώστε ό,τι επισυνάπτεται. Χωρίς τα έγγραφα που εφαρμόζονται, η αίτηση ΔΕΝ θεωρείται πλήρης (Ενότ. 5, 20.2).</p>
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" data-dialog-close>Κλείσιμο</button>
+        </div>
+        <dl class="detail-grid" data-documents-completeness-summary>
+            <div>
+                <dt>Κατάσταση δικαιολογητικών</dt>
+                <dd>
+                    <span class="badge {% if documents_is_complete %}badge--pass{% else %}badge--fail{% endif %}"
+                          data-documents-completeness-badge>
+                        {% if documents_is_complete %}ΟΛΟΚΛΗΡΩΜΕΝΗ{% else %}ΕΛΛΙΠΗΣ{% endif %}
+                    </span>
+                </dd>
+            </div>
+            <div>
+                <dt>Απαιτούμενα / Επισυναπτόμενα</dt>
+                <dd data-documents-completeness-counts>
+                    {{ documents_attached_count }} από {{ documents_required_count }} απαιτούμενα
+                    ({% if documents_missing_count %}{{ documents_missing_count }} ελλείποντα{% else %}χωρίς ελλείψεις{% endif %})
+                </dd>
+            </div>
+        </dl>
         {% if form.attached_documents.errors %}<ul class="errorlist">{% for e in form.attached_documents.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
         {% for title, choices, group_visible in document_groups %}
         <fieldset class="child-formset" data-document-group>
             <legend>{{ title }}</legend>
             <div class="document-checklist">
                 {% for choice in choices %}
-                <label class="checkbox-label{% if choice.data.value not in visible_documents %} is-disabled{% endif %}" data-document-code="{{ choice.data.value }}">{{ choice.tag }} <span>{{ choice.choice_label }}</span></label>
+                <div class="document-checklist__row" data-document-row="{{ choice.data.value }}">
+                    <div class="document-checklist__item">
+                        <label class="checkbox-label{% if choice.data.value not in visible_documents %} is-disabled{% endif %}" data-document-code="{{ choice.data.value }}">{{ choice.tag }} <span>{{ choice.choice_label }}</span></label>
+                        <button type="button"
+                                class="document-note-btn{% if choice.note %} has-note{% endif %}"
+                                data-document-note-toggle="{{ choice.data.value }}"
+                                data-ui-skip
+                                aria-label="Σημείωση για το πιστοποιητικό"
+                                aria-expanded="false"
+                                title="{% if choice.note %}Σημείωση: {{ choice.note }}{% else %}Προσθήκη σημείωσης{% endif %}">
+                            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+                                <path fill="currentColor" d="M2.5 1A1.5 1.5 0 0 0 1 2.5v8A1.5 1.5 0 0 0 2.5 12H5v2.5a.5.5 0 0 0 .85.35L8.7 12h4.8A1.5 1.5 0 0 0 15 10.5v-8A1.5 1.5 0 0 0 13.5 1h-11zm0 1h11a.5.5 0 0 1 .5.5v8a.5.5 0 0 1-.5.5H8.5a.5.5 0 0 0-.35.15L6 13.29V11.5a.5.5 0 0 0-.5-.5h-3a.5.5 0 0 1-.5-.5v-8a.5.5 0 0 1 .5-.5zm2 2a.5.5 0 0 0 0 1h7a.5.5 0 0 0 0-1h-7zm0 2.5a.5.5 0 0 0 0 1h7a.5.5 0 0 0 0-1h-7zm0 2.5a.5.5 0 0 0 0 1h4a.5.5 0 0 0 0-1h-4z"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="document-checklist__note" data-document-note-wrap="{{ choice.data.value }}" hidden>
+                        <input type="text"
+                               name="document_note_{{ choice.data.value }}"
+                               value="{{ choice.note }}"
+                               class="input document-note-input"
+                               data-document-note-input="{{ choice.data.value }}"
+                               placeholder="Σημείωση για το πιστοποιητικό…">
+                    </div>
+                </div>
                 {% endfor %}
             </div>
         </fieldset>
         {% endfor %}
         <div class="form-grid">
             {% include "plot_applications/_field.html" with field=form.other_documents wide=True %}
+            {% include "plot_applications/_field.html" with field=form.documents_complete_override wide=True %}
+            <div class="form-span-all" data-show-when="main-documents_complete_override=on" {% if not form.documents_complete_override.value %}hidden{% endif %}>
+                {% include "plot_applications/_field.html" with field=form.documents_complete_reason wide=True %}
+            </div>
         </div>
-    </div>
+        <div class="form-actions">
+            <button type="button" class="btn btn-primary" data-dialog-close>Κλείσιμο</button>
+        </div>
+    </dialog>
 
     {% if not is_create %}
     <div data-plot-application-email-status></div>
@@ -275,37 +334,67 @@
         {% endif %}
     </div>
     {% else %}
-    <p class="helptext">Αποθηκεύστε την αίτηση (έστω με «Προσωρινή αποθήκευση») για αποστολή email στον αιτητή και τήρηση ιστορικού απεσταλμένων email.</p>
+    <p class="helptext">Αποθηκεύστε την αίτηση για αποστολή email στον αιτητή και τήρηση ιστορικού απεσταλμένων email.</p>
     {% endif %}
 
     <div class="form-actions form-actions--sticky" data-sticky-form-actions>
-        <span class="save-btn-wrapper" data-save-button-wrapper>
-            <button type="submit" class="btn btn-primary" data-save-button>Αποθήκευση</button>
-            <div class="save-btn-tooltip" role="tooltip" data-save-tooltip hidden></div>
-        </span>
-        <button type="submit" name="save_draft" value="1" class="btn btn-secondary" data-save-draft-button>Προσωρινή αποθήκευση</button>
-        {% if not is_create and can_send_email %}
-        <button type="button"
-                class="btn btn-secondary"
-                data-dialog-open="plot-application-email-dialog"
-                data-email-action="{% url 'plot_applications:email_send' application.pk %}"
-                data-email-subject="{{ email_subject }}"
-                data-email-recipient="{{ application.email }}"
-                data-copy-text="{{ missing_documents_text }}"
-                data-check-label="Αίτηση {{ application.protocol_number }}"
-                data-collect-live-missing="1">
-            Αποστολή Email
-        </button>
-        {% endif %}
+        <div class="form-actions__group">
+            <span class="save-btn-wrapper" data-save-button-wrapper>
+                <button type="submit" class="btn btn-primary" data-save-button>Αποθήκευση</button>
+                <div class="save-btn-tooltip" role="tooltip" data-save-tooltip hidden></div>
+            </span>
+            {% if not is_create and access.plot_applications.view %}
+            <a href="{% url 'plot_applications:detail' application.pk %}" class="btn btn-secondary">Κατάσταση</a>
+            {% endif %}
+            <a href="{% url 'plot_applications:list' %}" class="btn btn-secondary">{% if is_create %}Ακύρωση{% else %}Πίσω στον κατάλογο{% endif %}</a>
+        </div>
+        <div class="form-actions__group">
+            {% if is_create or sub_edit.documents %}
+            <button type="button"
+                    class="btn btn-secondary"
+                    data-dialog-open="plot-application-documents-dialog"
+                    data-documents-modal-open
+                    aria-controls="plot-application-documents-dialog">
+                <span>Απαιτούμενα δικαιολογητικά</span>
+                <span class="badge {% if documents_is_complete %}badge--pass{% else %}badge--fail{% endif %}"
+                      data-documents-button-badge
+                      data-ui-skip>
+                    {% if documents_is_complete %}Ολοκληρωμένη{% else %}Ελλιπής{% endif %}
+                </span>
+            </button>
+            {% endif %}
+            {% if not is_create and can_send_email %}
+            <button type="button"
+                    class="btn btn-secondary"
+                    data-dialog-open="plot-application-email-dialog"
+                    data-email-action="{% url 'plot_applications:email_send' application.pk %}"
+                    data-email-subject="{{ email_subject }}"
+                    data-email-recipient="{{ application.email }}"
+                    data-copy-text="{{ missing_documents_text }}"
+                    data-check-label="Αίτηση {{ application.protocol_number }}"
+                    data-collect-live-missing="1">
+                Αποστολή Email
+            </button>
+            {% endif %}
+            {% if not is_create and sub_view.change_history %}
+            <button type="button"
+                    class="btn btn-secondary"
+                    data-history-timeline-open="{% url 'plot_applications:history' application.pk %}"
+                    aria-controls="history-timeline-dialog">
+                Ιστορικό αλλαγών
+            </button>
+            {% endif %}
+        </div>
         {% if not is_create and access.plot_applications.delete %}
-        <button type="submit"
-                form="plot-application-delete-form"
-                class="btn btn-danger"
-                {% if delete_refusal %}disabled title="{{ delete_refusal }}"{% endif %}>
-            Διαγραφή
-        </button>
+        <div class="form-actions__group form-actions__group--end">
+            <button type="submit"
+                    form="plot-application-delete-form"
+                    class="btn btn-danger"
+                    {% if delete_refusal %}disabled title="{{ delete_refusal }}"{% endif %}>
+                Διαγραφή
+            </button>
+        </div>
         {% endif %}
-        <a href="{% if is_create or not access.plot_applications.view %}{% url 'plot_applications:list' %}{% else %}{% url 'plot_applications:detail' application.pk %}{% endif %}" class="btn btn-secondary">Ακύρωση</a>
     </div>
 </form>
 {% if not is_create and access.plot_applications.delete %}
@@ -320,6 +409,9 @@
 {% if not is_create and can_send_email %}
 {% include "plot_applications/_email_dialog.html" %}
 {% endif %}
+{% if not is_create and sub_view.change_history %}
+{% include "core/_history_timeline_dialog.html" with timeline_subject=application.protocol_number %}
+{% endif %}
 {% include "plot_applications/_formset_dialogs.html" %}
 <dialog id="person-edit-dialog" class="modal" data-person-edit-dialog>
     <div class="alert alert--error" data-person-edit-errors hidden></div>
@@ -327,6 +419,6 @@
 </dialog>
 {{ form.community_names|json_script:"community-names" }}
 {{ income_parameters|json_script:"income-parameters" }}
-<script src="{% static 'js/plot_application.js' %}?v=9"></script>
+<script src="{% static 'js/plot_application.js' %}?v=15"></script>
 <script src="{% static 'js/plot_application_person.js' %}?v=2"></script>
 {% endblock %}

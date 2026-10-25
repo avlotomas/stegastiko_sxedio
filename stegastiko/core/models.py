@@ -62,6 +62,8 @@ class AuditedModel(models.Model):
                 "Manager.update() is blocked for audited models; use save() per instance."
             )
 
+    _history_hidden_fields: frozenset[str] = frozenset()
+
     objects = AuditedManager()
     created_at = models.DateTimeField(default=timezone.now, editable=False)
     updated_at = models.DateTimeField(auto_now=True)

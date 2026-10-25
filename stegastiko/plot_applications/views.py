@@ -1,3 +1,4 @@
+import json
 from datetime import date
 
 from django.contrib import messages
@@ -5,11 +6,12 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import F, Max, Q
-from django.http import Http404, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import formats, timezone
+from django.utils.http import content_disposition_header
 
 from applications.models import Person
 from applications.person_forms import PersonForm
@@ -18,6 +20,7 @@ from core.function_catalog import (
     CREATE,
     DELETE,
     EDIT,
+    EXPORT,
     FUNCTIONS_BY_CODE,
     PLOT_APPLICATION_SUBSECTION_CODES,
     SEND,
@@ -32,6 +35,7 @@ from core.permissions import (
     plot_application_subsection_map,
 )
 from core.services import smtp_is_configured
+from core.timeline import build_timeline
 from plot_applications.documents import (
     DOCUMENT_GROUPS,
     DOCUMENT_LABELS,
@@ -43,24 +47,49 @@ from plot_applications.forms import (
     ChildFormSet,
     IncomeFormSet,
     PersonIdentityForm,
+    PlotApplicationDocumentsCompletenessForm,
+    PlotApplicationEligibilityOverrideForm,
     PlotApplicationEmailForm,
     PlotApplicationForm,
+    PlotApplicationIncompleteRejectionForm,
 )
 from plot_applications.models import (
+    ApplicationCompleteness,
     ApplicationParty,
+    ApplicationStage,
+    DocumentsCompleteness,
     EligibilityResult,
     IncomeDeclaration,
+    PlotAllocationStatus,
     PlotApplication,
 )
-from plot_applications.rules import apply_evaluation, evaluate, income_evaluation_parameters, parameter
+from plot_applications.prioritization import (
+    BENEFICIARIES,
+    GROUPS,
+    OTHERS,
+    PRIORITIZATION_STAGES,
+    build_prioritization_list,
+    reset_manual_order,
+    save_manual_order,
+)
+from plot_applications.rules import (
+    apply_evaluation,
+    evaluate,
+    income_evaluation_parameters,
+    parameter,
+    required_documents,
+    required_documents_for_forms,
+)
 from plot_applications.services import (
     missing_documents_email_text,
     missing_documents_for_application,
     plot_application_communications,
     plot_application_email_subject,
+    plot_application_history as plot_application_history_entries,
     save_with_new_protocol_number,
     send_plot_application_email,
 )
+from plot_applications.stage_labels import application_stage_choices
 
 FUNCTION = "plot_applications"
 COUPLE_VALUES = {str(value) for value in PlotApplication.COUPLE_STATUSES}
@@ -84,6 +113,7 @@ MAIN_SUBSECTION_FIELDS = {
         "residence_apartment",
         "residence_postal_code",
         "residence_community",
+        "resides_in_controlled_areas",
         "origin_parent_description",
         "previous_residence_address",
         "residence_notes",
@@ -120,6 +150,8 @@ MAIN_SUBSECTION_FIELDS = {
     "documents": (
         "attached_documents",
         "other_documents",
+        "documents_complete_override",
+        "documents_complete_reason",
     ),
 }
 
@@ -160,7 +192,7 @@ class ApplicationForms:
             editable_subsections = None
         self.editable_subsections = editable_subsections
         bound = data is not None
-        self.is_draft = bool(bound and data.get("save_draft"))
+        self.is_draft = False
         if bound and ("children-TOTAL_FORMS" not in data or "incomes-TOTAL_FORMS" not in data):
             data = data.copy()
             if "children-TOTAL_FORMS" not in data:
@@ -181,6 +213,28 @@ class ApplicationForms:
             self.is_couple = instance.pk is None or instance.is_couple
 
         initial_attached = {"attached_documents": instance.attached_documents} if instance.pk else {}
+        existing_notes = (
+            instance.document_notes
+            if instance.pk and isinstance(instance.document_notes, dict)
+            else {}
+        )
+        cleaned_existing_notes = {
+            str(code): str(val).strip()
+            for code, val in existing_notes.items()
+            if code in DOCUMENT_LABELS and str(val).strip()
+        }
+        if (
+            bound
+            and self._can_edit("documents")
+            and any(f"document_note_{code}" in data for code in DOCUMENT_LABELS)
+        ):
+            self.document_notes = {
+                code: (data.get(f"document_note_{code}") or "").strip()
+                for code in DOCUMENT_LABELS
+                if (data.get(f"document_note_{code}") or "").strip()
+            }
+        else:
+            self.document_notes = cleaned_existing_notes
         self.main = PlotApplicationForm(
             data, instance=instance, prefix="main", initial=initial_attached, is_draft=self.is_draft
         )
@@ -193,8 +247,7 @@ class ApplicationForms:
         self.spouse = PersonIdentityForm(
             data,
             prefix="spouse",
-            required=not self.is_draft,
-            is_draft=self.is_draft,
+            required=False,
             initial=self._person_initial(instance.spouse if instance.pk else None),
         )
         self.applicant_party = ApplicationPartyForm(
@@ -333,20 +386,15 @@ class ApplicationForms:
         valid = all([form.is_valid() for form in self._active_forms()])
         if not valid:
             return False
-        if self._can_edit("section_5"):
-            if self.is_couple and not self.spouse.is_filled:
-                if not self.is_draft:
-                    self.spouse.add_error("identity_number", "Για Ζεύγος απαιτούνται τα στοιχεία συζύγου/συμβίου.")
-                    return False
-            elif self.is_couple and self.spouse.is_filled:
-                applicant_id = (
-                    self.applicant.cleaned_data["identity_number"].strip()
-                    if self._can_edit("section_1") and self.applicant.is_filled
-                    else (self.instance.applicant.identity_number if self.instance.pk and self.instance.applicant_id else "")
-                )
-                if applicant_id and applicant_id == self.spouse.cleaned_data["identity_number"].strip():
-                    self.spouse.add_error("identity_number", "Ο/Η σύζυγος δεν μπορεί να έχει το ίδιο ΑΔΤ με τον/την αιτητή/τρια.")
-                    return False
+        if self._can_edit("section_5") and self.is_couple and self.spouse.is_filled:
+            applicant_id = (
+                self.applicant.cleaned_data["identity_number"].strip()
+                if self._can_edit("section_1") and self.applicant.is_filled
+                else (self.instance.applicant.identity_number if self.instance.pk and self.instance.applicant_id else "")
+            )
+            if applicant_id and applicant_id == self.spouse.cleaned_data["identity_number"].strip():
+                self.spouse.add_error("identity_number", "Ο/Η σύζυγος δεν μπορεί να έχει το ίδιο ΑΔΤ με τον/την αιτητή/τρια.")
+                return False
 
         if self._can_edit("section_7"):
             parent_identities = set()
@@ -391,8 +439,12 @@ class ApplicationForms:
         application = self.main.save(commit=False)
         if self._can_edit("documents"):
             application.attached_documents = list(self.main.cleaned_data.get("attached_documents") or [])
+            application.document_notes = dict(self.document_notes)
         elif self.instance.pk:
             application.attached_documents = list(self.instance.attached_documents or [])
+            application.document_notes = dict(self.instance.document_notes or {})
+            application.documents_complete_override = self.instance.documents_complete_override
+            application.documents_complete_reason = self.instance.documents_complete_reason
         if self._can_edit("section_1") or not self.instance.pk:
             application.applicant = self.applicant.get_or_create_person()
         if self._can_edit("section_5") or not self.instance.pk:
@@ -466,7 +518,7 @@ class ApplicationForms:
                 kept_income_ids.append(income.pk)
             application.incomes.exclude(pk__in=kept_income_ids).delete()
 
-        if not self.is_draft and self._can_edit("documents"):
+        if self._can_edit("documents"):
             applicable = applicable_documents(application, parameter("plotApp.largeFamilyChildren"))
             application.attached_documents = [
                 code for code in application.attached_documents if code in applicable
@@ -535,10 +587,18 @@ def _render_form(request, forms: ApplicationForms, application=None):
         item_codes = dict(items)
         choices = [choice for choice in main["attached_documents"] if choice.data["value"] in item_codes]
         for choice in choices:
-            if choice.data["value"] not in visible_documents:
+            code = choice.data["value"]
+            if code not in visible_documents:
                 choice.data["attrs"]["disabled"] = True
+            choice.note = forms.document_notes.get(code, "")
         group_visible = any(choice.data["value"] in visible_documents for choice in choices)
         document_groups.append((title, choices, group_visible))
+    attached_set = set(main["attached_documents"].value() or []) & visible_documents
+    req_list = required_documents_for_forms(forms)
+    satisfied_count = sum(1 for codes, _ in req_list if attached_set.intersection(codes))
+    missing_count = len(req_list) - satisfied_count
+    override_checked = bool(main["documents_complete_override"].value())
+    documents_is_complete = missing_count == 0 or override_checked
     return render(
         request,
         "plot_applications/form.html",
@@ -550,6 +610,11 @@ def _render_form(request, forms: ApplicationForms, application=None):
             "income_parameters": income_params,
             "visible_documents": visible_documents,
             "document_groups": document_groups,
+            "documents_required_count": len(req_list),
+            "documents_attached_count": satisfied_count,
+            "documents_missing_count": missing_count,
+            "documents_is_complete": documents_is_complete,
+            "sub_view": plot_application_subsection_map(request.user, VIEW),
             "sub_edit": plot_application_subsection_map(request.user, EDIT),
             "delete_refusal": delete_refusal(application) if application else "",
             **_email_context(request, application),
@@ -668,7 +733,9 @@ def plot_application_detail(request, pk):
     application = get_object_or_404(
         PlotApplication.objects.select_related(
             "community", "applicant", "spouse"
-        ).prefetch_related("parties", "children", "incomes"),
+        ).prefetch_related(
+            "parties", "children", "incomes", "allocations", "ranking_entries__ranking_list"
+        ),
         pk=pk,
     )
     outcome = evaluate(application)
@@ -680,26 +747,262 @@ def plot_application_detail(request, pk):
         .order_by(F("preference_order").asc(nulls_last=True), "submitted_on", "id")
     )
     attached = set(application.attached_documents)
+    raw_notes = application.document_notes if isinstance(application.document_notes, dict) else {}
     applicable = applicable_documents(application, parameter("plotApp.largeFamilyChildren")) | attached
     document_groups = [
-        (title, [(code, label, code in attached) for code, label in items if code in applicable])
+        (
+            title,
+            [
+                (code, label, code in attached, str(raw_notes.get(code) or "").strip())
+                for code, label in items
+                if code in applicable
+            ],
+        )
         for title, items in DOCUMENT_GROUPS
     ]
     document_groups = [(title, items) for title, items in document_groups if items]
+    req_list = required_documents(application)
+    satisfied_required_count = len(req_list) - len(outcome["missing_documents"])
+    sub_edit = plot_application_subsection_map(request.user, EDIT)
+    can_edit_documents = bool(sub_edit.get("documents"))
+    documents_completeness_form = PlotApplicationDocumentsCompletenessForm(
+        initial={
+            "documents_complete_override": application.documents_complete_override,
+            "documents_complete_reason": application.documents_complete_reason,
+        }
+    )
+    eligibility_override_form = PlotApplicationEligibilityOverrideForm(
+        initial={
+            "eligibility_override": application.eligibility_override,
+            "eligibility_override_reason": application.eligibility_override_reason,
+        }
+    )
+    can_edit_eligibility = bool(sub_edit.get("eligibility"))
+    incomplete_rejection_form = PlotApplicationIncompleteRejectionForm(
+        initial={"incomplete_rejection_reason": _default_rejection_reason(outcome)}
+    )
+    prioritization_row = None
+    if (
+        application.application_stage in PRIORITIZATION_STAGES
+        and has_access(request.user, "plot_prioritization", VIEW)
+    ):
+        prioritization = build_prioritization_list(application.community)
+        prioritization_row = next(
+            (
+                row
+                for row in (*prioritization.beneficiaries, *prioritization.others)
+                if row.application.pk == application.pk
+            ),
+            None,
+        )
     return render(
         request,
         "plot_applications/detail.html",
         {
             "application": application,
             "outcome": outcome,
+            "application_stages": application_stage_choices(),
+            "can_override_eligibility": can_edit_eligibility
+            and _can_override_eligibility(application),
+            "eligibility_override_form": eligibility_override_form,
+            "can_reject_incomplete": can_edit_eligibility and _can_reject_incomplete(outcome),
+            "can_revoke_incomplete_rejection": can_edit_eligibility
+            and outcome["is_rejected_incomplete"],
+            "incomplete_rejection_form": incomplete_rejection_form,
+            "prioritization_row": prioritization_row,
             "other_applications": other_applications,
             "document_groups": document_groups,
             "attached_count": len(attached & set(DOCUMENT_LABELS)),
+            "required_documents_count": len(req_list),
+            "satisfied_required_count": satisfied_required_count,
+            "missing_documents_count": len(outcome["missing_documents"]),
+            "can_edit_documents": can_edit_documents,
+            "documents_completeness_form": documents_completeness_form,
             "sub_view": plot_application_subsection_map(request.user, VIEW),
+            "sub_edit": sub_edit,
             "delete_refusal": delete_refusal(application),
             **_email_context(request, application),
         },
     )
+
+
+@access_required(FUNCTION)
+def plot_application_eligibility_report_pdf(request, pk):
+    """Έκθεση ελέγχου κριτηρίων και επιλεξιμότητας αίτησης παραχώρησης οικοπέδου (PDF)."""
+    if not plot_application_subsection_map(request.user, VIEW).get("eligibility"):
+        raise PermissionDenied("Δεν έχετε πρόσβαση στον έλεγχο κριτηρίων της αίτησης.")
+    from plot_applications.eligibility_report_pdf import (
+        eligibility_report_pdf_filename,
+        render_eligibility_report_pdf,
+    )
+
+    application = get_object_or_404(
+        PlotApplication.objects.select_related(
+            "community", "applicant", "spouse"
+        ).prefetch_related(
+            "parties", "children", "incomes", "allocations", "ranking_entries__ranking_list"
+        ),
+        pk=pk,
+    )
+    pdf_bytes = render_eligibility_report_pdf(application)
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = content_disposition_header(
+        as_attachment=True, filename=eligibility_report_pdf_filename(application)
+    )
+    return response
+
+
+@access_required(FUNCTION)
+def plot_application_history(request, pk):
+    """Χρονολόγιο (timeline) των αλλαγών της αίτησης παραχώρησης οικοπέδου (§Β.1.3)."""
+    if not plot_application_subsection_map(request.user, VIEW).get("change_history"):
+        raise PermissionDenied("Δεν έχετε πρόσβαση στο ιστορικό αλλαγών της αίτησης.")
+    application = get_object_or_404(PlotApplication, pk=pk)
+    timeline_events = build_timeline(plot_application_history_entries(application))
+    timeline_html = render_to_string(
+        "core/_history_timeline.html",
+        {"timeline_events": timeline_events},
+        request=request,
+    )
+    return JsonResponse({"ok": True, "timeline_html": timeline_html})
+
+
+@access_required(FUNCTION, EDIT)
+def plot_application_documents_completeness_save(request, pk):
+    """Ενημέρωση του χειροκίνητου χαρακτηρισμού ολοκλήρωσης δικαιολογητικών και της αιτιολογίας."""
+    if request.method != "POST":
+        raise Http404("Επιτρέπεται μόνο POST.")
+    editable_subsections = editable_plot_application_subsections(request.user)
+    if editable_subsections is not None and "documents" not in editable_subsections:
+        raise PermissionDenied("Δεν έχετε δικαίωμα επεξεργασίας των δικαιολογητικών.")
+    application = get_object_or_404(
+        PlotApplication.objects.select_related(
+            "community", "applicant", "spouse"
+        ).prefetch_related("parties", "children", "incomes"),
+        pk=pk,
+    )
+    form = PlotApplicationDocumentsCompletenessForm(request.POST)
+    if form.is_valid():
+        with transaction.atomic():
+            application.documents_complete_override = bool(
+                form.cleaned_data.get("documents_complete_override")
+            )
+            application.documents_complete_reason = form.cleaned_data.get("documents_complete_reason") or ""
+            apply_evaluation(application)
+        messages.success(
+            request,
+            "Η κατάσταση πληρότητας δικαιολογητικών της αίτησης ενημερώθηκε.",
+        )
+    else:
+        for field_errors in form.errors.values():
+            for error in field_errors:
+                messages.error(request, error)
+    return redirect("plot_applications:detail", pk=application.pk)
+
+
+def _can_override_eligibility(application: PlotApplication) -> bool:
+    """Η χειροκίνητη αλλαγή γίνεται στην πλήρη αίτηση που δεν έχει ολοκληρωθεί (στάδια 2 και 3)."""
+    return application.application_stage in PRIORITIZATION_STAGES
+
+
+@access_required(FUNCTION, EDIT)
+def plot_application_eligibility_override_save(request, pk):
+    """Χειροκίνητη αλλαγή του αποτελέσματος του λογισμικού (δικαιούχος / μη δικαιούχος) με αιτιολογία (Ενότ. 6)."""
+    if request.method != "POST":
+        raise Http404("Επιτρέπεται μόνο POST.")
+    if not plot_application_subsection_map(request.user, EDIT).get("eligibility"):
+        raise PermissionDenied("Δεν έχετε δικαίωμα αλλαγής του αποτελέσματος επιλεξιμότητας.")
+    application = get_object_or_404(
+        PlotApplication.objects.select_related(
+            "community", "applicant", "spouse"
+        ).prefetch_related("parties", "children", "incomes"),
+        pk=pk,
+    )
+    if not _can_override_eligibility(application):
+        messages.error(
+            request,
+            "Το αποτέλεσμα επιλεξιμότητας αλλάζει μόνο σε πλήρη αίτηση που δεν έχει ολοκληρωθεί.",
+        )
+        return redirect("plot_applications:detail", pk=application.pk)
+    form = PlotApplicationEligibilityOverrideForm(request.POST)
+    if form.is_valid():
+        with transaction.atomic():
+            application.eligibility_override = form.cleaned_data["eligibility_override"]
+            application.eligibility_override_reason = form.cleaned_data["eligibility_override_reason"]
+            apply_evaluation(application)
+        messages.success(request, "Το αποτέλεσμα επιλεξιμότητας της αίτησης ενημερώθηκε.")
+    else:
+        for field_errors in form.errors.values():
+            for error in field_errors:
+                messages.error(request, error)
+    return redirect("plot_applications:detail", pk=application.pk)
+
+
+def _can_reject_incomplete(outcome: dict) -> bool:
+    """Απορρίπτεται μόνο η ελλιπής αίτηση που εκκρεμεί για συμπλήρωση (στάδιο 1)."""
+    return outcome["completeness_overall"] == ApplicationCompleteness.INCOMPLETE
+
+
+def _default_rejection_reason(outcome: dict) -> str:
+    return "\n".join(
+        f"{criterion.label}: {criterion.note}"
+        for criterion in outcome["completeness_criteria"]
+        if criterion.result != EligibilityResult.PASS
+    )
+
+
+def _incomplete_decision_application(request, pk) -> PlotApplication:
+    if request.method != "POST":
+        raise Http404("Επιτρέπεται μόνο POST.")
+    if not plot_application_subsection_map(request.user, EDIT).get("eligibility"):
+        raise PermissionDenied("Δεν έχετε δικαίωμα απόρριψης ελλιπούς αίτησης.")
+    return get_object_or_404(
+        PlotApplication.objects.select_related(
+            "community", "applicant", "spouse"
+        ).prefetch_related("parties", "children", "incomes"),
+        pk=pk,
+    )
+
+
+@access_required(FUNCTION, EDIT)
+def plot_application_incomplete_reject(request, pk):
+    """Απόρριψη ελλιπούς αίτησης λόγω έλλειψης στοιχείων ή πιστοποιητικών (Ενότ. 5(β), 20.2)."""
+    application = _incomplete_decision_application(request, pk)
+    if not _can_reject_incomplete(evaluate(application)):
+        messages.error(
+            request,
+            "Απορρίπτεται λόγω ελλείψεων μόνο ελλιπής αίτηση που εκκρεμεί για συμπλήρωση.",
+        )
+        return redirect("plot_applications:detail", pk=application.pk)
+    form = PlotApplicationIncompleteRejectionForm(request.POST)
+    if form.is_valid():
+        with transaction.atomic():
+            application.incomplete_rejected = True
+            application.incomplete_rejection_reason = form.cleaned_data["incomplete_rejection_reason"]
+            application.incomplete_rejected_on = timezone.localdate()
+            apply_evaluation(application)
+        messages.success(request, "Η αίτηση απορρίφθηκε λόγω ελλείψεων.")
+    else:
+        for field_errors in form.errors.values():
+            for error in field_errors:
+                messages.error(request, error)
+    return redirect("plot_applications:detail", pk=application.pk)
+
+
+@access_required(FUNCTION, EDIT)
+def plot_application_incomplete_reject_revoke(request, pk):
+    """Ανάκληση της απόρριψης λόγω ελλείψεων· η αίτηση επανέρχεται στον έλεγχο πληρότητας."""
+    application = _incomplete_decision_application(request, pk)
+    if not application.incomplete_rejected:
+        messages.error(request, "Η αίτηση δεν έχει απορριφθεί λόγω ελλείψεων.")
+        return redirect("plot_applications:detail", pk=application.pk)
+    with transaction.atomic():
+        application.incomplete_rejected = False
+        application.incomplete_rejection_reason = ""
+        application.incomplete_rejected_on = None
+        apply_evaluation(application)
+    messages.success(request, "Η απόρριψη λόγω ελλείψεων ανακλήθηκε.")
+    return redirect("plot_applications:detail", pk=application.pk)
 
 
 @access_required(FUNCTION, DELETE)
@@ -730,6 +1033,27 @@ def plot_application_email_send(request, pk):
     application = get_object_or_404(
         PlotApplication.objects.select_related("community", "applicant", "spouse"), pk=pk
     )
+
+    if any(f"document_note_{code}" in request.POST for code in DOCUMENT_LABELS):
+        updated_notes = dict(
+            application.document_notes if isinstance(application.document_notes, dict) else {}
+        )
+        notes_changed = False
+        for code in DOCUMENT_LABELS:
+            key = f"document_note_{code}"
+            if key not in request.POST:
+                continue
+            val = (request.POST.get(key) or "").strip()
+            if val:
+                if updated_notes.get(code) != val:
+                    updated_notes[code] = val
+                    notes_changed = True
+            elif code in updated_notes:
+                updated_notes.pop(code, None)
+                notes_changed = True
+        if notes_changed:
+            application.document_notes = updated_notes
+            application.save()
 
     form = PlotApplicationEmailForm(request.POST)
     errors = []
@@ -818,12 +1142,46 @@ def plot_application_list(request):
         "community", "applicant", "spouse"
     )
     community_id = request.GET.get("community_id") or ""
+    stage = request.GET.get("stage") or ""
+    beneficiary = request.GET.get("beneficiary") or ""
+    plot_allocation = request.GET.get("plot_allocation") or ""
     result = request.GET.get("result") or ""
+    completeness = request.GET.get("completeness") or ""
+    documents_completeness = request.GET.get("documents_completeness") or ""
     q = (request.GET.get("q") or "").strip()
     if community_id:
         applications = applications.filter(community_id=community_id)
+    if stage in ApplicationStage.values:
+        applications = applications.filter(application_stage=stage)
+    if beneficiary in ("pass", "yes", "True", "1"):
+        applications = applications.filter(
+            completeness_result=ApplicationCompleteness.COMPLETE,
+            documents_completeness=DocumentsCompleteness.COMPLETE,
+            eligibility_result=EligibilityResult.PASS,
+        )
+        beneficiary = "pass"
+    elif beneficiary in ("fail", "no", "False", "0"):
+        applications = applications.filter(
+            Q(eligibility_result=EligibilityResult.FAIL)
+            | Q(completeness_result=ApplicationCompleteness.REJECTED)
+        )
+        beneficiary = "fail"
+    elif beneficiary == "pending":
+        applications = applications.exclude(eligibility_result=EligibilityResult.FAIL).exclude(
+            completeness_result=ApplicationCompleteness.REJECTED
+        ).exclude(
+            completeness_result=ApplicationCompleteness.COMPLETE,
+            documents_completeness=DocumentsCompleteness.COMPLETE,
+            eligibility_result=EligibilityResult.PASS,
+        )
+    if plot_allocation in PlotAllocationStatus.values:
+        applications = applications.filter(plot_allocation_status=plot_allocation)
     if result in EligibilityResult.values:
         applications = applications.filter(eligibility_result=result)
+    if completeness in ApplicationCompleteness.values:
+        applications = applications.filter(completeness_result=completeness)
+    if documents_completeness in DocumentsCompleteness.values:
+        applications = applications.filter(documents_completeness=documents_completeness)
     if q:
         applications = applications.filter(
             Q(protocol_number__icontains=q)
@@ -843,10 +1201,117 @@ def plot_application_list(request):
         {
             "applications": applications,
             "communities": Community.objects.filter(is_active=True).order_by("name"),
+            "stage_choices": application_stage_choices(),
+            "plot_allocation_choices": PlotAllocationStatus.choices,
             "results": EligibilityResult.choices,
+            "completeness_choices": ApplicationCompleteness.choices,
+            "documents_completeness_choices": DocumentsCompleteness.choices,
             "community_id": community_id,
+            "stage": stage,
+            "beneficiary": beneficiary,
+            "plot_allocation": plot_allocation,
             "result": result,
+            "completeness": completeness,
+            "documents_completeness": documents_completeness,
             "order": order,
             "q": q,
         },
     )
+
+
+def _prioritization_communities():
+    """Κοινότητες με πλήρεις ανοικτές αιτήσεις (στάδια 2 και 3), για την επιλογή καταλόγου."""
+    return Community.objects.filter(
+        plot_applications__application_stage__in=PRIORITIZATION_STAGES
+    ).distinct().order_by("name")
+
+
+def _community_or_404(raw) -> Community:
+    raw = str(raw or "")
+    if not raw.isdigit():
+        raise Http404("Δεν βρέθηκε η Κοινότητα.")
+    return get_object_or_404(Community, pk=int(raw))
+
+
+def _selected_community(request, communities):
+    raw = request.GET.get("community_id") or ""
+    if raw:
+        return _community_or_404(raw)
+    return communities[0] if communities else None
+
+
+@access_required("plot_prioritization")
+def plot_application_prioritization(request):
+    """Κατάλογος προτεραιοποίησης όλων των πλήρων ανοικτών αιτήσεων μιας Κοινότητας (Ενότ. 6, 11)."""
+    communities = list(_prioritization_communities())
+    community = _selected_community(request, communities)
+    if community is not None and community not in communities:
+        communities = sorted([*communities, community], key=lambda item: item.name)
+    prioritization = build_prioritization_list(community) if community else None
+    can_reorder = has_access(request.user, "plot_prioritization", EDIT)
+    return render(
+        request,
+        "plot_applications/prioritization.html",
+        {
+            "communities": communities,
+            "community": community,
+            "prioritization": prioritization,
+            "can_reorder": can_reorder,
+            "movable_beneficiaries": bool(
+                can_reorder and prioritization and len(prioritization.beneficiaries) > 1
+            ),
+            "movable_others": bool(can_reorder and prioritization and len(prioritization.others) > 1),
+            "can_export": has_access(request.user, "plot_prioritization", EXPORT),
+            "groups": {"beneficiaries": BENEFICIARIES, "others": OTHERS},
+        },
+    )
+
+
+@access_required("plot_prioritization", EDIT)
+def plot_application_prioritization_reorder(request):
+    """Αποθήκευση της σειράς μιας ομάδας (δικαιούχοι / μη δικαιούχοι) μετά από drag and drop."""
+    if request.method != "POST":
+        raise Http404("Επιτρέπεται μόνο POST.")
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+    except ValueError:
+        payload = {}
+    group = payload.get("group")
+    if group not in GROUPS:
+        return JsonResponse({"ok": False, "message": "Μη έγκυρο αίτημα αλλαγής σειράς."}, status=400)
+    community = _community_or_404(payload.get("community_id"))
+    requested_ids = []
+    for item in payload.get("order") or []:
+        try:
+            requested_ids.append(int(item))
+        except (TypeError, ValueError):
+            continue
+    ordered = save_manual_order(community, group, requested_ids)
+    return JsonResponse({"ok": True, "order": [app.pk for app in ordered]})
+
+
+@access_required("plot_prioritization", EDIT)
+def plot_application_prioritization_reset(request):
+    """Επαναφορά του καταλόγου της Κοινότητας στη σειρά του λογισμικού."""
+    if request.method != "POST":
+        raise Http404("Επιτρέπεται μόνο POST.")
+    community = _community_or_404(request.POST.get("community_id"))
+    reset_manual_order(community)
+    messages.success(request, "Ο κατάλογος επανήλθε στη σειρά του λογισμικού (Ενότ. 11).")
+    return redirect(f"{reverse('plot_applications:prioritization')}?community_id={community.pk}")
+
+
+@access_required("plot_prioritization", EXPORT)
+def plot_application_prioritization_report_pdf(request):
+    """Εξαγωγή του καταλόγου προτεραιοποίησης της Κοινότητας σε PDF (A4 landscape)."""
+    from plot_applications.prioritization_report_pdf import (
+        prioritization_report_pdf_filename,
+        render_prioritization_report_pdf,
+    )
+
+    community = _community_or_404(request.GET.get("community_id"))
+    response = HttpResponse(render_prioritization_report_pdf(community), content_type="application/pdf")
+    response["Content-Disposition"] = content_disposition_header(
+        as_attachment=True, filename=prioritization_report_pdf_filename(community)
+    )
+    return response

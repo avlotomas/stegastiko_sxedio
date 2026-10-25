@@ -3,7 +3,9 @@
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 
 from cases import section_refs as refs
 from cases.forms import CaseCreateForm
@@ -16,11 +18,12 @@ from cases.services import (
     suitability_summary,
 )
 from cases.services import case_history as case_history_entries
-from cases.views.common import case_nav_items
+from cases.views.common import case_nav_items, wants_json
 from cases.views.grids import case_utility_services, consultation_grid
 from core.function_catalog import CREATE
 from core.models import Community
 from core.permissions import access_required
+from core.timeline import build_timeline
 
 CASE_LIST_PAGE_SIZE = 50
 
@@ -130,12 +133,22 @@ def case_detail(request, pk):
 @access_required("case_history")
 def case_history(request, pk):
     case = get_object_or_404(Case, pk=pk)
+    entries = case_history_entries(case)
+    timeline_events = build_timeline(entries)
+    if wants_json(request) or request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        timeline_html = render_to_string(
+            "core/_history_timeline.html",
+            {"timeline_events": timeline_events},
+            request=request,
+        )
+        return JsonResponse({"ok": True, "timeline_html": timeline_html})
     return render(
         request,
         "cases/history.html",
         {
             "case": case,
-            "history_entries": case_history_entries(case),
+            "history_entries": entries,
+            "timeline_events": timeline_events,
             "case_nav": case_nav_items(case, request.user),
         },
     )

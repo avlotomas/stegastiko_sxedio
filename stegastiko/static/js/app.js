@@ -298,18 +298,24 @@ bindFilePickers(document);
 
         const close = event.target.closest("[data-dialog-close]");
 
-        if (!close) {
-
+        if (close) {
+            const dialog = close.closest("dialog");
+            if (dialog) {
+                dialog.close();
+            }
             return;
-
         }
 
-        const dialog = close.closest("dialog");
-
-        if (dialog) {
-
-            dialog.close();
-
+        if (event.target && event.target.matches && event.target.matches("dialog[data-documents-modal]")) {
+            const rect = event.target.getBoundingClientRect();
+            const inside =
+                event.clientX >= rect.left &&
+                event.clientX <= rect.right &&
+                event.clientY >= rect.top &&
+                event.clientY <= rect.bottom;
+            if (!inside) {
+                event.target.close();
+            }
         }
 
     });
@@ -434,6 +440,12 @@ bindFilePickers(document);
         const element = document.querySelector(selector);
         if (element) {
             element.outerHTML = html;
+            if (typeof window.refreshUiTexts === "function") {
+                const updated = document.querySelector(selector);
+                if (updated) {
+                    window.refreshUiTexts(updated);
+                }
+            }
         }
     }
 
@@ -586,6 +598,9 @@ bindFilePickers(document);
 
         const mountForm = function (html, pendingFiles) {
             body.innerHTML = html;
+            if (typeof window.refreshUiTexts === "function") {
+                window.refreshUiTexts(body);
+            }
             if (config.bindForm) {
                 config.bindForm(body, pendingFiles);
             }
@@ -716,19 +731,114 @@ bindFilePickers(document);
 
     // 2.2 deficiencies email dialog & plot application email dialog, sent without reloading so unsaved edits survive.
 
+    function escapeEmailHtml(value) {
+        return String(value || "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+    }
+
+    function formatEmailBodyHtml(rawText) {
+        return escapeEmailHtml(rawText).replace(
+            /\*\*\*([^\n*]+?)\*\*\*/g,
+            '<strong class="email-doc-note"><em>$1</em></strong>'
+        );
+    }
+
+    function serializeEmailRichNode(node) {
+        if (!node) {
+            return "";
+        }
+        if (node.nodeType === 3) {
+            return node.nodeValue || "";
+        }
+        if (node.nodeType !== 1) {
+            return "";
+        }
+        const tag = (node.tagName || "").toUpperCase();
+        if (tag === "BR") {
+            return "\n";
+        }
+        const isBoldItalicNote =
+            node.classList.contains("email-doc-note") ||
+            ((tag === "STRONG" || tag === "B") &&
+                node.childElementCount === 1 &&
+                (node.firstElementChild.tagName === "EM" || node.firstElementChild.tagName === "I")) ||
+            ((tag === "EM" || tag === "I") &&
+                node.childElementCount === 1 &&
+                (node.firstElementChild.tagName === "STRONG" || node.firstElementChild.tagName === "B"));
+        if (isBoldItalicNote) {
+            const noteText = (node.textContent || "").replace(/\s+/g, " ").trim();
+            return noteText ? "***" + noteText + "***" : "";
+        }
+        let inner = "";
+        Array.from(node.childNodes).forEach(function (child) {
+            inner += serializeEmailRichNode(child);
+        });
+        if (tag === "DIV" || tag === "P") {
+            if (inner === "\n") {
+                return "\n";
+            }
+            return "\n" + inner;
+        }
+        return inner;
+    }
+
+    function serializeEmailRichBody(richEl) {
+        if (!richEl) {
+            return "";
+        }
+        let out = "";
+        Array.from(richEl.childNodes).forEach(function (child, idx) {
+            let chunk = serializeEmailRichNode(child);
+            if (idx === 0 && (child.tagName === "DIV" || child.tagName === "P") && chunk.startsWith("\n")) {
+                chunk = chunk.slice(1);
+            }
+            out += chunk;
+        });
+        return out.replace(/\u00a0/g, " ");
+    }
+
+    function syncEmailRichBodyFromTextarea(dialog) {
+        if (!dialog) {
+            return;
+        }
+        const body = dialog.querySelector("[data-email-body]");
+        const rich = dialog.querySelector("[data-email-rich-body]");
+        if (!body || !rich) {
+            return;
+        }
+        rich.innerHTML = formatEmailBodyHtml(body.value || "");
+    }
+
     function collectLiveMissingDocumentsText() {
         const plotForm = document.querySelector("[data-plot-application-form]");
-        if (!plotForm) {
+        const docScope = plotForm || document.getElementById("plot-application-documents-dialog");
+        if (!docScope) {
             return null;
         }
         const missing = [];
-        plotForm.querySelectorAll("[data-document-code]:not([hidden])").forEach(function (label) {
+        docScope.querySelectorAll("[data-document-code]:not([hidden])").forEach(function (label) {
+            const code = label.dataset.documentCode || "";
             const checkbox = label.querySelector('input[type="checkbox"]');
-            if (checkbox && !checkbox.disabled && !checkbox.checked) {
-                const textEl = label.querySelector("span");
+            const row = label.closest("[data-document-row]") || docScope;
+            const noteInput = code
+                ? row.querySelector('[data-document-note-input="' + code + '"]')
+                : null;
+            const note = noteInput ? (noteInput.value || "").trim() : "";
+            const isMissing = checkbox
+                ? (!checkbox.disabled && !checkbox.checked)
+                : label.dataset.documentMissing === "1";
+            if (isMissing || note) {
+                const textEl =
+                    label.querySelector("[data-ui-text-node]") ||
+                    label.querySelector("[data-document-label]") ||
+                    label.querySelector("span");
                 const text = (textEl ? textEl.textContent : label.textContent || "").trim();
                 if (text) {
-                    missing.push("- " + text);
+                    missing.push(note ? "- " + text + " ***" + note + "***" : "- " + text);
                 }
             }
         });
@@ -740,7 +850,90 @@ bindFilePickers(document);
 
     (function () {
 
+        document.addEventListener("input", function (event) {
+            const noteInput = event.target.closest("[data-document-note-input]");
+            if (noteInput) {
+                const code = noteInput.dataset.documentNoteInput;
+                const value = noteInput.value || "";
+                const trimmed = value.trim();
+                document.querySelectorAll('[data-document-note-input="' + code + '"]').forEach(function (other) {
+                    if (other !== noteInput && other.value !== value) {
+                        other.value = value;
+                    }
+                });
+                document.querySelectorAll('[data-document-note-toggle="' + code + '"]').forEach(function (btn) {
+                    btn.classList.toggle("has-note", Boolean(trimmed));
+                    btn.title = trimmed ? "Σημείωση: " + trimmed : "Προσθήκη σημείωσης";
+                });
+                return;
+            }
+            const richBody = event.target.closest("[data-email-rich-body]");
+            if (richBody) {
+                const dialog = richBody.closest("dialog");
+                const body = dialog ? dialog.querySelector("[data-email-body]") : null;
+                if (body) {
+                    body.value = serializeEmailRichBody(richBody);
+                }
+            }
+        });
+
+        document.addEventListener("change", function (event) {
+            const overrideInput = event.target.closest(
+                '[data-documents-completeness-form] input[name="documents_complete_override"]'
+            );
+            if (!overrideInput) {
+                return;
+            }
+            const form = overrideInput.closest("[data-documents-completeness-form]");
+            const wrap = form ? form.querySelector("[data-documents-override-reason-wrap]") : null;
+            if (wrap) {
+                wrap.hidden = !overrideInput.checked;
+            }
+        });
+
         document.addEventListener("click", function (event) {
+
+            const noteToggle = event.target.closest("[data-document-note-toggle]");
+
+            if (noteToggle) {
+
+                event.preventDefault();
+
+                const code = noteToggle.dataset.documentNoteToggle;
+
+                const row = noteToggle.closest("[data-document-row]") || document;
+
+                const wrap = row.querySelector('[data-document-note-wrap="' + code + '"]');
+
+                if (!wrap) {
+
+                    return;
+
+                }
+
+                const willShow = wrap.hidden;
+
+                wrap.hidden = !willShow;
+
+                noteToggle.setAttribute("aria-expanded", willShow ? "true" : "false");
+
+                noteToggle.classList.toggle("is-open", willShow);
+
+                if (willShow) {
+
+                    const input = wrap.querySelector("[data-document-note-input]");
+
+                    if (input) {
+
+                        input.focus();
+
+                    }
+
+                }
+
+                return;
+
+            }
 
             const insertBtn = event.target.closest("[data-insert-missing-documents]");
 
@@ -786,7 +979,19 @@ bindFilePickers(document);
 
                 }
 
-                body.focus();
+                syncEmailRichBodyFromTextarea(dialog);
+
+                const rich = dialog.querySelector("[data-email-rich-body]");
+
+                if (rich) {
+
+                    rich.focus();
+
+                } else {
+
+                    body.focus();
+
+                }
 
                 return;
 
@@ -849,6 +1054,8 @@ bindFilePickers(document);
                 body.value = source;
 
             }
+
+            syncEmailRichBodyFromTextarea(dialog);
 
             const recipientInput = form.querySelector("[data-email-recipient-input]");
 
@@ -929,7 +1136,27 @@ bindFilePickers(document);
 
                 submit.disabled = true;
 
-                requestJson(form.action, { method: "POST", body: new FormData(form) })
+                const formData = new FormData(form);
+
+                const docScope =
+                    document.querySelector("[data-plot-application-form]") ||
+                    document.getElementById("plot-application-documents-dialog");
+
+                if (docScope && dialog && dialog.id === "plot-application-email-dialog") {
+
+                    docScope.querySelectorAll("[data-document-note-input]").forEach(function (input) {
+
+                        if (input.name) {
+
+                            formData.set(input.name, input.value || "");
+
+                        }
+
+                    });
+
+                }
+
+                requestJson(form.action, { method: "POST", body: formData })
 
                     .then(function (data) {
 
@@ -1109,7 +1336,15 @@ bindFilePickers(document);
 
                     subject.textContent = data.subject || "—";
 
-                    body.textContent = data.body || "—";
+                    if (data.body) {
+
+                        body.innerHTML = formatEmailBodyHtml(data.body);
+
+                    } else {
+
+                        body.textContent = "—";
+
+                    }
 
                 })
 
@@ -1453,6 +1688,9 @@ bindFilePickers(document);
                 }
                 body.innerHTML = data.grid_html;
                 bindOtherGroups(body);
+                if (typeof window.refreshUiTexts === "function") {
+                    window.refreshUiTexts(body);
+                }
             })
             .catch(function () {
                 body.innerHTML = "";
@@ -1463,6 +1701,53 @@ bindFilePickers(document);
                 );
             });
     });
+
+    // History timeline modal: load on open for both PlotApplication and Case.
+    if (!window.__historyTimelineBound) {
+        window.__historyTimelineBound = true;
+        document.addEventListener("click", function (event) {
+            const open = event.target.closest("[data-history-timeline-open]");
+            if (!open) {
+                return;
+            }
+            event.preventDefault();
+            const dialog = document.getElementById("history-timeline-dialog");
+            const body = dialog ? dialog.querySelector("[data-history-timeline-body]") : null;
+            const statusEl = dialog ? dialog.querySelector("[data-history-timeline-status]") : null;
+            if (!dialog || !body) {
+                return;
+            }
+            if (statusEl) {
+                statusEl.innerHTML = "";
+            }
+            body.innerHTML = '<p class="text-muted">Φόρτωση…</p>';
+            if (!dialog.open) {
+                if (typeof dialog.showModal === "function") {
+                    dialog.showModal();
+                } else {
+                    dialog.setAttribute("open", "");
+                }
+            }
+            requestJson(open.dataset.historyTimelineOpen)
+                .then(function (data) {
+                    if (!data.ok) {
+                        throw new Error("bad response");
+                    }
+                    body.innerHTML = data.timeline_html;
+                    if (typeof window.refreshUiTexts === "function") {
+                        window.refreshUiTexts(body);
+                    }
+                })
+                .catch(function () {
+                    body.innerHTML = "";
+                    showStatusAlert(
+                        "[data-history-timeline-status]",
+                        "Αποτυχία φόρτωσης του ιστορικού αλλαγών.",
+                        "error"
+                    );
+                });
+        });
+    }
 
     // Additions use a form dialog; existing rows save inline.
     initGridModal({
@@ -1732,5 +2017,496 @@ bindFilePickers(document);
         if (form && !window.confirm(form.getAttribute("data-confirm"))) {
             event.preventDefault();
         }
+    });
+})();
+
+// In-place UI Text Edit Mode (§Α.9.1): applies custom text overrides across all screens
+// and, while Edit Mode is active, attaches an inline edit icon next to every editable text
+// that opens the popup modal to edit or reset the text.
+(function () {
+    function parseJsonScript(id) {
+        const node = document.getElementById(id);
+        if (!node) {
+            return {};
+        }
+        try {
+            return JSON.parse(node.textContent || "{}") || {};
+        } catch (_err) {
+            return {};
+        }
+    }
+
+    const overridesMap = parseJsonScript("ui-text-overrides");
+    const defaultsMap = parseJsonScript("ui-text-defaults");
+
+    const sectionKeys = Object.keys(defaultsMap)
+        .filter(function (k) { return k.startsWith("caseSectionLabel."); })
+        .map(function (k) { return k.slice("caseSectionLabel.".length); })
+        .sort(function (a, b) { return b.length - a.length; });
+
+    const subsectionKeys = Object.keys(defaultsMap)
+        .filter(function (k) { return k.startsWith("caseSubsectionLabel."); })
+        .map(function (k) { return k.slice("caseSubsectionLabel.".length); })
+        .sort(function (a, b) { return b.length - a.length; });
+
+    const TARGET_RULES = [
+        { selector: "[data-ui-key]", category: "explicit" },
+        { selector: "[data-ui-text]", category: "h1" },
+        { selector: ".site-brand__title", category: "brand" },
+        { selector: ".page-header h1, .login-card h1", category: "h1" },
+        { selector: ".page-header__lead, .card__lead", category: "lead" },
+        {
+            selector: "h2.card__title, h3.form-section-title, h4.form-section-subtitle, fieldset > legend, .tile__title",
+            category: "heading",
+        },
+        { selector: ".tile__desc", category: "desc" },
+        { selector: "button.btn, a.btn, .btn-link:not(.btn-link--table), .btn-logout", category: "btn" },
+        {
+            selector: ".form-field > label:not(.checkbox-label), label.checkbox-label > span, .filter-form label, dl.detail-grid dt",
+            category: "label",
+        },
+        { selector: "table.data-table thead th, button.btn-link--table", category: "th" },
+        { selector: ".breadcrumb a, .case-actions-sidebar__footer a, .settings-nav a", category: "nav" },
+    ];
+
+    const PENCIL_SVG =
+        '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" focusable="false">' +
+        '<path fill="currentColor" d="M11.8 1.5a1.5 1.5 0 0 1 2.12 0l.58.58a1.5 1.5 0 0 1 0 2.12L5.2 13.5l-3.45.75.75-3.45 9.3-9.3zm1.06 1.06L4.3 11.12l-.33 1.51 1.51-.33 8.56-8.56-.18-.18z"/>' +
+        "</svg>";
+
+    function normalizeText(value) {
+        return (value || "").replace(/\s+/g, " ").trim();
+    }
+
+    function computeUiTextKey(category, defaultText) {
+        const input = category + ":" + defaultText;
+        let h1 = 0x811c9dc5;
+        let h2 = 0x01000193;
+        for (let i = 0; i < input.length; i += 1) {
+            const ch = input.charCodeAt(i);
+            h1 ^= ch;
+            h1 = Math.imul(h1, 0x01000193) >>> 0;
+            h2 ^= ch + (i & 0xff);
+            h2 = Math.imul(h2, 0x85ebca6b) >>> 0;
+        }
+        return (
+            "uiText." +
+            category +
+            "_" +
+            h1.toString(16).padStart(8, "0") +
+            h2.toString(16).padStart(8, "0")
+        );
+    }
+
+    function shouldSkipElement(el, category) {
+        if (!el || el.nodeType !== 1) {
+            return true;
+        }
+        if (
+            el.hasAttribute("data-ui-skip") ||
+            el.closest("[data-ui-skip]") ||
+            el.closest("[data-ui-text-dialog]") ||
+            el.hasAttribute("data-ui-edit-mode-toggle") ||
+            el.hasAttribute("data-file-remove")
+        ) {
+            return true;
+        }
+        if (category === "h1" && !el.hasAttribute("data-ui-text") && !el.hasAttribute("data-ui-key")) {
+            if (el.querySelector("[data-ui-text], [data-ui-key]")) {
+                return true;
+            }
+        }
+        if (category === "lead") {
+            if (el.querySelector("a, .badge, input, select, button")) {
+                return true;
+            }
+        }
+        if (category === "th" && el.tagName === "TH") {
+            if (el.querySelector("button, input, .visually-hidden")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function ensureTextSpan(el) {
+        const existing = el.querySelector(":scope > [data-ui-text-node]");
+        if (existing) {
+            return existing;
+        }
+        const textNodes = [];
+        Array.from(el.childNodes).forEach(function (node) {
+            if (node.nodeType === 3 && normalizeText(node.nodeValue)) {
+                textNodes.push(node);
+            }
+        });
+        if (!textNodes.length) {
+            return null;
+        }
+        const firstNode = textNodes[0];
+        const raw = normalizeText(
+            textNodes.map(function (n) { return n.nodeValue; }).join(" ")
+        );
+        if (!raw) {
+            return null;
+        }
+        const hasFollowingElement = Boolean(
+            firstNode.nextSibling &&
+            Array.from(el.childNodes).slice(Array.from(el.childNodes).indexOf(firstNode) + 1).some(function (n) {
+                return n.nodeType === 1 && !n.hasAttribute("data-ui-edit-trigger");
+            })
+        );
+        const span = document.createElement("span");
+        span.className = "ui-editable-text";
+        span.setAttribute("data-ui-text-node", "");
+        span.textContent = raw;
+        if (hasFollowingElement && /\s$/.test(firstNode.nodeValue || "")) {
+            span.setAttribute("data-ui-trailing-space", "1");
+        }
+        el.insertBefore(span, firstNode);
+        textNodes.forEach(function (n) {
+            n.remove();
+        });
+        return span;
+    }
+
+    function detectSectionOrSubsection(rawText) {
+        for (let i = 0; i < sectionKeys.length; i += 1) {
+            const sec = sectionKeys[i];
+            const prefix = sec + ". ";
+            if (rawText.startsWith(prefix)) {
+                return {
+                    key: "caseSectionLabel." + sec,
+                    prefix: prefix,
+                    suffix: "",
+                    valueText: rawText.slice(prefix.length).trim(),
+                };
+            }
+        }
+        for (let i = 0; i < subsectionKeys.length; i += 1) {
+            const sub = subsectionKeys[i];
+            const prefix = sub + " ";
+            if (rawText.startsWith(prefix)) {
+                let valueText = rawText.slice(prefix.length).trim();
+                let suffix = "";
+                if (valueText.endsWith(" (3.2)")) {
+                    suffix = " (3.2)";
+                    valueText = valueText.slice(0, -suffix.length).trim();
+                }
+                return {
+                    key: "caseSubsectionLabel." + sub,
+                    prefix: prefix,
+                    suffix: suffix,
+                    valueText: valueText,
+                };
+            }
+        }
+        return null;
+    }
+
+    function renderElementText(el) {
+        const span = el.querySelector(":scope > [data-ui-text-node]");
+        if (!span) {
+            return;
+        }
+        const key = el.getAttribute("data-ui-resolved-key") || "";
+        const prefix = el.getAttribute("data-ui-prefix") || "";
+        const suffix = el.getAttribute("data-ui-suffix") || "";
+        const defaultText = el.getAttribute("data-ui-default") || "";
+        const initialValue = el.getAttribute("data-ui-initial") || defaultText;
+        const hasOverride = Object.prototype.hasOwnProperty.call(overridesMap, key) && overridesMap[key] !== "";
+        const activeValue = hasOverride ? overridesMap[key] : initialValue;
+        el.setAttribute("data-ui-current", activeValue);
+        const trailing = span.getAttribute("data-ui-trailing-space") === "1" ? " " : "";
+        span.textContent = prefix + activeValue + suffix + trailing;
+    }
+
+    function syncEditIconOnElement(el, editModeActive) {
+        const existingIcon = el.querySelector(":scope > [data-ui-edit-trigger]");
+        if (!editModeActive) {
+            if (existingIcon) {
+                existingIcon.remove();
+            }
+            return;
+        }
+        if (existingIcon) {
+            return;
+        }
+        const icon = document.createElement("span");
+        icon.className = "ui-edit-icon";
+        icon.setAttribute("role", "button");
+        icon.setAttribute("tabindex", "0");
+        icon.setAttribute("data-ui-edit-trigger", "");
+        icon.setAttribute("title", "Επεξεργασία κειμένου");
+        icon.setAttribute("aria-label", "Επεξεργασία κειμένου");
+        icon.innerHTML = PENCIL_SVG;
+        const span = el.querySelector(":scope > [data-ui-text-node]");
+        if (span && span.nextSibling) {
+            el.insertBefore(icon, span.nextSibling);
+        } else {
+            el.appendChild(icon);
+        }
+    }
+
+    function bindElement(el, category, editModeActive) {
+        if (el.hasAttribute("data-ui-bound")) {
+            renderElementText(el);
+            syncEditIconOnElement(el, editModeActive);
+            return;
+        }
+        if (shouldSkipElement(el, category)) {
+            return;
+        }
+        const span = ensureTextSpan(el);
+        if (!span) {
+            return;
+        }
+        const rawText = normalizeText(span.textContent);
+        if (!rawText || rawText === "—" || !/[Α-Ωα-ωΆ-Ώά-ώA-Za-z]{2,}/.test(rawText)) {
+            return;
+        }
+        if (category === "nav" && /^[A-Z0-9._/-]+$/.test(rawText)) {
+            return;
+        }
+
+        let key = el.getAttribute("data-ui-key") || "";
+        if (!key && category === "brand") {
+            key = "appTitle";
+        }
+        if (!key && category === "h1") {
+            const header = el.closest("[data-header-ui-key]");
+            if (header) {
+                key = header.getAttribute("data-header-ui-key") || "";
+            }
+        }
+
+        let prefix = el.getAttribute("data-ui-prefix") || "";
+        let suffix = el.getAttribute("data-ui-suffix") || "";
+        let valueText = rawText;
+
+        if (key && prefix && valueText.startsWith(prefix.trim())) {
+            valueText = valueText.slice(prefix.trim().length).trim();
+        } else if (!key && category === "heading") {
+            const detected = detectSectionOrSubsection(rawText);
+            if (detected) {
+                key = detected.key;
+                prefix = detected.prefix;
+                suffix = detected.suffix;
+                valueText = detected.valueText;
+            }
+        }
+
+        const defaultText =
+            key && Object.prototype.hasOwnProperty.call(defaultsMap, key)
+                ? defaultsMap[key]
+                : valueText;
+
+        if (!key) {
+            key = computeUiTextKey(category, defaultText);
+        }
+
+        el.setAttribute("data-ui-bound", "1");
+        el.setAttribute("data-ui-resolved-key", key);
+        el.setAttribute("data-ui-default", defaultText);
+        el.setAttribute("data-ui-initial", valueText);
+        el.setAttribute("data-ui-prefix", prefix);
+        el.setAttribute("data-ui-suffix", suffix);
+        el.setAttribute("data-ui-category", category);
+
+        renderElementText(el);
+        syncEditIconOnElement(el, editModeActive);
+    }
+
+    function refreshUiTexts(root) {
+        const scope = root || document;
+        const editModeActive = document.body.classList.contains("ui-edit-mode");
+        TARGET_RULES.forEach(function (rule) {
+            if (scope.nodeType === 1 && scope.matches && scope.matches(rule.selector)) {
+                bindElement(scope, rule.category, editModeActive);
+            }
+            scope.querySelectorAll(rule.selector).forEach(function (el) {
+                bindElement(el, rule.category, editModeActive);
+            });
+        });
+    }
+
+    window.refreshUiTexts = refreshUiTexts;
+    refreshUiTexts(document);
+
+    // Header Edit Mode toggle button.
+    const toggleBtn = document.querySelector("[data-ui-edit-mode-toggle]");
+    if (toggleBtn) {
+        toggleBtn.addEventListener("click", function () {
+            const nextState = !document.body.classList.contains("ui-edit-mode");
+            document.body.classList.toggle("ui-edit-mode", nextState);
+            toggleBtn.classList.toggle("is-active", nextState);
+            toggleBtn.setAttribute("aria-pressed", nextState ? "true" : "false");
+            refreshUiTexts(document);
+
+            const tokenInput = document.querySelector('input[name="csrfmiddlewaretoken"]');
+            const data = new FormData();
+            data.append("csrfmiddlewaretoken", tokenInput ? tokenInput.value : "");
+            data.append("enabled", nextState ? "1" : "0");
+            fetch(toggleBtn.getAttribute("data-ui-edit-mode-toggle"), {
+                method: "POST",
+                headers: { Accept: "application/json" },
+                credentials: "same-origin",
+                body: data,
+            }).catch(function () {
+                // Keep visual state even if background session sync fails.
+            });
+        });
+    }
+
+    const dialog = document.getElementById("ui-text-edit-dialog");
+    if (!dialog) {
+        return;
+    }
+
+    const form = dialog.querySelector("[data-ui-text-form]");
+    const keyInput = dialog.querySelector("[data-ui-text-key]");
+    const descInput = dialog.querySelector("[data-ui-text-description]");
+    const textInput = dialog.querySelector("[data-ui-text-input]");
+    const defaultHint = dialog.querySelector("[data-ui-text-default-hint]");
+    const errorsBox = dialog.querySelector("[data-ui-text-errors]");
+    const saveBtn = dialog.querySelector("[data-ui-text-save]");
+    const resetBtn = dialog.querySelector("[data-ui-text-reset]");
+
+    function showError(msg) {
+        if (!errorsBox) {
+            return;
+        }
+        errorsBox.textContent = msg || "";
+        errorsBox.hidden = !msg;
+    }
+
+    function openEditDialogForElement(el) {
+        const key = el.getAttribute("data-ui-resolved-key") || "";
+        const currentText = el.getAttribute("data-ui-current") || "";
+        const defaultText = el.getAttribute("data-ui-default") || "";
+        const category = el.getAttribute("data-ui-category") || "text";
+        if (!key) {
+            return;
+        }
+        showError("");
+        keyInput.value = key;
+        descInput.value = "Κείμενο (" + category + "): «" + defaultText.slice(0, 120) + "»";
+        textInput.value = currentText;
+        textInput.rows = currentText.length > 70 || defaultText.length > 70 ? 3 : 2;
+        if (defaultHint) {
+            defaultHint.textContent = defaultText ? "Προεπιλογή: «" + defaultText + "»" : "";
+        }
+        if (typeof dialog.showModal === "function") {
+            dialog.showModal();
+        } else {
+            dialog.setAttribute("open", "");
+        }
+        textInput.focus();
+        textInput.select();
+    }
+
+    // Intercept clicks and keyboard activation on `.ui-edit-icon` in the capture phase
+    // so buttons do not submit, links do not navigate, and labels do not toggle inputs.
+    document.addEventListener(
+        "click",
+        function (event) {
+            const trigger = event.target.closest ? event.target.closest("[data-ui-edit-trigger]") : null;
+            if (!trigger) {
+                return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+            const host = trigger.closest("[data-ui-bound]");
+            if (host) {
+                openEditDialogForElement(host);
+            }
+        },
+        true
+    );
+
+    document.addEventListener(
+        "keydown",
+        function (event) {
+            if (event.key !== "Enter" && event.key !== " ") {
+                return;
+            }
+            const trigger = event.target.closest ? event.target.closest("[data-ui-edit-trigger]") : null;
+            if (!trigger) {
+                return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            const host = trigger.closest("[data-ui-bound]");
+            if (host) {
+                openEditDialogForElement(host);
+            }
+        },
+        true
+    );
+
+    function applySavedKey(key, value, isReset) {
+        if (isReset && key.startsWith("uiText.")) {
+            delete overridesMap[key];
+        } else {
+            overridesMap[key] = value;
+        }
+        document.querySelectorAll("[data-ui-bound]").forEach(function (el) {
+            if (el.getAttribute("data-ui-resolved-key") === key) {
+                if (!key.startsWith("uiText.")) {
+                    el.setAttribute("data-ui-initial", value);
+                } else if (isReset) {
+                    el.setAttribute("data-ui-initial", el.getAttribute("data-ui-default") || "");
+                }
+                renderElementText(el);
+            }
+        });
+    }
+
+    function submitTextChange(isReset) {
+        showError("");
+        const data = new FormData(form);
+        if (isReset) {
+            data.append("reset", "1");
+        }
+        saveBtn.disabled = true;
+        resetBtn.disabled = true;
+        fetch(form.action, {
+            method: "POST",
+            headers: { Accept: "application/json" },
+            credentials: "same-origin",
+            body: data,
+        })
+            .then(function (response) {
+                return response.json();
+            })
+            .then(function (result) {
+                if (!result || !result.ok) {
+                    showError((result && result.message) || "Αποτυχία αποθήκευσης κειμένου.");
+                    return;
+                }
+                applySavedKey(result.key, result.value, Boolean(result.reset));
+                if (typeof dialog.close === "function") {
+                    dialog.close();
+                } else {
+                    dialog.removeAttribute("open");
+                }
+            })
+            .catch(function () {
+                showError("Αποτυχία επικοινωνίας με τον διακομιστή.");
+            })
+            .finally(function () {
+                saveBtn.disabled = false;
+                resetBtn.disabled = false;
+            });
+    }
+
+    form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        submitTextChange(false);
+    });
+
+    resetBtn.addEventListener("click", function () {
+        submitTextChange(true);
     });
 })();

@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+
+{% block title %}Προτεραιοποίηση αιτήσεων παραχώρησης οικοπέδου{% endblock %}
+
+{% block content %}
+<nav class="breadcrumb" aria-label="Πλοήγηση">
+    <a href="{% url 'plot_applications:list' %}">Αιτήσεις παραχώρησης οικοπέδου</a>
+    <span>/</span>
+    <span>Προτεραιοποίηση</span>
+</nav>
+
+<div class="page-header">
+    <h1>Προτεραιοποίηση αιτήσεων παραχώρησης οικοπέδου</h1>
+    <p class="page-header__lead">Όλες οι πλήρεις ανοικτές αιτήσεις της Κοινότητας, δικαιούχοι και μη. Οι δικαιούχοι προηγούνται και κατατάσσονται από το λογισμικό κατά τόπο διαμονής (Ενότ. 11.1) και σύνθεση οικογένειας (Ενότ. 11.2). Τον Προκαταρκτικό Κατάλογο τον καταρτίζει η Επιτροπή Εξέτασης Αιτήσεων (Ενότ. 6).</p>
+</div>
+
+<div class="card">
+    <h2 class="card__title">Κοινότητα</h2>
+    <form method="get" class="filter-form">
+        <div>
+            <label for="community_id">Κοινότητα</label>
+            <select name="community_id" id="community_id">
+                {% for item in communities %}
+                <option value="{{ item.id }}" {% if community and item.id == community.id %}selected{% endif %}>{{ item.name }}</option>
+                {% empty %}
+                <option value="">—</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div><button type="submit" class="btn btn-primary">Προβολή καταλόγου</button></div>
+    </form>
+</div>
+
+{% if not community %}
+<p class="text-muted">Δεν υπάρχουν πλήρεις ανοικτές αιτήσεις για προτεραιοποίηση.</p>
+{% else %}
+<div class="toolbar">
+    <div class="toolbar__group">
+        {% if can_export %}
+        <a href="{% url 'plot_applications:prioritization_report_pdf' %}?community_id={{ community.pk }}"
+           class="btn btn-secondary"
+           data-prioritization-report-pdf-link>
+            Εξαγωγή PDF καταλόγου
+        </a>
+        {% endif %}
+    </div>
+    {% if can_reorder and prioritization.has_manual_order %}
+    <div class="toolbar__group toolbar__group--end">
+        <form method="post" action="{% url 'plot_applications:prioritization_reset' %}" class="inline-form"
+              data-confirm="Επαναφορά του καταλόγου στη σειρά του λογισμικού;">
+            {% csrf_token %}
+            <input type="hidden" name="community_id" value="{{ community.pk }}">
+            <button type="submit" class="btn btn-secondary">Επαναφορά σειράς λογισμικού</button>
+        </form>
+    </div>
+    {% endif %}
+</div>
+
+<div class="card" data-prioritization-card>
+    <h2 class="card__title">Δικαιούχοι κατά σειρά προτεραιότητας (Ενότ. 10, 11)</h2>
+    {% if movable_beneficiaries %}
+    <p class="helptext">Σύρετε τις γραμμές (drag &amp; drop) ή χρησιμοποιήστε τα βέλη για να αλλάξετε τη σειρά. Οι δικαιούχοι παραμένουν πάντα πριν από τους μη δικαιούχους.</p>
+    {% endif %}
+    <div class="table-wrap">
+        <table class="data-table" data-prioritization-table>
+            <thead>
+            <tr>
+                <th>Σειρά</th>
+                <th>Αρ. Πρωτοκόλλου / Ημ. υποβολής</th>
+                <th>Αιτητής/τρια — Σύζυγος/Συμβίος</th>
+                <th>Τόπος διαμονής (Ενότ. 11.1)</th>
+                <th>Σύνθεση οικογένειας (Ενότ. 11.2)</th>
+                <th>Τέκνα (10.Α)</th>
+                <th>Σειρά λογισμικού</th>
+                <th>Παρατηρήσεις</th>
+                <th>Ενέργειες</th>
+            </tr>
+            </thead>
+            <tbody data-prioritization-sortable="{{ groups.beneficiaries }}">
+            {% for row in prioritization.beneficiaries %}
+            {% include "plot_applications/_prioritization_row.html" with movable=movable_beneficiaries %}
+            {% empty %}
+            <tr><td colspan="9" class="text-muted">Δεν υπάρχουν δικαιούχοι στον κατάλογο της Κοινότητας.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card" data-prioritization-card>
+    <h2 class="card__title">Μη δικαιούχοι / εκκρεμείς (Ενότ. 6, 10, 20)</h2>
+    <div class="table-wrap">
+        <table class="data-table" data-prioritization-table>
+            <thead>
+            <tr>
+                <th>Α/Α</th>
+                <th>Αρ. Πρωτοκόλλου / Ημ. υποβολής</th>
+                <th>Αιτητής/τρια — Σύζυγος/Συμβίος</th>
+                <th>Αποτέλεσμα</th>
+                <th>Λόγος</th>
+                <th>Ενέργειες</th>
+            </tr>
+            </thead>
+            <tbody data-prioritization-sortable="{{ groups.others }}">
+            {% for row in prioritization.others %}
+            {% include "plot_applications/_prioritization_row.html" with movable=movable_others %}
+            {% empty %}
+            <tr><td colspan="6" class="text-muted">Δεν υπάρχουν μη δικαιούχοι ή εκκρεμείς αιτήσεις στον κατάλογο της Κοινότητας.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+<p class="helptext" data-reorder-status hidden></p>
+
+{% if can_reorder %}
+{% csrf_token %}
+<script>
+(function () {
+    "use strict";
+    const reorderUrl = "{% url 'plot_applications:prioritization_reorder' %}";
+    const communityId = "{{ community.pk }}";
+    const statusEl = document.querySelector("[data-reorder-status]");
+
+    function csrfToken() {
+        const input = document.querySelector('input[name="csrfmiddlewaretoken"]');
+        return input ? input.value : "";
+    }
+
+    function rows(tbody) {
+        return Array.from(tbody.querySelectorAll("tr[data-sortable-row]"));
+    }
+
+    function refreshNumbers(tbody) {
+        rows(tbody).forEach((row, index) => {
+            const num = row.querySelector("[data-priority-position]");
+            if (num) num.textContent = String(index + 1);
+            const moved = row.querySelector("[data-priority-moved]");
+            if (moved) moved.hidden = String(index + 1) === row.dataset.autoPosition;
+        });
+    }
+
+    function setStatus(text) {
+        if (!statusEl) return;
+        statusEl.hidden = false;
+        statusEl.textContent = text;
+    }
+
+    function saveOrder(tbody) {
+        setStatus("Αποθήκευση σειράς…");
+        fetch(reorderUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": csrfToken(),
+                "X-Requested-With": "XMLHttpRequest",
+            },
+            body: JSON.stringify({
+                community_id: communityId,
+                group: tbody.dataset.prioritizationSortable,
+                order: rows(tbody).map((row) => row.dataset.applicationId),
+            }),
+        })
+            .then((response) => {
+                if (!response.ok) throw new Error(String(response.status));
+                return response.json();
+            })
+            .then(() => setStatus("Η σειρά αποθηκεύτηκε."))
+            .catch(() => setStatus("Η αποθήκευση της σειράς απέτυχε."));
+    }
+
+    document.querySelectorAll("[data-prioritization-sortable]").forEach((tbody) => {
+        let draggedRow = null;
+
+        tbody.addEventListener("click", (event) => {
+            const button = event.target.closest("[data-priority-move]");
+            if (!button) return;
+            const row = button.closest("tr[data-sortable-row]");
+            if (button.dataset.priorityMove === "up" && row.previousElementSibling) {
+                row.previousElementSibling.before(row);
+            } else if (button.dataset.priorityMove === "down" && row.nextElementSibling) {
+                row.nextElementSibling.after(row);
+            } else {
+                return;
+            }
+            refreshNumbers(tbody);
+            saveOrder(tbody);
+        });
+
+        tbody.addEventListener("dragstart", (event) => {
+            const row = event.target.closest("tr[data-sortable-row]");
+            if (!row) return;
+            draggedRow = row;
+            row.classList.add("is-dragging");
+            if (event.dataTransfer) {
+                event.dataTransfer.effectAllowed = "move";
+                event.dataTransfer.setData("text/plain", row.dataset.applicationId || "");
+            }
+        });
+
+        tbody.addEventListener("dragover", (event) => {
+            if (!draggedRow) return;
+            event.preventDefault();
+            const targetRow = event.target.closest("tr[data-sortable-row]");
+            if (!targetRow || targetRow === draggedRow || !tbody.contains(targetRow)) return;
+            const rect = targetRow.getBoundingClientRect();
+            if (event.clientY > rect.top + rect.height / 2) {
+                targetRow.after(draggedRow);
+            } else {
+                targetRow.before(draggedRow);
+            }
+            refreshNumbers(tbody);
+        });
+
+        tbody.addEventListener("drop", (event) => {
+            if (!draggedRow) return;
+            event.preventDefault();
+            saveOrder(tbody);
+        });
+
+        tbody.addEventListener("dragend", () => {
+            if (draggedRow) {
+                draggedRow.classList.remove("is-dragging");
+                draggedRow = null;
+            }
+        });
+    });
+})();
+</script>
+{% endif %}
+{% endif %}
+{% endblock %}

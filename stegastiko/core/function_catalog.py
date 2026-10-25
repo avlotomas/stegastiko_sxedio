@@ -56,6 +56,7 @@ PLOT_APPLICATION_SUBSECTIONS = (
     ("eligibility", "Κατ' αρχήν έλεγχος κριτηρίων"),
     ("other_applications", "Άλλες αιτήσεις των ίδιων προσώπων"),
     ("email_history", "Ιστορικό απεσταλμένων email"),
+    ("change_history", "Ιστορικό αλλαγών αίτησης"),
 )
 PLOT_APPLICATION_SUBSECTION_LABELS = dict(PLOT_APPLICATION_SUBSECTIONS)
 PLOT_APPLICATION_SUBSECTION_CODES = tuple(code for code, _ in PLOT_APPLICATION_SUBSECTIONS)
@@ -187,6 +188,13 @@ FUNCTIONS = (
         for sub_code, sub_label in PLOT_APPLICATION_SUBSECTIONS
     ),
     AppFunction(
+        "plot_prioritization",
+        "Προτεραιοποίηση αιτήσεων παραχώρησης οικοπέδου",
+        (VIEW, EDIT, EXPORT),
+        description="Κατάλογος προτεραιοποίησης των πλήρων αιτήσεων ανά Κοινότητα (Ενότ. 6, 11): "
+        "αυτόματη κατάταξη, αλλαγή σειράς με drag and drop και εξαγωγή PDF.",
+    ),
+    AppFunction(
         "persons",
         "Άτομα",
         (VIEW, CREATE, EDIT, DELETE),
@@ -213,6 +221,13 @@ FUNCTIONS = (
         "settings_section_labels", "Τίτλοι ενοτήτων Κ.Σ. / Δ.Δ.", (VIEW, EDIT), parent="settings"
     ),
     AppFunction("settings_subsection_labels", "Τίτλοι υποενοτήτων", (VIEW, EDIT), parent="settings"),
+    AppFunction(
+        "settings_plot_application_labels",
+        "Τίτλοι αίτησης παραχώρησης οικοπέδου",
+        (VIEW, EDIT),
+        parent="settings",
+        description="Τίτλοι εμφάνισης των σταδίων της αίτησης παραχώρησης οικοπέδου (§Α.9.1).",
+    ),
     AppFunction("settings_email", "Αποστολή email (SMTP)", (VIEW, EDIT), parent="settings"),
     AppFunction(
         "settings_users",

@@ -7,7 +7,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from cases.models import CommunicationStatus
-from core.models import Communication, Community
+from core.models import ActionHistory, Communication, Community
 from core.services import get_setting, require_smtp_configured, send_email
 from plot_applications.documents import DOCUMENT_GROUPS, applicable_documents
 from plot_applications.models import PlotApplication
@@ -76,6 +76,14 @@ def plot_application_email_subject(application: PlotApplication) -> str:
     )
 
 
+def format_document_email_line(label: str, note: str = "") -> str:
+    """Γραμμή πιστοποιητικού στο email· αν υπάρχει σημείωση, εμφανίζεται δίπλα ως italic/bold."""
+    clean_note = (note or "").strip()
+    if clean_note:
+        return f"- {label} ***{clean_note}***"
+    return f"- {label}"
+
+
 def missing_documents_for_application(application: PlotApplication) -> list[tuple[str, str]]:
     """Εφαρμοζόμενα δικαιολογητικά από τον Κατάλογο που δεν έχουν επιλεγεί (unchecked checkboxes)."""
     applicable = applicable_documents(application, parameter("plotApp.largeFamilyChildren"))
@@ -89,13 +97,19 @@ def missing_documents_for_application(application: PlotApplication) -> list[tupl
 
 
 def missing_documents_email_text(application: PlotApplication) -> str:
-    """Κείμενο με τα ελλείποντα δικαιολογητικά έγγραφα για προσθήκη στο σώμα του email."""
-    missing = [label for _, label in missing_documents_for_application(application)]
-    if not missing:
+    """Κείμενο με τα ελλείποντα δικαιολογητικά έγγραφα (και τυχόν σημειώσεις) για προσθήκη στο σώμα του email."""
+    applicable = applicable_documents(application, parameter("plotApp.largeFamilyChildren"))
+    attached = set(application.attached_documents or [])
+    raw_notes = application.document_notes if isinstance(application.document_notes, dict) else {}
+    lines_items = []
+    for _, items in DOCUMENT_GROUPS:
+        for code, label in items:
+            note = str(raw_notes.get(code) or "").strip()
+            if (code in applicable and code not in attached) or note:
+                lines_items.append(format_document_email_line(label, note))
+    if not lines_items:
         return ""
-    lines = [MISSING_DOCUMENTS_HEADING]
-    lines.extend(f"- {label}" for label in missing)
-    return "\n".join(lines)
+    return "\n".join([MISSING_DOCUMENTS_HEADING, *lines_items])
 
 
 def send_plot_application_email(
@@ -186,4 +200,15 @@ def person_communications(person):
         .prefetch_related("content_object")
         .order_by("-created_at", "-id")
     )
+
+
+def plot_application_history(application: PlotApplication):
+    """§Β.1.3 Συγκεντρωτικό ιστορικό αλλαγών της αίτησης παραχώρησης οικοπέδου και των παιδιών της."""
+    if not application or not application.pk:
+        return ActionHistory.objects.none()
+    return ActionHistory.objects.filter(
+        Q(entity_type="PlotApplication", entity_id=str(application.pk))
+        | Q(application_id=application.pk)
+    ).order_by("-timestamp", "-id")
+
 

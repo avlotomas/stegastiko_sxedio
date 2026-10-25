@@ -1,0 +1,41 @@
+{% if timeline_events %}
+<ol class="history-timeline" data-history-timeline>
+    {% for event in timeline_events %}
+    <li class="history-timeline__item history-timeline__item--{{ event.action|lower }}" data-history-timeline-item>
+        <span class="history-timeline__dot" aria-hidden="true"></span>
+        <div class="history-timeline__card">
+            <div class="history-timeline__meta">
+                <span class="history-timeline__badge history-timeline__badge--{{ event.action|lower }}">
+                    {{ event.action_label }}
+                </span>
+                <time class="history-timeline__time" datetime="{{ event.timestamp|date:'c' }}">
+                    {{ event.timestamp|date:"d/m/Y H:i:s" }}
+                </time>
+                <span class="history-timeline__actor">
+                    Χρήστης: <strong>{{ event.actor }}</strong>
+                </span>
+            </div>
+            <ul class="history-timeline__changes">
+                {% for change in event.changes %}
+                <li class="history-timeline__change">
+                    <span class="history-timeline__entity">{{ change.entity_label }}</span>
+                    {% if change.is_field_update %}
+                    <span class="history-timeline__field">{{ change.field_label }}:</span>
+                    <span class="history-timeline__values">
+                        <span class="history-timeline__old">{{ change.old_value|linebreaksbr }}</span>
+                        <span class="history-timeline__arrow" aria-hidden="true">→</span>
+                        <span class="history-timeline__new">{{ change.new_value|linebreaksbr }}</span>
+                    </span>
+                    {% else %}
+                    <span class="history-timeline__action-text">{{ change.action_label }}</span>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </li>
+    {% endfor %}
+</ol>
+{% else %}
+<p class="text-muted" data-history-timeline-empty>Δεν υπάρχουν εγγραφές ιστορικού αλλαγών.</p>
+{% endif %}

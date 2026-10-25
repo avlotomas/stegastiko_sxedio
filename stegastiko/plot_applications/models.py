@@ -29,6 +29,37 @@ class EligibilityResult(models.TextChoices):
     PENDING = "pending", "Εκκρεμεί έλεγχος"
 
 
+class EligibilityOverride(models.TextChoices):
+    PASS = "pass", "ΔΙΚΑΙΟΥΧΟΣ"
+    FAIL = "fail", "ΜΗ ΔΙΚΑΙΟΥΧΟΣ"
+
+
+class ApplicationCompleteness(models.TextChoices):
+    """Ενότ. 5(β), 20.2: η ελλιπής αίτηση εκκρεμεί για συμπλήρωση ή απορρίπτεται από τον λειτουργό."""
+
+    COMPLETE = "complete", "Πλήρης"
+    INCOMPLETE = "incomplete", "Ελλιπής"
+    REJECTED = "rejected", "Απορρίφθηκε λόγω ελλείψεων"
+
+
+class DocumentsCompleteness(models.TextChoices):
+    COMPLETE = "complete", "Ολοκληρωμένη"
+    INCOMPLETE = "incomplete", "Ελλιπής"
+
+
+class ApplicationStage(models.TextChoices):
+    COLLECTION = "collection", "Συλλογή πληροφοριών και πιστοποιητικών"
+    EXAMINATION = "examination", "Εξέταση επιλεξιμότητας"
+    PRIORITIZATION = "prioritization", "Επιλογή και προτεραιοποίηση"
+    COMPLETED = "completed", "Ολοκλήρωση"
+
+
+class PlotAllocationStatus(models.TextChoices):
+    PENDING = "pending", "Εκκρεμεί"
+    ALLOCATED = "allocated", "Πήρε οικόπεδο"
+    NOT_ALLOCATED = "not_allocated", "Δεν πήρε οικόπεδο"
+
+
 class PlotApplication(AuditedModel):
     class FamilyStatus(models.TextChoices):
         COUPLE_WITH_CHILDREN = "couple_with_children", "Ζεύγος με τέκνα"
@@ -87,6 +118,10 @@ class PlotApplication(AuditedModel):
         blank=True,
         help_text="Κοινότητα / Δ.Δ. διαμονής (για (Δ): η Γειτονική Κοινότητα)",
     )
+    resides_in_controlled_areas = models.BooleanField(
+        default=False,
+        help_text="Διαμένει σε ελεγχόμενες από την Κυπριακή Δημοκρατία περιοχές (Ενότ. 11.ΙΙΙ)",
+    )
     origin_parent_description = models.TextField(
         blank=True, help_text="(Β) Καταγωγή από την Κοινότητα ως προς ποιο γονέα"
     )
@@ -133,20 +168,114 @@ class PlotApplication(AuditedModel):
 
     # Κατάλογος απαιτούμενων δικαιολογητικών (κωδικοί του documents.DOCUMENT_CATALOG)
     attached_documents = models.JSONField(default=list, blank=True)
+    document_notes = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Σημειώσεις ανά πιστοποιητικό/δικαιολογητικό (κωδικός -> σημείωση)",
+    )
     other_documents = models.TextField(blank=True, help_text="Άλλα πιστοποιητικά που επισυνάπτονται")
+    documents_completeness = models.CharField(
+        max_length=16,
+        choices=DocumentsCompleteness.choices,
+        default=DocumentsCompleteness.INCOMPLETE,
+        help_text="Κατάσταση πληρότητας απαιτούμενων δικαιολογητικών (Ενότ. 5, 20.2)",
+    )
+    documents_complete_override = models.BooleanField(
+        default=False,
+        help_text="Χειροκίνητος χαρακτηρισμός της αίτησης ως ολοκληρωμένης ως προς τα δικαιολογητικά παρά τις ελλείψεις (Ενότ. 5, 20.2)",
+    )
+    documents_complete_reason = models.TextField(
+        blank=True,
+        help_text="Περιγραφή του λόγου για τον οποίο η αίτηση χαρακτηρίζεται ως ολοκληρωμένη ενώ λείπουν δικαιολογητικά (Ενότ. 5, 20.2)",
+    )
+
+    # Απόφαση λειτουργού για την ελλιπή αίτηση: εκκρεμεί για συμπλήρωση ή απορρίπτεται (Ενότ. 5(β), 20.2)
+    incomplete_rejected = models.BooleanField(
+        default=False,
+        help_text="Απόρριψη της ελλιπούς αίτησης λόγω έλλειψης στοιχείων ή πιστοποιητικών (Ενότ. 5(β), 20.2)",
+    )
+    incomplete_rejection_reason = models.TextField(
+        blank=True,
+        help_text="Αιτιολογία απόρριψης της ελλιπούς αίτησης (Ενότ. 5(β), 20.2)",
+    )
+    incomplete_rejected_on = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Ημερομηνία απόρριψης της ελλιπούς αίτησης (Ενότ. 5(β))",
+    )
 
     # Αποτέλεσμα αυτόματου ελέγχου (υπολογίζεται σε κάθε αποθήκευση — rules.evaluate)
     children_count = models.PositiveIntegerField(default=0)
     recognized_children_count = models.PositiveIntegerField(default=0)
     family_members_count = models.PositiveIntegerField(default=0)
     family_income_total = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
+    completeness_result = models.CharField(
+        max_length=16,
+        choices=ApplicationCompleteness.choices,
+        default=ApplicationCompleteness.INCOMPLETE,
+        help_text="Κατάσταση πληρότητας της αίτησης (υποχρεωτικά πεδία, υπογραφές, δικαιολογητικά, Ενότ. 5, 20.2)",
+    )
+    completeness_details = models.JSONField(default=list, blank=True)
     eligibility_result = models.CharField(
         max_length=16, choices=EligibilityResult.choices, default=EligibilityResult.PENDING
     )
+    eligibility_auto_result = models.CharField(
+        max_length=16,
+        choices=EligibilityResult.choices,
+        default=EligibilityResult.PENDING,
+        help_text="Αποτέλεσμα του αυτόματου ελέγχου επιλεξιμότητας από το λογισμικό, πριν από τυχόν χειροκίνητη αλλαγή (Ενότ. 10, 20)",
+    )
     eligibility_details = models.JSONField(default=list, blank=True)
+    eligibility_override = models.CharField(
+        max_length=16,
+        choices=EligibilityOverride.choices,
+        blank=True,
+        help_text="Χειροκίνητη αλλαγή του αποτελέσματος του λογισμικού κατά πόσο ο αιτητής είναι δικαιούχος (Ενότ. 6)",
+    )
+    eligibility_override_reason = models.TextField(
+        blank=True,
+        help_text="Αιτιολογία της χειροκίνητης αλλαγής του αποτελέσματος επιλεξιμότητας (Ενότ. 6)",
+    )
+    priority_rank = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Θέση στον κατάλογο προτεραιοποίησης της Κοινότητας μετά από χειροκίνητη αλλαγή σειράς (Ενότ. 6, 11)",
+    )
+    application_stage = models.CharField(
+        max_length=24,
+        choices=ApplicationStage.choices,
+        default=ApplicationStage.COLLECTION,
+        help_text="Στάδιο εξέτασης της αίτησης (συλλογή πληροφοριών και πιστοποιητικών, εξέταση επιλεξιμότητας, επιλογή και προτεραιοποίηση, ολοκλήρωση)",
+    )
+    plot_allocation_status = models.CharField(
+        max_length=16,
+        choices=PlotAllocationStatus.choices,
+        default=PlotAllocationStatus.PENDING,
+        help_text="Κατάσταση παραχώρησης οικοπέδου (Εκκρεμεί, Πήρε οικόπεδο, Δεν πήρε οικόπεδο — Ενότ. 8, 9)",
+    )
     priority_primary = models.PositiveSmallIntegerField(null=True, blank=True)
     priority_secondary = models.PositiveSmallIntegerField(null=True, blank=True)
     priority_label = models.CharField(max_length=255, blank=True)
+
+    _history_hidden_fields = frozenset(
+        {
+            "children_count",
+            "recognized_children_count",
+            "family_members_count",
+            "family_income_total",
+            "documents_completeness",
+            "completeness_result",
+            "completeness_details",
+            "eligibility_result",
+            "eligibility_auto_result",
+            "eligibility_details",
+            "application_stage",
+            "plot_allocation_status",
+            "priority_primary",
+            "priority_secondary",
+            "priority_label",
+        }
+    )
 
     class Meta:
         ordering = ("-submitted_on", "-id")
@@ -157,6 +286,70 @@ class PlotApplication(AuditedModel):
     @property
     def is_couple(self) -> bool:
         return self.family_status in self.COUPLE_STATUSES
+
+    @property
+    def is_documents_complete(self) -> bool:
+        return (
+            self.documents_completeness == DocumentsCompleteness.COMPLETE
+            or bool(self.documents_complete_override)
+        )
+
+    @property
+    def is_complete(self) -> bool:
+        return self.completeness_result == ApplicationCompleteness.COMPLETE
+
+    @property
+    def is_rejected_incomplete(self) -> bool:
+        return self.completeness_result == ApplicationCompleteness.REJECTED
+
+    @property
+    def beneficiary_status(self) -> str:
+        if self.eligibility_result == EligibilityResult.FAIL or self.is_rejected_incomplete:
+            return EligibilityResult.FAIL
+        if (
+            self.completeness_result == ApplicationCompleteness.COMPLETE
+            and self.documents_completeness == DocumentsCompleteness.COMPLETE
+            and self.eligibility_result == EligibilityResult.PASS
+        ):
+            return EligibilityResult.PASS
+        return EligibilityResult.PENDING
+
+    @property
+    def is_beneficiary(self) -> bool:
+        return self.beneficiary_status == EligibilityResult.PASS
+
+    @property
+    def beneficiary_label(self) -> str:
+        status = self.beneficiary_status
+        if status == EligibilityResult.PASS:
+            return "ΔΙΚΑΙΟΥΧΟΣ"
+        if status == EligibilityResult.FAIL:
+            return "ΜΗ ΔΙΚΑΙΟΥΧΟΣ"
+        return "ΕΚΚΡΕΜΕΙ"
+
+    @property
+    def application_stage_label(self) -> str:
+        from plot_applications.stage_labels import get_application_stage_label
+
+        return get_application_stage_label(self.application_stage)
+
+    @property
+    def is_eligibility_overridden(self) -> bool:
+        return self.eligibility_override in EligibilityOverride.values
+
+    @property
+    def stage_badge(self) -> str:
+        if self.application_stage == ApplicationStage.COMPLETED:
+            return "pass"
+        return "pending"
+
+    @property
+    def plot_allocation_badge(self) -> str:
+        if self.plot_allocation_status == PlotAllocationStatus.ALLOCATED:
+            return "pass"
+        if self.plot_allocation_status == PlotAllocationStatus.NOT_ALLOCATED:
+            return "fail"
+        return "pending"
 
     def party(self, role):
         return next((p for p in self.parties.all() if p.role == role), None)

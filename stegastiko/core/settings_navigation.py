@@ -46,6 +46,12 @@ SETTINGS_NAV_SECTIONS = (
         "functions": ("settings_section_labels", "settings_subsection_labels"),
     },
     {
+        "key": "plot_application_labels",
+        "url_name": "system_settings_plot_application_labels",
+        "label": "Τίτλοι αίτησης παραχώρησης οικοπέδου",
+        "function": "settings_plot_application_labels",
+    },
+    {
         "key": "email",
         "url_name": "system_settings_email",
         "label": "Αποστολή email (SMTP)",

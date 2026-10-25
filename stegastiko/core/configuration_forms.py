@@ -36,6 +36,11 @@ from core.reminders import (
     CONSULTATION_DUE_REMINDER_DAYS_KEY,
 )
 from core.services import SMTP_SECURITY_CHOICES, SMTP_SETTING_DEFAULTS, get_setting, set_setting
+from plot_applications.stage_labels import (
+    DEFAULT_APPLICATION_STAGE_LABELS,
+    get_application_stage_label,
+    save_application_stage_label,
+)
 
 BRANDING_SETTING_FIELDS = (
     (APP_TITLE_SETTING_KEY, "Τίτλος εφαρμογής (κεφαλίδα, πάνω αριστερά)"),
@@ -216,6 +221,25 @@ class SystemMenuLabelSettingsForm(forms.Form):
     def save(self):
         for key, _, description in MENU_LABEL_FIELDS:
             save_menu_label(key, self.cleaned_data[f"menu_{key}"], description)
+
+
+class SystemPlotApplicationLabelSettingsForm(forms.Form):
+    """Τίτλοι εμφάνισης των σταδίων της αίτησης παραχώρησης οικοπέδου."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for number, (stage, default) in enumerate(DEFAULT_APPLICATION_STAGE_LABELS.items(), start=1):
+            self.fields[f"stage_{stage}"] = forms.CharField(
+                label=f"Στάδιο {number}",
+                max_length=128,
+                initial=None if self.is_bound else get_application_stage_label(stage),
+                help_text=f"Προεπιλογή: «{default}».",
+                widget=forms.TextInput(attrs={"class": "input"}),
+            )
+
+    def save(self):
+        for stage in DEFAULT_APPLICATION_STAGE_LABELS:
+            save_application_stage_label(stage, self.cleaned_data[f"stage_{stage}"])
 
 
 class SystemWorkflowSettingsForm(forms.Form):

@@ -15,6 +15,7 @@ from plots.models import Plot
 from plot_applications.models import (
     ApplicationChild,
     ApplicationParty,
+    EligibilityOverride,
     IncomeDeclaration,
     PlotApplication,
     ResidenceCategory,
@@ -65,7 +66,7 @@ class PersonIdentityForm(forms.Form):
         "parents_birth_place",
         "parents_birth_country",
     )
-    DRAFT_REQUIRED_FIELDS = (
+    MINIMUM_REQUIRED_FIELDS = (
         "identity_number",
         "first_name",
         "last_name",
@@ -80,17 +81,17 @@ class PersonIdentityForm(forms.Form):
     parents_birth_place = forms.CharField(label="Τόπος γέννησης γονέων", max_length=128)
     parents_birth_country = forms.CharField(label="Χώρα Γέννησης Γονέων", max_length=128)
 
-    def __init__(self, *args, required=True, is_draft=False, **kwargs):
+    def __init__(self, *args, required=True, **kwargs):
+        kwargs.pop("is_draft", None)
         super().__init__(*args, **kwargs)
         self.is_required = required
-        self.is_draft = is_draft
         self.existing = self._existing_person()
         for name, field in self.fields.items():
             has_stored = self.existing is not None and getattr(self.existing, name) not in (None, "")
-            if is_draft:
+            if self.is_bound:
                 field.required = (
                     required
-                    and (name in self.DRAFT_REQUIRED_FIELDS)
+                    and (name in self.MINIMUM_REQUIRED_FIELDS)
                     and (not has_stored or name == "identity_number")
                 )
             else:
@@ -218,6 +219,7 @@ class PlotApplicationForm(forms.ModelForm):
             "residence_apartment",
             "residence_postal_code",
             "residence_community",
+            "resides_in_controlled_areas",
             "origin_parent_description",
             "previous_residence_address",
             "residence_notes",
@@ -240,6 +242,8 @@ class PlotApplicationForm(forms.ModelForm):
             "sworn_by_spouse",
             "attached_documents",
             "other_documents",
+            "documents_complete_override",
+            "documents_complete_reason",
         ]
         labels = {
             "community": "Κοινότητα στην οποία ζητείται η παραχώρηση οικοπέδου",
@@ -257,6 +261,7 @@ class PlotApplicationForm(forms.ModelForm):
             "residence_apartment": "Αρ. κατοικίας / διαμερίσματος",
             "residence_postal_code": "Ταχ. Κωδ.",
             "residence_community": "Κοινότητα / Δημοτικό Διαμέρισμα διαμονής",
+            "resides_in_controlled_areas": "Διαμένει σε ελεγχόμενες από την Κυπριακή Δημοκρατία περιοχές",
             "origin_parent_description": "Καταγωγή από την Κοινότητα ως προς ποιο γονέα",
             "previous_residence_address": "Διεύθυνση στην Κοινότητα κατά την περίοδο μόνιμης κατοίκησης",
             "residence_notes": "Αναλυτική περιγραφή / λοιπές πληροφορίες",
@@ -274,6 +279,8 @@ class PlotApplicationForm(forms.ModelForm):
             "sworn_by_applicant": "Ένορκη δήλωση Αιτητή/Αιτήτριας",
             "sworn_by_spouse": "Ένορκη δήλωση Συζύγου/Συμβίου",
             "other_documents": "Άλλα πιστοποιητικά",
+            "documents_complete_override": "Τα πιστοποιητικά / δικαιολογητικά είναι εντάξει (παρά τις ελλείψεις)",
+            "documents_complete_reason": "Περιγραφή λόγου ολοκλήρωσης δικαιολογητικών (προαιρετική)",
         }
         widgets = {
             "submitted_on": IsoDateInput(),
@@ -288,11 +295,17 @@ class PlotApplicationForm(forms.ModelForm):
             "has_alienated_property_details": forms.Textarea(attrs={"rows": 2}),
             "previous_housing_aid_details": forms.Textarea(attrs={"rows": 2}),
             "other_documents": forms.Textarea(attrs={"rows": 2}),
+            "documents_complete_reason": forms.Textarea(
+                attrs={
+                    "rows": 2,
+                    "placeholder": "Αιτιολογήστε γιατί η αίτηση χαρακτηρίζεται ως ολοκληρωμένη παρά τα ελλείποντα δικαιολογητικά…",
+                }
+            ),
         }
 
-    def __init__(self, *args, is_draft=False, **kwargs):
+    def __init__(self, *args, **kwargs):
+        kwargs.pop("is_draft", None)
         super().__init__(*args, **kwargs)
-        self.is_draft = is_draft
         # Η Αίτηση δεν συνδέεται με Γνωστοποιήσεις: προσφέρονται οι ενεργές Κοινότητες που
         # έχουν διαθέσιμα Οικόπεδα, με τον αριθμό τους. Στην επεξεργασία μένει μόνο η υπάρχουσα.
         communities = Community.objects.annotate(
@@ -309,8 +322,7 @@ class PlotApplicationForm(forms.ModelForm):
         )
         self.community_names = {str(c.pk): c.name for c in communities}
         for name in ("submitted_on", "email", "residence_category", "family_status"):
-            self.fields[name].required = not is_draft
-        # Η απαιτούμενη τιμή κατά κατηγορία ελέγχεται στο clean().
+            self.fields[name].required = not self.is_bound
         self.fields["residence_community"].required = False
         for field in self.fields.values():
             field.help_text = ""
@@ -346,14 +358,8 @@ class PlotApplicationForm(forms.ModelForm):
             cleaned["single_parent_other"] = self.instance.single_parent_other
         elif cleaned.get("family_status") == PlotApplication.FamilyStatus.SINGLE_PARENT:
             status = cleaned.get("single_parent_status")
-            if not status and not self.is_draft:
-                self.add_error("single_parent_status", "Επιλέξτε την περίπτωση μονογονιού.")
-            elif (
-                status == PlotApplication.SingleParentStatus.OTHER
-                and not cleaned.get("single_parent_other")
-                and not self.is_draft
-            ):
-                self.add_error("single_parent_other", "Περιγράψτε την περίπτωση «Άλλο».")
+            if status != PlotApplication.SingleParentStatus.OTHER:
+                cleaned["single_parent_other"] = ""
         else:
             cleaned["single_parent_status"] = ""
             cleaned["single_parent_other"] = ""
@@ -361,6 +367,13 @@ class PlotApplicationForm(forms.ModelForm):
             cleaned["residence_community"] = self.instance.residence_community
         else:
             self._clean_residence_community(cleaned)
+        if self.fields["documents_complete_override"].disabled and self.instance.pk:
+            cleaned["documents_complete_override"] = self.instance.documents_complete_override
+            cleaned["documents_complete_reason"] = self.instance.documents_complete_reason
+        elif cleaned.get("documents_complete_override"):
+            cleaned["documents_complete_reason"] = (cleaned.get("documents_complete_reason") or "").strip()
+        else:
+            cleaned["documents_complete_reason"] = ""
         return cleaned
 
     def _clean_residence_community(self, cleaned):
@@ -370,11 +383,9 @@ class PlotApplicationForm(forms.ModelForm):
             cleaned["residence_community"] = community.name if community else ""
         elif category == ResidenceCategory.NEIGHBOURING:
             chosen = cleaned.get("neighbouring_community") or ""
-            if not chosen and not self.is_draft and "neighbouring_community" not in self.errors:
-                self.add_error("neighbouring_community", "Επιλέξτε τη Γειτονική Κοινότητα από τον κατάλογο.")
             cleaned["residence_community"] = chosen
-        elif category and not self.is_draft and not (cleaned.get("residence_community") or "").strip():
-            self.add_error("residence_community", "Συμπληρώστε την Κοινότητα / Δημοτικό Διαμέρισμα διαμονής.")
+        else:
+            cleaned["residence_community"] = (cleaned.get("residence_community") or "").strip()
 
 
 class ApplicationPartyForm(forms.ModelForm):
@@ -417,10 +428,10 @@ class ApplicationPartyForm(forms.ModelForm):
             "employer_details": forms.Textarea(attrs={"rows": 2}),
         }
 
-    def __init__(self, *args, role=ApplicationParty.Role.APPLICANT, is_draft=False, **kwargs):
+    def __init__(self, *args, role=ApplicationParty.Role.APPLICANT, **kwargs):
+        kwargs.pop("is_draft", None)
         super().__init__(*args, **kwargs)
         self.role = role
-        self.is_draft = is_draft
         choices = [c for c in self.fields["citizenship"].choices if c[0]]
         if role == ApplicationParty.Role.APPLICANT:
             for name in ("alien_registration_number", "email"):
@@ -430,8 +441,10 @@ class ApplicationPartyForm(forms.ModelForm):
                 "Για την επίσημη αλληλογραφία χρησιμοποιείται το email του Αιτητή/Αιτήτριας."
             )
         self.fields["citizenship"].choices = choices
-        self.fields["citizenship"].required = not is_draft
-        self.fields["mobile_phone"].required = (role == ApplicationParty.Role.APPLICANT) or not is_draft
+        self.fields["citizenship"].required = not self.is_bound
+        if not self.is_bound:
+            self.fields["citizenship_other"].required = True
+        self.fields["mobile_phone"].required = (role == ApplicationParty.Role.APPLICANT) or not self.is_bound
         _style(self)
 
     def clean(self):
@@ -441,7 +454,7 @@ class ApplicationPartyForm(forms.ModelForm):
             cleaned["citizenship_other"] = self.instance.citizenship_other
             return cleaned
         if cleaned.get("citizenship") == ApplicationParty.Citizenship.OTHER:
-            if not self.is_draft and not (cleaned.get("citizenship_other") or "").strip():
+            if not (cleaned.get("citizenship_other") or "").strip():
                 self.add_error("citizenship_other", "Συμπληρώστε την υπηκοότητα / ιδιότητα.")
         else:
             cleaned["citizenship_other"] = ""
@@ -664,4 +677,90 @@ class PlotApplicationEmailForm(forms.Form):
             attrs={"class": "input", "rows": 10, "data-email-body": ""}
         ),
     )
+
+
+class PlotApplicationEligibilityOverrideForm(forms.Form):
+    """Χειροκίνητη αλλαγή του αποτελέσματος του λογισμικού κατά πόσο ο αιτητής είναι δικαιούχος (Ενότ. 6)."""
+
+    eligibility_override = forms.ChoiceField(
+        label="Αποτέλεσμα επιλεξιμότητας",
+        required=False,
+        choices=(("", "Όπως το αποτέλεσμα του λογισμικού"), *EligibilityOverride.choices),
+        widget=forms.Select(attrs={"class": "input"}),
+    )
+    eligibility_override_reason = forms.CharField(
+        label="Αιτιολογία χειροκίνητης αλλαγής",
+        required=False,
+        widget=forms.Textarea(
+            attrs={
+                "class": "input",
+                "rows": 3,
+                "placeholder": "Αιτιολογήστε γιατί αλλάζει το αποτέλεσμα του λογισμικού…",
+            }
+        ),
+    )
+
+    def clean(self):
+        cleaned = super().clean()
+        override = cleaned.get("eligibility_override") or ""
+        reason = (cleaned.get("eligibility_override_reason") or "").strip()
+        if override and not reason:
+            self.add_error(
+                "eligibility_override_reason",
+                "Η αιτιολογία είναι υποχρεωτική όταν αλλάζει χειροκίνητα το αποτέλεσμα του λογισμικού.",
+            )
+        cleaned["eligibility_override"] = override
+        cleaned["eligibility_override_reason"] = reason if override else ""
+        return cleaned
+
+
+class PlotApplicationIncompleteRejectionForm(forms.Form):
+    """Απόρριψη ελλιπούς αίτησης λόγω έλλειψης στοιχείων ή πιστοποιητικών (Ενότ. 5(β), 20.2)."""
+
+    incomplete_rejection_reason = forms.CharField(
+        label="Αιτιολογία απόρριψης",
+        widget=forms.Textarea(
+            attrs={
+                "class": "input",
+                "rows": 3,
+                "placeholder": "Περιγράψτε τα στοιχεία ή πιστοποιητικά που λείπουν…",
+            }
+        ),
+        error_messages={"required": "Η αιτιολογία απόρριψης είναι υποχρεωτική."},
+    )
+
+    def clean_incomplete_rejection_reason(self):
+        reason = (self.cleaned_data.get("incomplete_rejection_reason") or "").strip()
+        if not reason:
+            raise forms.ValidationError("Η αιτιολογία απόρριψης είναι υποχρεωτική.")
+        return reason
+
+
+class PlotApplicationDocumentsCompletenessForm(forms.Form):
+    """Χειροκίνητος χαρακτηρισμός της αίτησης ως ολοκληρωμένης ως προς τα δικαιολογητικά με προαιρετική περιγραφή λόγου."""
+
+    documents_complete_override = forms.BooleanField(
+        label="Τα πιστοποιητικά / δικαιολογητικά είναι εντάξει (παρά τις ελλείψεις)",
+        required=False,
+        widget=forms.CheckboxInput(attrs={"class": "checkbox"}),
+    )
+    documents_complete_reason = forms.CharField(
+        label="Περιγραφή λόγου ολοκλήρωσης δικαιολογητικών (προαιρετική)",
+        required=False,
+        widget=forms.Textarea(
+            attrs={
+                "class": "input",
+                "rows": 2,
+                "placeholder": "Προαιρετικά: αιτιολογήστε γιατί τα δικαιολογητικά θεωρούνται εντάξει παρά τις ελλείψεις…",
+            }
+        ),
+    )
+
+    def clean(self):
+        cleaned = super().clean()
+        override = bool(cleaned.get("documents_complete_override"))
+        reason = (cleaned.get("documents_complete_reason") or "").strip()
+        cleaned["documents_complete_reason"] = reason if override else ""
+        return cleaned
+
 

@@ -21,6 +21,16 @@ class RankingList(AuditedModel):
         ordering = ("-id",)
         unique_together = ("community", "submission_cycle", "list_type")
 
+    def save(self, *args, **kwargs):
+        result = super().save(*args, **kwargs)
+        if self.pk:
+            from plot_applications.rules import apply_evaluation
+
+            for entry in self.entries.select_related("application").all():
+                if entry.application_id:
+                    apply_evaluation(entry.application)
+        return result
+
 
 class RankingEntry(AuditedModel):
     class Status(models.TextChoices):
@@ -37,6 +47,23 @@ class RankingEntry(AuditedModel):
     class Meta:
         ordering = ("finalized_rank", "proposed_rank", "id")
         unique_together = ("ranking_list", "application")
+
+    def save(self, *args, **kwargs):
+        result = super().save(*args, **kwargs)
+        if self.application_id:
+            from plot_applications.rules import apply_evaluation
+
+            apply_evaluation(self.application)
+        return result
+
+    def delete(self, *args, **kwargs):
+        application = self.application if self.application_id else None
+        result = super().delete(*args, **kwargs)
+        if application is not None and application.pk:
+            from plot_applications.rules import apply_evaluation
+
+            apply_evaluation(application)
+        return result
 
 
 class Lottery(AuditedModel):
@@ -79,6 +106,23 @@ class Allocation(AuditedModel):
 
     class Meta:
         ordering = ("-allocated_at", "-id")
+
+    def save(self, *args, **kwargs):
+        result = super().save(*args, **kwargs)
+        if self.application_id:
+            from plot_applications.rules import apply_evaluation
+
+            apply_evaluation(self.application)
+        return result
+
+    def delete(self, *args, **kwargs):
+        application = self.application if self.application_id else None
+        result = super().delete(*args, **kwargs)
+        if application is not None and application.pk:
+            from plot_applications.rules import apply_evaluation
+
+            apply_evaluation(application)
+        return result
 
 
 class Payment(AuditedModel):

@@ -10,7 +10,7 @@
 </nav>
 
 <div class="page-header">
-    <h1>{% if is_create %}Νέο άτομο{% else %}{{ person.first_name }} {{ person.last_name }}{% endif %}</h1>
+    <h1{% if not is_create %} data-ui-skip{% endif %}>{% if is_create %}Νέο άτομο{% else %}{{ person.first_name }} {{ person.last_name }}{% endif %}</h1>
     <p class="page-header__lead">
         Σταθερά στοιχεία ταυτότητας (10.3.1). Υπηκοότητα, προσφυγική ταυτότητα και τα υπόλοιπα
         στοιχεία δηλώνονται σε κάθε αίτηση.
@@ -55,8 +55,13 @@
                 <th>Κοινότητα</th>
                 <th>Ημ. υποβολής</th>
                 <th>Ρόλος</th>
-                <th>Κατ' αρχήν έλεγχος</th>
-                {% if can_send_email %}<th><span class="visually-hidden">Ενέργειες</span></th>{% endif %}
+                <th>Στάδιο αίτησης</th>
+                <th>Πληρότητα αίτησης</th>
+                <th>Δικαιολογητικά</th>
+                <th>Επιλεξιμότητα</th>
+                <th>Δικαιούχος</th>
+                <th>Παραχώρηση οικοπέδου</th>
+                <th>Ενέργειες</th>
             </tr>
             </thead>
             <tbody data-person-applications-sortable>
@@ -78,9 +83,41 @@
                     <td>{{ application.community.name }}</td>
                     <td>{{ application.submitted_on|date:"d/m/Y"|default:"—" }}</td>
                     <td>{% if application.applicant_id == person.pk %}Αιτητής/τρια{% else %}Σύζυγος/Συμβίος{% endif %}</td>
+                    <td>
+                        <span class="badge badge--{{ application.stage_badge }}" data-application-stage-badge>
+                            {{ application.application_stage_label }}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="badge {% if application.completeness_result == 'complete' %}badge--pass{% else %}badge--fail{% endif %}">
+                            {{ application.get_completeness_result_display }}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="badge {% if application.documents_completeness == 'complete' %}badge--pass{% else %}badge--fail{% endif %}"
+                              {% if application.documents_complete_override and application.documents_complete_reason %}title="{{ application.documents_complete_reason }}"{% endif %}>
+                            {{ application.get_documents_completeness_display }}
+                        </span>
+                    </td>
                     <td><span class="badge badge--{{ application.eligibility_result }}">{{ application.get_eligibility_result_display }}</span></td>
-                    {% if can_send_email %}
+                    <td>
+                        <span class="badge badge--{{ application.beneficiary_status }}" data-application-beneficiary-badge>
+                            {{ application.beneficiary_label }}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="badge badge--{{ application.plot_allocation_badge }}" data-application-plot-allocation-badge>
+                            {{ application.get_plot_allocation_status_display }}
+                        </span>
+                    </td>
                     <td class="data-table__actions">
+                        {% if access.plot_applications.view %}
+                        <a href="{% url 'plot_applications:detail' application.pk %}" class="btn btn-secondary btn-sm">Κατάσταση</a>
+                        {% endif %}
+                        {% if access.plot_applications.edit %}
+                        <a href="{% url 'plot_applications:edit' application.pk %}" class="btn btn-primary btn-sm">Επεξεργασία</a>
+                        {% endif %}
+                        {% if can_send_email %}
                         <button type="button"
                                 class="btn btn-secondary btn-sm"
                                 data-dialog-open="plot-application-email-dialog"
@@ -91,11 +128,11 @@
                                 data-check-label="Αίτηση {{ application.protocol_number }}">
                             Αποστολή Email
                         </button>
+                        {% endif %}
                     </td>
-                    {% endif %}
                 </tr>
             {% empty %}
-                <tr><td colspan="{% if can_send_email %}7{% else %}6{% endif %}">Το άτομο δεν συμμετέχει σε αιτήσεις.</td></tr>
+                <tr><td colspan="12">Το άτομο δεν συμμετέχει σε αιτήσεις.</td></tr>
             {% endfor %}
             </tbody>
         </table>
