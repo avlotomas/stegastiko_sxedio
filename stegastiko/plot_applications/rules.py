@@ -27,6 +27,7 @@ from plot_applications.models import (
     EligibilityOverride,
     EligibilityResult,
     IncomeDeclaration,
+    REJECTION_STAGES,
     PlotAllocationStatus,
     PlotApplication,
     ResidenceCategory,
@@ -45,6 +46,9 @@ PARAMETER_SETTINGS: tuple[tuple[str, int, str], ...] = (
     ("plotApp.studentMaxAgeFemale", 23, "Ενότ. 10.Α — σπουδάζοντα τέκνα θήλυ μέχρι (ετών)"),
     ("plotApp.studentMaxAgeMale", 25, "Ενότ. 10.Α — σπουδάζοντα τέκνα άρρενα μέχρι (ετών)"),
     ("plotApp.largeFamilyChildren", 4, "Ενότ. 11 — ελάχιστος αριθμός τέκνων πολύτεκνης"),
+    ("plotApp.receiptConfirmationDays", 5, "Ενότ. 6 — προθεσμία επιβεβαίωσης λήψης επιστολής σε ημέρες"),
+    ("plotApp.objectionDays", 21, "Ενότ. 7 — προθεσμία ενστάσεων κατά του Προκαταρκτικού Καταλόγου (ημερολογιακές ημέρες)"),
+    ("plotApp.submissionDeadlineWarningDays", 14, "Ενότ. 4, 5 — ειδοποίηση X ημέρες πριν από τη λήξη της προθεσμίας υποβολής αιτήσεων"),
 )
 PARAMETER_DEFAULTS = {key: default for key, default, _ in PARAMETER_SETTINGS}
 
@@ -137,6 +141,7 @@ def income_evaluation_parameters() -> dict:
         "student_max_age_female": parameter("plotApp.studentMaxAgeFemale"),
         "student_max_age_male": parameter("plotApp.studentMaxAgeMale"),
         "large_family_children": parameter("plotApp.largeFamilyChildren"),
+        "document_labels": dict(DOCUMENT_LABELS),
     }
 
 
@@ -389,8 +394,8 @@ def required_documents_for_forms(forms) -> list[tuple[tuple[str, ...], str]]:
 def missing_required_field_labels(application: PlotApplication) -> list[str]:
     """Υποχρεωτικά πεδία της αίτησης που λείπουν ώστε η αίτηση να θεωρείται πλήρης (Ενότ. 5)."""
     missing: list[str] = []
-    if not application.community_id:
-        missing.append("Κοινότητα")
+    if not application.announcement_id:
+        missing.append("Γνωστοποίηση")
     if not application.submitted_on:
         missing.append("Ημερομηνία υποβολής")
 
@@ -474,8 +479,136 @@ def missing_required_field_labels(application: PlotApplication) -> list[str]:
         missing.append("Οικόπεδο/τεμάχιο σε Οικιστική Ζώνη (Ναι/Όχι)")
     if application.has_alienated_property is None:
         missing.append("Αποξένωση εντός 3 ετών (Ναι/Όχι)")
-    if application.previous_housing_aid is None:
+    if application.has_previous_housing_aid if hasattr(application, "has_previous_housing_aid") else application.previous_housing_aid is None:
         missing.append("Προηγούμενη κρατική στεγαστική ενίσχυση (Ναι/Όχι)")
+
+    return missing
+
+
+def missing_completeness_fields_for_forms(forms) -> list[tuple[str, str]]:
+    """Υποχρεωτικά πεδία και υπογραφές της αίτησης που λείπουν βάσει των τρεχουσών τιμών της φόρμας (Ενότ. 5, 20.2).
+
+    Επιστρέφει λίστα από (όνομα_input_φόρμας, ετικέτα_εμφάνισης).
+    """
+    from plot_applications.documents import _bool_or_none, _checkbox_bool
+
+    def _val(bound_form, field_name: str) -> str:
+        if field_name not in bound_form.fields:
+            return ""
+        raw = bound_form[field_name].value()
+        if raw is None:
+            return ""
+        return str(raw).strip()
+
+    main = forms.main
+    ap = forms.applicant_party
+    sp = forms.spouse_party
+    missing: list[tuple[str, str]] = []
+
+    if "announcement" in main.fields:
+        if not _val(main, "announcement"):
+            missing.append(("main-announcement", "Γνωστοποίηση"))
+    elif not _val(main, "community"):
+        missing.append(("main-community", "Κοινότητα"))
+    if not _val(main, "submitted_on"):
+        missing.append(("main-submitted_on", "Ημερομηνία υποβολής"))
+
+    person_fields = (
+        ("identity_number", "Αρ. Δελτίου Ταυτότητας"),
+        ("first_name", "Όνομα"),
+        ("last_name", "Επίθετο"),
+        ("date_of_birth", "Ημερομηνία Γέννησης"),
+        ("birth_place", "Τόπος Γέννησης"),
+        ("birth_country", "Χώρα Γέννησης"),
+        ("parents_birth_place", "Τόπος γέννησης γονέων"),
+        ("parents_birth_country", "Χώρα Γέννησης Γονέων"),
+    )
+    for attr, label in person_fields:
+        if not _val(forms.applicant, attr):
+            missing.append((f"applicant-{attr}", f"Αιτητής/τρια: {label}"))
+
+    applicant_cit = _val(ap, "citizenship")
+    if not applicant_cit:
+        missing.append(("applicant_party-citizenship", "Αιτητής/τρια: Υπηκοότητα / Ιδιότητα"))
+    elif (
+        applicant_cit == ApplicationParty.Citizenship.OTHER
+        and not _val(ap, "citizenship_other")
+    ):
+        missing.append(
+            ("applicant_party-citizenship_other", "Αιτητής/τρια: Άλλο (περιγραφή υπηκοότητας)")
+        )
+    if not _val(ap, "mobile_phone"):
+        missing.append(("applicant_party-mobile_phone", "Αιτητής/τρια: Τηλέφωνο Κινητό"))
+    if not _val(main, "email"):
+        missing.append(("main-email", "Ηλεκτρονική Διεύθυνση"))
+
+    category = _val(main, "residence_category")
+    if not category:
+        missing.append(("main-residence_category", "Τόπος διαμονής: Κατηγορία"))
+    elif category == ResidenceCategory.NEIGHBOURING:
+        if not (_val(main, "neighbouring_community") or _val(main, "residence_community")):
+            missing.append(("main-neighbouring_community", "Τόπος διαμονής: Γειτονική Κοινότητα"))
+    else:
+        locked = category in (
+            ResidenceCategory.AUTOCHTHON,
+            ResidenceCategory.DISPLACED,
+            ResidenceCategory.REPATRIATED,
+        )
+        has_res_comm = bool(_val(main, "residence_community")) or (
+            locked and bool(_val(main, "announcement") or _val(main, "community"))
+        )
+        if not has_res_comm:
+            missing.append(("main-residence_community", "Τόπος διαμονής: Κοινότητα / Δ.Δ. διαμονής"))
+
+    family_status = _val(main, "family_status")
+    is_couple = family_status in (
+        PlotApplication.FamilyStatus.COUPLE_WITH_CHILDREN,
+        PlotApplication.FamilyStatus.COUPLE_WITHOUT_CHILDREN,
+    )
+    if not family_status:
+        missing.append(("main-family_status", "Οικογενειακή κατάσταση"))
+    elif family_status == PlotApplication.FamilyStatus.SINGLE_PARENT:
+        single_status = _val(main, "single_parent_status")
+        if not single_status:
+            missing.append(("main-single_parent_status", "Μονογονιός (περίπτωση)"))
+        elif (
+            single_status == PlotApplication.SingleParentStatus.OTHER
+            and not _val(main, "single_parent_other")
+        ):
+            missing.append(("main-single_parent_other", "Μονογονιός: Άλλο (περιγραφή)"))
+
+    if is_couple:
+        for attr, label in person_fields:
+            if not _val(forms.spouse, attr):
+                missing.append((f"spouse-{attr}", f"Σύζυγος/Συμβίος: {label}"))
+        spouse_cit = _val(sp, "citizenship")
+        if not spouse_cit:
+            missing.append(("spouse_party-citizenship", "Σύζυγος/Συμβίος: Υπηκοότητα / Ιδιότητα"))
+        elif (
+            spouse_cit == ApplicationParty.Citizenship.OTHER
+            and not _val(sp, "citizenship_other")
+        ):
+            missing.append(
+                ("spouse_party-citizenship_other", "Σύζυγος/Συμβίος: Άλλο (περιγραφή υπηκοότητας)")
+            )
+        if not _val(sp, "mobile_phone"):
+            missing.append(("spouse_party-mobile_phone", "Σύζυγος/Συμβίος: Τηλέφωνο Κινητό"))
+
+    if _bool_or_none(main["has_dwelling"].value()) is None:
+        missing.append(("main-has_dwelling", "Εγγεγραμμένη κατοικία (Ναι/Όχι)"))
+    if _bool_or_none(main["has_residential_land"].value()) is None:
+        missing.append(("main-has_residential_land", "Οικόπεδο/τεμάχιο σε Οικιστική Ζώνη (Ναι/Όχι)"))
+    if _bool_or_none(main["has_alienated_property"].value()) is None:
+        missing.append(("main-has_alienated_property", "Αποξένωση εντός 3 ετών (Ναι/Όχι)"))
+    if _bool_or_none(main["previous_housing_aid"].value()) is None:
+        missing.append(
+            ("main-previous_housing_aid", "Προηγούμενη κρατική στεγαστική ενίσχυση (Ναι/Όχι)")
+        )
+
+    if not _checkbox_bool(main["applicant_signed"].value()):
+        missing.append(("main-applicant_signed", "Υπογραφή Αιτητή/Αιτήτριας"))
+    if is_couple and not _checkbox_bool(main["spouse_signed"].value()):
+        missing.append(("main-spouse_signed", "Υπογραφή Συζύγου/Συμβίου"))
 
     return missing
 
@@ -581,77 +714,43 @@ def _documents_criterion(application: PlotApplication) -> CriterionResult:
     return criterion
 
 
-NEIGHBOURING_PRIORITY = 5
-PRIMARY_ORDER = {
-    ResidenceCategory.AUTOCHTHON: 1,
-    ResidenceCategory.DISPLACED: 2,
-    ResidenceCategory.INTERNAL_EMIGRANT: 3,
-    ResidenceCategory.REPATRIATED: 4,
-}
-SECONDARY_LABELS = {
-    1: "Πολύτεκνη οικογένεια",
-    2: "Οικογένεια μη πολύτεκνη",
-    3: "Μονογονεϊκή οικογένεια",
-    4: "Ζεύγος χωρίς τέκνα",
-}
+def _list_entries(application: PlotApplication) -> dict[str, object]:
+    """Η πιο πρόσφατη εγγραφή της αίτησης στον Προκαταρκτικό και στον Τελικό Κατάλογο Δικαιούχων."""
+    entries: dict[str, object] = {}
+    if not application.pk:
+        return entries
+    for entry in application.ranking_entries.select_related("ranking_list").order_by("-ranking_list_id"):
+        entries.setdefault(entry.ranking_list.list_type, entry)
+    return entries
 
 
-def priority(application: PlotApplication, recognized_children: int) -> tuple[int | None, int | None, str]:
-    """Ενότ. 11: πρωτεύουσα σειρά κατά τόπο διαμονής, δευτερεύουσα κατά σύνθεση οικογένειας.
-
-    Οι Κάτοικοι Γειτονικής Κοινότητας έπονται όλοι μαζί (5), χωρίς υποδιαίρεση ανά ιδιότητα.
-    """
-    category = application.residence_category
-    if not category:
-        return None, None, ""
-    labels = dict(ResidenceCategory.choices)
-    if category == ResidenceCategory.NEIGHBOURING:
-        primary = NEIGHBOURING_PRIORITY
-        primary_label = labels[category]
-    else:
-        primary = PRIMARY_ORDER[category]
-        primary_label = labels[category]
-
-    if recognized_children >= parameter("plotApp.largeFamilyChildren"):
-        secondary = 1
-    elif application.is_couple and recognized_children > 0:
-        secondary = 2
-    elif application.family_status == PlotApplication.FamilyStatus.SINGLE_PARENT:
-        secondary = 3
-    else:
-        secondary = 4
-    return primary, secondary, f"{primary_label} · {SECONDARY_LABELS[secondary]}"
-
-
-def _prioritization_outcome(application: PlotApplication) -> str | None:
-    """Αν έχει ολοκληρωθεί η διαδικασία επιλογής/προτεραιοποίησης και κατανομής για δικαιούχο αίτηση,
-    επιστρέφει PlotAllocationStatus.ALLOCATED ή PlotAllocationStatus.NOT_ALLOCATED, αλλιώς None.
-    """
+def _active_allocation(application: PlotApplication):
     if not application.pk:
         return None
-    if any(alloc.status == "active" for alloc in application.allocations.all()):
-        return PlotAllocationStatus.ALLOCATED
-    finalized_entries = [
-        entry
-        for entry in application.ranking_entries.select_related("ranking_list").all()
-        if entry.ranking_list_id
-        and (
-            entry.ranking_list.finalized_at is not None
-            or entry.ranking_list.list_type == "final"
-        )
-    ]
-    if finalized_entries:
-        if any(entry.status == "eligible" for entry in finalized_entries):
-            return PlotAllocationStatus.ALLOCATED
-        return PlotAllocationStatus.NOT_ALLOCATED
-    if (
-        application.application_stage == ApplicationStage.COMPLETED
-        and application.eligibility_result == EligibilityResult.PASS
-        and application.plot_allocation_status
-        in (PlotAllocationStatus.ALLOCATED, PlotAllocationStatus.NOT_ALLOCATED)
-    ):
-        return application.plot_allocation_status
+    for alloc in application.allocations.all():
+        if alloc.status == "active":
+            return alloc
     return None
+
+
+def _has_active_allocation(application: PlotApplication) -> bool:
+    return _active_allocation(application) is not None
+
+
+def _allocation_is_signed_and_paid(alloc) -> tuple[bool, bool]:
+    """Returns (has_workflow_records, is_completed)."""
+    try:
+        agreement = alloc.agreement
+    except Exception:
+        agreement = None
+    try:
+        payment = alloc.payment
+    except Exception:
+        payment = None
+    has_records = agreement is not None or payment is not None
+    is_signed = agreement is not None and agreement.status == "signed"
+    is_paid = payment is not None and payment.status == "paid"
+    return has_records, (is_signed and is_paid)
 
 
 def _assess_stage_and_allocation(
@@ -659,35 +758,52 @@ def _assess_stage_and_allocation(
     completeness_overall: str,
     documents_completeness: str,
     eligibility_overall: str,
+    *,
+    is_rejected: bool = False,
 ) -> tuple[str, str]:
-    """Υπολογίζει το στάδιο της αίτησης (`ApplicationStage`) και την κατάσταση παραχώρησης οικοπέδου (`PlotAllocationStatus`).
-
-    Στάδια:
-    1. `collection`: Συλλογή πληροφοριών και πιστοποιητικών μέχρι η αίτηση να είναι πλήρης· η
-       ελλιπής αίτηση εκκρεμεί εδώ μέχρι να συμπληρωθεί ή να απορριφθεί από τον λειτουργό.
-    2. `examination`: Εξέταση επιλεξιμότητας — το λογισμικό δεν έχει ακόμη κρίνει κατά πόσο είναι
-       δικαιούχος (εκκρεμεί κριτήριο) και ο λειτουργός δεν έχει αλλάξει χειροκίνητα το αποτέλεσμα.
-    3. `prioritization`: Επιλογή και προτεραιοποίηση — η πλήρης αίτηση έχει κριθεί δικαιούχος ή μη
-       δικαιούχος (από το λογισμικό ή χειροκίνητα) και εμφανίζεται στον κατάλογο προτεραιοποίησης
-       της Κοινότητας μέχρι να οριστικοποιηθεί ο κατάλογος / η κατανομή.
-    4. `completed`: Ολοκλήρωση, όταν η αίτηση περιληφθεί σε οριστικοποιημένο κατάλογο ή λάβει
-       οικόπεδο (μη δικαιούχος → «Δεν πήρε οικόπεδο»), ή όταν απορριφθεί λόγω ελλείψεων (Ενότ. 5(β)).
-    """
-    if completeness_overall == ApplicationCompleteness.REJECTED:
-        return ApplicationStage.COMPLETED, PlotAllocationStatus.NOT_ALLOCATED
+    """Υπολογίζει το στάδιο της αίτησης (`ApplicationStage`) και την κατάσταση παραχώρησης οικοπέδου (`PlotAllocationStatus`)."""
+    if is_rejected:
+        return ApplicationStage.REJECTED, PlotAllocationStatus.NOT_ALLOCATED
+    if getattr(application, "forfeited", False):
+        return ApplicationStage.FORFEITED, PlotAllocationStatus.NOT_ALLOCATED
     is_complete = (
         completeness_overall == ApplicationCompleteness.COMPLETE
         and documents_completeness == DocumentsCompleteness.COMPLETE
     )
     if not is_complete:
         return ApplicationStage.COLLECTION, PlotAllocationStatus.PENDING
+    entries = _list_entries(application)
+    final_entry = entries.get("final")
+    cycle = application.announcement if application.announcement_id else None
+    cycle_stage = getattr(cycle, "stage", None)
+    if final_entry is not None:
+        active_alloc = _active_allocation(application)
+        if active_alloc is not None:
+            has_records, is_done = _allocation_is_signed_and_paid(active_alloc)
+            if is_done:
+                return ApplicationStage.COMPLETED, PlotAllocationStatus.ALLOCATED
+            if has_records or cycle_stage == "agreements":
+                return ApplicationStage.AGREEMENT, PlotAllocationStatus.ALLOCATED
+            return ApplicationStage.COMPLETED, PlotAllocationStatus.ALLOCATED
+        if final_entry.status == "rejected":
+            return ApplicationStage.COMMITTEE_REJECTED, PlotAllocationStatus.NOT_ALLOCATED
+        if final_entry.status == "eligible":
+            if cycle_stage == "lottery":
+                return ApplicationStage.LOTTERY, PlotAllocationStatus.ALLOCATED
+            if cycle_stage == "agreements":
+                return ApplicationStage.AGREEMENT, PlotAllocationStatus.ALLOCATED
+            return ApplicationStage.COMPLETED, PlotAllocationStatus.ALLOCATED
+        return ApplicationStage.COMPLETED, PlotAllocationStatus.RUNNER_UP
+    if _has_active_allocation(application):
+        return ApplicationStage.COMPLETED, PlotAllocationStatus.ALLOCATED
     if eligibility_overall == PENDING:
         return ApplicationStage.EXAMINATION, PlotAllocationStatus.PENDING
-    outcome = _prioritization_outcome(application)
-    if outcome is not None:
-        if eligibility_overall == FAIL:
-            return ApplicationStage.COMPLETED, PlotAllocationStatus.NOT_ALLOCATED
-        return ApplicationStage.COMPLETED, outcome
+    if entries.get("preliminary") is not None:
+        if cycle_stage in ("objections_committee", "final_list") and getattr(
+            cycle, "objections_closed_on", None
+        ):
+            return ApplicationStage.OBJECTIONS_COMMITTEE, PlotAllocationStatus.PENDING
+        return ApplicationStage.OBJECTIONS, PlotAllocationStatus.PENDING
     return ApplicationStage.PRIORITIZATION, PlotAllocationStatus.PENDING
 
 
@@ -714,19 +830,25 @@ def evaluate(application: PlotApplication) -> dict:
     completeness_criteria.append(documents_criterion)
 
     completeness_all_pass = all(item.result == PASS for item in completeness_criteria)
-    # Ενότ. 5(β): η απορριφθείσα αίτηση δεν διορθώνεται — ο αιτητής υποβάλλει νέα αίτηση.
+    # Ενότ. 5(β): η απορριφθείσα ελλιπής αίτηση δεν διορθώνεται — ο αιτητής υποβάλλει νέα αίτηση.
     is_rejected = bool(application.incomplete_rejected)
-    if is_rejected:
-        completeness_overall = ApplicationCompleteness.REJECTED
+    was_incomplete_when_rejected = is_rejected and (
+        not completeness_all_pass
+        or (
+            application.pk is not None
+            and application.completeness_result == ApplicationCompleteness.INCOMPLETE
+        )
+    )
+    if was_incomplete_when_rejected:
+        completeness_overall = ApplicationCompleteness.INCOMPLETE
+        documents_completeness = DocumentsCompleteness.INCOMPLETE
     elif completeness_all_pass:
         completeness_overall = ApplicationCompleteness.COMPLETE
     else:
         completeness_overall = ApplicationCompleteness.INCOMPLETE
-    completeness_badge = {
-        ApplicationCompleteness.COMPLETE: PASS,
-        ApplicationCompleteness.INCOMPLETE: PENDING,
-        ApplicationCompleteness.REJECTED: FAIL,
-    }[completeness_overall]
+    completeness_badge = (
+        PASS if completeness_overall == ApplicationCompleteness.COMPLETE else FAIL
+    )
 
     # ─────────────────────────────────────────────────────────────────────────
     # 2. Κριτήρια επιλεξιμότητας δικαιούχου (Ενότ. 10, 11, 20.3)
@@ -908,7 +1030,16 @@ def evaluate(application: PlotApplication) -> dict:
     )
 
     all_criteria = [*completeness_criteria, *eligibility_criteria]
-    if eligibility_overall == FAIL or is_rejected:
+    # Η απόρριψη από τον λειτουργό και ο εκκρεμής έλεγχος δεν δίνουν «Δικαιούχος» / «Παραχώρηση οικοπέδου».
+    eligibility_pending = eligibility_overall == PENDING
+    no_beneficiary_outcome = is_rejected or eligibility_pending
+    if is_rejected:
+        beneficiary_status = ""
+        beneficiary_label = ""
+    elif eligibility_pending:
+        beneficiary_status = PENDING
+        beneficiary_label = ""
+    elif eligibility_overall == FAIL:
         beneficiary_status = FAIL
         beneficiary_label = "ΜΗ ΔΙΚΑΙΟΥΧΟΣ"
     elif (
@@ -927,17 +1058,20 @@ def evaluate(application: PlotApplication) -> dict:
         completeness_overall,
         documents_completeness,
         eligibility_overall,
+        is_rejected=is_rejected,
     )
-    application_stage_badge = (
-        "pass" if application_stage == ApplicationStage.COMPLETED else "pending"
-    )
+    if application_stage == ApplicationStage.COMPLETED:
+        application_stage_badge = "pass"
+    elif application_stage in REJECTION_STAGES:
+        application_stage_badge = "fail"
+    else:
+        application_stage_badge = "pending"
     if plot_allocation_status == PlotAllocationStatus.ALLOCATED:
         plot_allocation_badge = "pass"
     elif plot_allocation_status == PlotAllocationStatus.NOT_ALLOCATED:
         plot_allocation_badge = "fail"
     else:
         plot_allocation_badge = "pending"
-    primary, secondary, priority_label = priority(application, recognized)
     return {
         "completeness_criteria": completeness_criteria,
         "completeness_overall": completeness_overall,
@@ -953,7 +1087,7 @@ def evaluate(application: PlotApplication) -> dict:
         "missing_documents": missing_documents,
         "eligibility_criteria": eligibility_criteria,
         "eligibility_overall": eligibility_overall,
-        "eligibility_label": EligibilityResult(eligibility_overall).label,
+        "eligibility_label": "" if is_rejected else EligibilityResult(eligibility_overall).label,
         "eligibility_auto_overall": eligibility_auto_overall,
         "eligibility_auto_label": EligibilityResult(eligibility_auto_overall).label,
         "eligibility_overridden": eligibility_overridden,
@@ -968,7 +1102,9 @@ def evaluate(application: PlotApplication) -> dict:
         "application_stage_label": get_application_stage_label(application_stage),
         "application_stage_badge": application_stage_badge,
         "plot_allocation_status": plot_allocation_status,
-        "plot_allocation_label": PlotAllocationStatus(plot_allocation_status).label,
+        "plot_allocation_label": (
+            "" if no_beneficiary_outcome else PlotAllocationStatus(plot_allocation_status).label
+        ),
         "plot_allocation_badge": plot_allocation_badge,
         "criteria": all_criteria,
         "children": children,
@@ -980,9 +1116,6 @@ def evaluate(application: PlotApplication) -> dict:
         "income_limit": limit,
         "income_tier_label": tier_label,
         "income_criterion": income_criterion,
-        "priority_primary": primary,
-        "priority_secondary": secondary,
-        "priority_label": priority_label,
     }
 
 
@@ -1004,8 +1137,5 @@ def apply_evaluation(application: PlotApplication) -> dict:
     application.eligibility_details = [asdict(item) for item in outcome["eligibility_criteria"]]
     application.application_stage = outcome["application_stage"]
     application.plot_allocation_status = outcome["plot_allocation_status"]
-    application.priority_primary = outcome["priority_primary"]
-    application.priority_secondary = outcome["priority_secondary"]
-    application.priority_label = outcome["priority_label"]
     application.save()
     return outcome

@@ -18,8 +18,8 @@
 
 <div class="page-header" data-header-ui-key="caseSectionLabel.{{ section }}">
     <h1>{{ section_title }}</h1>
-    <p class="page-header__lead" data-ui-skip>
-        Υπόθεση {{ case.case_number }} · {{ case.community.name }} · {{ case.get_case_type_display }}
+    <p class="page-header__lead">
+        <span data-ui-text>Υπόθεση</span> {{ case.case_number }} · {{ case.community.name }} · <span data-ui-text>{{ case.get_case_type_display }}</span>
     </p>
 </div>
 {% if not can_edit %}

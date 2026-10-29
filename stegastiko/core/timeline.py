@@ -34,6 +34,8 @@ ENTITY_LABELS = {
     "ApplicationParty": "Στοιχεία προσώπου αίτησης",
     "ApplicationChild": "7. Τέκνο",
     "IncomeDeclaration": "8. Εισόδημα",
+    "Objection": "Ένσταση (Ενότ. 7)",
+    "PendingRequirement": "Εκκρεμότητα / Επιπλέον στοιχείο (Ενότ. 7)",
     "Person": "Άτομο",
     "Case": "Υπόθεση",
     "CompletenessCheck": "2.1 Έλεγχος πληρότητας",
@@ -55,6 +57,7 @@ ENTITY_LABELS = {
     "Allocation": "Κατανομή οικοπέδου",
     "Payment": "Πληρωμή",
     "Agreement": "Σύμβαση",
+    "AgreementTemplate": "Πρότυπο Συμφωνίας (Παράρτημα 4)",
     "TitleTransfer": "Μεταβίβαση τίτλου",
     "ConstructionMonitoring": "Παρακολούθηση ανέγερσης",
     "Attachment": "Αρχείο",
@@ -78,10 +81,22 @@ EXTRA_FIELD_LABELS: dict[tuple[str, str], str] = {
     ("PlotApplication", "previous_housing_aid"): "Παραχώρηση άλλης κρατικής στεγαστικής βοήθειας (Ενότ. 20.3)",
     ("PlotApplication", "eligibility_override"): "Χειροκίνητη αλλαγή αποτελέσματος επιλεξιμότητας (Ενότ. 6)",
     ("PlotApplication", "eligibility_override_reason"): "Αιτιολογία χειροκίνητης αλλαγής αποτελέσματος (Ενότ. 6)",
-    ("PlotApplication", "incomplete_rejected"): "Απόρριψη αίτησης λόγω ελλείψεων (Ενότ. 5(β), 20.2)",
-    ("PlotApplication", "incomplete_rejection_reason"): "Αιτιολογία απόρριψης λόγω ελλείψεων (Ενότ. 5(β))",
-    ("PlotApplication", "incomplete_rejected_on"): "Ημερομηνία απόρριψης λόγω ελλείψεων",
+    ("PlotApplication", "incomplete_rejected"): "Απόρριψη αίτησης",
+    ("PlotApplication", "incomplete_rejection_reason"): "Λόγος απόρριψης",
+    ("PlotApplication", "incomplete_rejected_on"): "Ημερομηνία απόρριψης",
+    ("PlotApplication", "forfeited"): "Απόρριψη λόγω μη προσέλευσης/υπογραφής/πληρωμής",
+    ("PlotApplication", "forfeited_reason"): "Αιτιολογία απόρριψης (μη προσέλευση/υπογραφή/πληρωμή)",
+    ("PlotApplication", "forfeited_on"): "Ημερομηνία απόρριψης (μη προσέλευση/υπογραφή/πληρωμή)",
     ("PlotApplication", "priority_rank"): "Θέση στον κατάλογο προτεραιοποίησης (χειροκίνητη σειρά)",
+    ("Objection", "submitted_on"): "Ημερομηνία υποβολής ένστασης",
+    ("Objection", "objection_type"): "Είδος ένστασης",
+    ("Objection", "grounds"): "Αιτιολόγηση ένστασης",
+    ("Objection", "status"): "Απόφαση ένστασης",
+    ("Objection", "decided_on"): "Ημερομηνία απόφασης ένστασης",
+    ("Objection", "decision_notes"): "Σκεπτικό απόφασης ένστασης",
+    ("PendingRequirement", "description"): "Περιγραφή εκκρεμότητας",
+    ("PendingRequirement", "is_fulfilled"): "Προσκομίσθηκε",
+    ("PendingRequirement", "fulfilled_on"): "Ημερομηνία προσκόμισης",
     ("ApplicationParty", "role"): "Ρόλος",
     ("IncomeDeclaration", "child"): "Τέκνο",
     ("Case", "community"): "1.1 Κοινότητα / Δ.Δ.",
@@ -165,10 +180,15 @@ def _load_existing_instances(entries: list[ActionHistory]) -> dict[tuple[str, st
     for entry in entries:
         if entry.entity_type in models_map and str(entry.entity_id).isdigit():
             ids_by_type.setdefault(entry.entity_type, set()).add(int(entry.entity_id))
+        if entry.application_id and "PlotApplication" in models_map:
+            ids_by_type.setdefault("PlotApplication", set()).add(int(entry.application_id))
     instances: dict[tuple[str, str], models.Model] = {}
     for entity_type, pks in ids_by_type.items():
         model = models_map[entity_type]
-        for obj in model.objects.filter(pk__in=pks):
+        qs = model.objects.filter(pk__in=pks)
+        if entity_type == "PlotApplication":
+            qs = qs.select_related("applicant")
+        for obj in qs:
             instances[(entity_type, str(obj.pk))] = obj
     return instances
 
@@ -180,13 +200,31 @@ def _entity_label(entry: ActionHistory, instances: dict[tuple[str, str], models.
         if entry.section_ref and entry.entity_type in {"Attachment", "Consultation"}:
             return f"{base} ({entry.section_ref})"
         return base
+    if entry.entity_type == "PlotApplication":
+        applicant_name = (
+            f"{obj.applicant.first_name} {obj.applicant.last_name}".strip()
+            if getattr(obj, "applicant_id", None)
+            else ""
+        )
+        if obj.protocol_number and applicant_name:
+            return f"{base} {obj.protocol_number} ({applicant_name})"
+        if obj.protocol_number:
+            return f"{base} ({obj.protocol_number})"
+        return base
+    parent_app = (
+        instances.get(("PlotApplication", str(entry.application_id)))
+        if entry.application_id
+        else None
+    )
+    prefix = f"{parent_app.protocol_number} · " if parent_app and parent_app.protocol_number else ""
     if entry.entity_type == "ApplicationParty":
-        return f"Στοιχεία προσώπου ({obj.get_role_display()})"
+        return f"{prefix}Στοιχεία προσώπου ({obj.get_role_display()})"
     if entry.entity_type == "ApplicationChild":
         full_name = f"{obj.first_name} {obj.last_name}".strip()
-        return f"{base} ({full_name})" if full_name else base
+        label = f"{base} ({full_name})" if full_name else base
+        return f"{prefix}{label}"
     if entry.entity_type == "IncomeDeclaration":
-        return f"{base} ({obj.member_label})"
+        return f"{prefix}{base} ({obj.member_label})"
     if entry.entity_type == "CompletenessCheck":
         return f"{base} ({obj.sequence}ος έλεγχος)"
     if entry.entity_type == "LandPlot":
@@ -202,8 +240,19 @@ def _entity_label(entry: ActionHistory, instances: dict[tuple[str, str], models.
     if entry.entity_type == "Attachment":
         return f"{base} ({obj.filename})"
     if entry.entity_type == "Communication":
-        return f"{base} ({obj.recipient})"
-    return base
+        return f"{prefix}{base} ({obj.recipient})"
+    if entry.entity_type == "RankingEntry":
+        rank = obj.finalized_rank or obj.proposed_rank
+        position = f", θέση {rank}" if rank and obj.status != "rejected" else ""
+        return (
+            f"{prefix}{obj.ranking_list.get_list_type_display()} Κατάλογος Δικαιούχων "
+            f"({obj.get_status_display()}{position})"
+        )
+    if entry.entity_type == "Objection":
+        return f"{prefix}{base} ({obj.get_objection_type_display()})"
+    if entry.entity_type == "PendingRequirement":
+        return f"{prefix}{base} ({obj.description})"
+    return f"{prefix}{base}"
 
 
 def _get_model_field(entity_type: str, field_name: str):
@@ -218,9 +267,15 @@ def _get_model_field(entity_type: str, field_name: str):
         return None
 
 
-def get_field_label(entity_type: str, field_name: str) -> str:
+def get_field_label(entity_type: str, field_name: str, section_ref: str = "") -> str:
     if not field_name:
         return ""
+    if entity_type == "PlotApplication" and field_name == "priority_rank":
+        group = section_ref.split(":", 1)[1] if _is_prioritization_ref(section_ref) else ""
+        if group == "beneficiaries":
+            return "Θέση στον κατάλογο προτεραιοποίησης — Δικαιούχοι (χειροκίνητη σειρά)"
+        if group == "others":
+            return "Θέση στον κατάλογο προτεραιοποίησης — Μη δικαιούχοι / εκκρεμείς (χειροκίνητη σειρά)"
     labels = _form_field_labels()
     if (entity_type, field_name) in labels:
         return labels[(entity_type, field_name)]
@@ -328,10 +383,72 @@ def _format_change_values(entry: ActionHistory, fk_cache: dict[tuple[type, str],
         return _attached_documents_diff(entry.old_value, entry.new_value)
     if entry.entity_type == "PlotApplication" and entry.field_name == "document_notes":
         return _format_document_notes(entry.old_value), _format_document_notes(entry.new_value)
+    if entry.entity_type == "PlotApplication" and entry.field_name == "priority_rank":
+        return (
+            entry.old_value if entry.old_value else "Σειρά λογισμικού",
+            entry.new_value if entry.new_value else "Σειρά λογισμικού",
+        )
+    if entry.entity_type == "PlotApplication" and entry.field_name == "application_stage":
+        from plot_applications.stage_labels import get_application_stage_label
+
+        return (
+            get_application_stage_label(entry.old_value) if entry.old_value else "—",
+            get_application_stage_label(entry.new_value) if entry.new_value else "—",
+        )
+    if entry.entity_type == "PlotApplication" and entry.field_name == "eligibility_override":
+        old_val = (
+            "Αποτέλεσμα λογισμικού"
+            if not entry.old_value
+            else _format_scalar_value(entry.entity_type, entry.field_name, entry.old_value, fk_cache)
+        )
+        new_val = (
+            "Αποτέλεσμα λογισμικού"
+            if not entry.new_value
+            else _format_scalar_value(entry.entity_type, entry.field_name, entry.new_value, fk_cache)
+        )
+        return old_val, new_val
     return (
         _format_scalar_value(entry.entity_type, entry.field_name, entry.old_value, fk_cache),
         _format_scalar_value(entry.entity_type, entry.field_name, entry.new_value, fk_cache),
     )
+
+
+ORDER_REF_STAGES = {"prioritization": "prioritization", "objections": "objections"}
+
+
+def _is_prioritization_ref(section_ref: str) -> bool:
+    return bool(section_ref) and section_ref.split(":", 1)[0] in ORDER_REF_STAGES
+
+
+def _is_prioritization_entry(entry: ActionHistory) -> bool:
+    return _is_prioritization_ref(entry.section_ref)
+
+
+def _entry_stage(entry: ActionHistory) -> str:
+    """Στάδιο της αίτησης κατά την αλλαγή (`stage:<code>` ή αλλαγή σειράς `<stage>:<group>`)."""
+    prefix, _, rest = (entry.section_ref or "").partition(":")
+    if prefix in ("stage", "announcement_stage"):
+        return rest
+    return ORDER_REF_STAGES.get(prefix, "")
+
+
+def _event_stage_label(group: list[ActionHistory]) -> str:
+    from cases.models import SubmissionCycle
+    from plot_applications.stage_labels import (
+        DEFAULT_APPLICATION_STAGE_LABELS,
+        get_application_stage_label,
+    )
+
+    cycle_stage_labels = dict(SubmissionCycle.Stage.choices)
+    for entry in group:
+        stage = _entry_stage(entry)
+        if stage:
+            if stage in DEFAULT_APPLICATION_STAGE_LABELS:
+                return get_application_stage_label(stage)
+            if stage in cycle_stage_labels:
+                return str(cycle_stage_labels[stage])
+            return get_application_stage_label(stage)
+    return ""
 
 
 def _group_entries(entries: list[ActionHistory]) -> list[list[ActionHistory]]:
@@ -343,7 +460,24 @@ def _group_entries(entries: list[ActionHistory]) -> list[list[ActionHistory]]:
         current_group = groups[-1]
         prev_entry = current_group[-1]
         delta = abs((prev_entry.timestamp - entry.timestamp).total_seconds())
-        if entry.user_id == prev_entry.user_id and delta < GROUP_WINDOW_SECONDS:
+        same_prioritization_op = _is_prioritization_entry(entry) == _is_prioritization_entry(
+            prev_entry
+        )
+        duplicate_priority_rank = (
+            entry.field_name == "priority_rank"
+            and any(
+                e.entity_type == entry.entity_type
+                and e.entity_id == entry.entity_id
+                and e.field_name == "priority_rank"
+                for e in current_group
+            )
+        )
+        if (
+            entry.user_id == prev_entry.user_id
+            and delta < GROUP_WINDOW_SECONDS
+            and same_prioritization_op
+            and not duplicate_priority_rank
+        ):
             current_group.append(entry)
         else:
             groups.append([entry])
@@ -410,7 +544,9 @@ def build_timeline(entries) -> list[dict]:
                         "action": entry.action,
                         "action_label": action_label,
                         "field_name": entry.field_name,
-                        "field_label": get_field_label(entry.entity_type, entry.field_name),
+                        "field_label": get_field_label(
+                            entry.entity_type, entry.field_name, entry.section_ref
+                        ),
                         "old_value": old_val,
                         "new_value": new_val,
                         "is_field_update": True,
@@ -444,6 +580,7 @@ def build_timeline(entries) -> list[dict]:
                 "actor": actor,
                 "action": event_act,
                 "action_label": ACTION_LABELS.get(event_act, event_act),
+                "stage_label": _event_stage_label(group),
                 "changes": changes,
             }
         )

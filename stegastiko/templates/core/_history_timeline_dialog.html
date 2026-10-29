@@ -4,10 +4,10 @@
         data-history-timeline-dialog>
     <div class="approved-design-plots-workspace__header">
         <div>
-            <h2 class="card__title" id="history-timeline-dialog-title">
+            <h2 class="card__title" id="history-timeline-dialog-title" data-history-timeline-title-el>
                 Ιστορικό αλλαγών{% if timeline_subject %} — {{ timeline_subject }}{% endif %}
             </h2>
-            <p class="text-muted">Χρονολόγιο των αλλαγών που έγιναν στην αίτηση και από ποιον χρήστη (§Β.1.3).</p>
+            <p class="text-muted" data-history-timeline-lead-el>{{ timeline_lead|default:"Χρονολόγιο των αλλαγών που έγιναν στην αίτηση και από ποιον χρήστη (§Β.1.3)." }}</p>
         </div>
         <button type="button" class="btn btn-secondary btn-sm" data-dialog-close>Κλείσιμο</button>
     </div>
@@ -34,6 +34,14 @@
         const statusEl = dialog ? dialog.querySelector("[data-history-timeline-status]") : null;
         if (!dialog || !body) {
             return;
+        }
+        const titleEl = dialog.querySelector("[data-history-timeline-title-el]");
+        if (titleEl && open.dataset.historyTimelineTitle) {
+            titleEl.textContent = "Ιστορικό αλλαγών — " + open.dataset.historyTimelineTitle;
+        }
+        const leadEl = dialog.querySelector("[data-history-timeline-lead-el]");
+        if (leadEl && open.dataset.historyTimelineLead) {
+            leadEl.textContent = open.dataset.historyTimelineLead;
         }
         if (statusEl) {
             statusEl.innerHTML = "";

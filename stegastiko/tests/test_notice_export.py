@@ -72,17 +72,16 @@ def staff_client(client, make_user):
 
 @pytest.mark.django_db
 def test_notice_carries_the_announcement_data():
-    ripples = _community("Ριζοκάρπασο", code="1")
     abg = _community("Άγιος Γεώργιος", code="2")
-    cycle = _cycle((ripples, 3), (abg, 5))
+    cycle = _cycle((abg, 5))
 
     document = Document(render_notice(cycle))
     text = _text(document)
 
     assert "5 Οκτωβρίου, 2026" in text
     assert "τριών (3) μηνών" in text and "05/01/2027" in text
-    assert [row[1:] for row in _rows(document)[1:]] == [["Άγιος Γεώργιος", "5"], ["Ριζοκάρπασο", "3"]]
-    assert [row[0] for row in _rows(document)[1:]] == ["1", "2"]
+    assert [row[1:] for row in _rows(document)[1:]] == [["Άγιος Γεώργιος", "5"]]
+    assert [row[0] for row in _rows(document)[1:]] == ["1"]
     # Nothing of the sample notice is left.
     for sample in ("28 Σεπτεμβρίου", "30/11/2026", "δύο (2)", "Αγροκηπιά", "Μένοικο"):
         assert sample not in text

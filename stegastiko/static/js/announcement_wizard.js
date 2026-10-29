@@ -1,17 +1,17 @@
-// Γνωστοποιήσεις, βήμα 1: η ανακοίνωση εκδίδεται από τον Έπαρχο, άρα οι Κοινότητες
-// είναι μίας Επαρχίας. Μόλις επιλεγεί μία Κοινότητα, οι άλλες Επαρχίες απενεργοποιούνται.
+// Γνωστοποιήσεις, βήμα 1: όλα τα οικόπεδα μιας γνωστοποίησης ανήκουν στην ίδια Κοινότητα.
+// Μόλις επιλεγεί ένα οικόπεδο, τα οικόπεδα άλλων Κοινοτήτων απενεργοποιούνται.
 (function () {
-    const form = document.querySelector("[data-community-picker]");
+    const form = document.querySelector("[data-plot-picker]");
     if (!form) {
         return;
     }
-    const boxes = Array.from(form.querySelectorAll('input[name="communities"]'));
+    const boxes = Array.from(form.querySelectorAll('input[name="plots"]'));
 
     function sync() {
         const chosen = boxes.find(function (box) { return box.checked; });
-        const district = chosen ? chosen.dataset.district : null;
+        const community = chosen ? chosen.dataset.community : null;
         boxes.forEach(function (box) {
-            box.disabled = district !== null && box.dataset.district !== district;
+            box.disabled = community !== null && box.dataset.community !== community;
         });
     }
 

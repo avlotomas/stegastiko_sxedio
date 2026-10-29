@@ -59,7 +59,11 @@ MIDDLEWARE = [
     'core.middleware.CurrentUserMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'core.middleware.EmbedModeMiddleware',
 ]
+
+# Announcement workspace opens related pages in same-origin iframe modals.
+X_FRAME_OPTIONS = 'SAMEORIGIN'
 
 ROOT_URLCONF = 'config.urls'
 
@@ -120,6 +124,9 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
 
 # The SMTP server is configured in the Settings screen (SystemSetting); point this at
 # django.core.mail.backends.console.EmailBackend to print emails during development.

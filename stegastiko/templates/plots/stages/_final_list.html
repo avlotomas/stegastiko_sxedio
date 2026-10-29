@@ -1,0 +1,139 @@
+{# Στάδιο 5: Τελικός Κατάλογος Δικαιούχων (Ενότ. 7(ε), 8) #}
+<div class="card" data-announcement-stage="final_list" data-scroll-anchor="stage-final-list">
+    <div class="card__header-row" style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+        <h2 class="card__title" style="margin-bottom: 0;">
+            5. Τελικός Κατάλογος Δικαιούχων (Ενότ. 7(ε), 8){% if stage_done.final_list %} <span class="badge badge--pass">Ολοκληρώθηκε</span>{% endif %}
+        </h2>
+        <div class="toolbar" style="margin: 0; margin-left: auto;">
+            {% if lists.preliminary %}
+            <button type="button" class="btn btn-secondary btn-sm" data-dialog-open="preliminary-list-dialog" data-open-preliminary-list>
+                Κατάλογος Δικαιούχων (Προκαταρκτικός)
+            </button>
+            {% endif %}
+            <button type="button" class="btn btn-secondary btn-sm" data-dialog-open="applications-dialog" data-open-applications-modal data-ui-suffix=" ({{ applications|length }})">
+                Αιτήσεις ({{ applications|length }})
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" data-dialog-open="announcement-details-dialog" data-open-announcement-details-modal>
+                Στοιχεία γνωστοποίησης
+            </button>
+        </div>
+    </div>
+
+    {% if lists.preliminary %}
+    {% include "plots/_preliminary_list_dialog.html" %}
+    {% endif %}
+    {% include "plots/_applications_dialog.html" %}
+    {% include "plots/_announcement_details_dialog.html" %}
+
+    {% if cycle.stage == 'final_list' or lists.final %}
+    {% if not lists.final %}
+    <p class="helptext" style="margin-top: 0.75rem;">
+        Ο Έπαρχος καταρτίζει τον Τελικό Κατάλογο μετά την εξέταση των ενστάσεων (Ενότ. 7(ε)), με αφετηρία τον
+        Προκαταρκτικό Κατάλογο της Επιτροπής Εξέτασης Αιτήσεων (Στάδιο 3). Στον πίνακα αλλάζετε τη σειρά
+        (drag &amp; drop) ή το αποτέλεσμα («Αλλαγή αποτελέσματος») <strong>μόνο των αιτήσεων με ένσταση</strong>· οι ενστάσεις
+        και οι αποφάσεις εμφανίζονται πάνω από τον πίνακα. Με την έκδοση οι πρώτοι δικαιούχοι, όσα και τα οικόπεδα, λαμβάνουν
+        email δικαιούχου οικοπέδου και οι υπόλοιποι email επιλαχόντα (Ενότ. 8).
+    </p>
+    {% endif %}
+    {% if cycle.objections_closed_early %}
+    <div class="alert alert--error" data-objections-closed-early style="margin-top: 0.75rem;">
+        <span data-ui-text>Η περίοδος ενστάσεων έκλεισε στις</span> {{ cycle.objections_closed_on|date:"d/m/Y" }}, <span data-ui-text>πριν από τη λήξη της προθεσμίας</span>
+        ({{ lists.objection_deadline|date:"d/m/Y" }}), <span data-ui-text>κατόπιν αποδοχής της προειδοποίησης (Ενότ. 7(α)).</span>
+    </div>
+    {% endif %}
+    {% if cycle.community %}
+    <div class="toolbar" style="margin: 0.75rem 0;">
+        <a href="{% url 'plot_applications:prioritization' %}?community_id={{ cycle.community.pk }}&amp;list=final" class="btn btn-primary btn-sm" data-embed-title="Τελικός Κατάλογος Δικαιούχων" data-open-final-list>
+            {% if lists.final %}Προβολή Τελικού Καταλόγου{% else %}Επεξεργασία Τελικού Καταλόγου{% endif %}
+        </a>
+        <a href="{% url 'plot_applications:prioritization' %}?community_id={{ cycle.community.pk }}&amp;list=changes" class="btn btn-secondary btn-sm" data-embed-title="Αλλαγές έναντι Προκαταρκτικού Καταλόγου">
+            Αλλαγές έναντι Προκαταρκτικού
+        </a>
+    </div>
+    {% endif %}
+
+    <h3 class="form-section-title">Ενστάσεις και αποφάσεις (Ενότ. 7)</h3>
+    <div class="table-wrap">
+        <table class="data-table" data-final-list-objections>
+            <thead>
+                <tr>
+                    <th>Αρ. Πρωτ.</th>
+                    <th>Αιτητής/τρια</th>
+                    <th>Είδος ένστασης</th>
+                    <th>Αιτιολόγηση</th>
+                    <th>Απόφαση</th>
+                    <th>Σκεπτικό απόφασης</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for obj in objections %}
+                <tr>
+                    <td><a href="{% url 'plot_applications:detail' obj.application.pk %}"><strong>{{ obj.application.protocol_number }}</strong></a></td>
+                    <td>{{ obj.application.applicant.first_name }} {{ obj.application.applicant.last_name }}</td>
+                    <td>{{ obj.get_objection_type_display }}</td>
+                    <td>{{ obj.grounds }}</td>
+                    <td><span class="badge {% if obj.status == 'upheld' %}badge--pass{% elif obj.status == 'dismissed' %}badge--fail{% else %}badge--pending{% endif %}">{{ obj.get_status_display }}</span></td>
+                    <td>{{ obj.decision_notes|default:"—" }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="6" class="text-muted">Δεν υποβλήθηκαν ενστάσεις.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <h3 class="form-section-title">Αλλαγές του Τελικού Καταλόγου{% if not lists.final %} (υπό κατάρτιση){% endif %} έναντι του Προκαταρκτικού</h3>
+    <div class="table-wrap">
+        <table class="data-table" data-final-list-changes>
+            <thead>
+                <tr>
+                    <th>Αρ. Πρωτ.</th>
+                    <th>Αιτητής/τρια</th>
+                    <th>Αλλαγή</th>
+                    <th>Προκαταρκτικός</th>
+                    <th>Τελικός</th>
+                    <th>Αιτία</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for change in list_changes %}
+                <tr>
+                    <td><a href="{% url 'plot_applications:detail' change.application.pk %}"><strong>{{ change.application.protocol_number }}</strong></a></td>
+                    <td>{{ change.application.applicant.first_name }} {{ change.application.applicant.last_name }}</td>
+                    <td><span data-ui-text>{{ change.kind }}</span>{% if not change.is_direct %} <span class="text-muted" data-ui-text>(έμμεση)</span>{% endif %}</td>
+                    <td><span class="badge badge--{{ change.preliminary_badge }}">{{ change.preliminary_text }}</span></td>
+                    <td><span class="badge badge--{{ change.final_badge }}">{{ change.final_text }}</span></td>
+                    <td>{% for reason in change.reasons %}<div>{{ reason }}</div>{% empty %}—{% endfor %}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="6" class="text-muted">Ο Τελικός Κατάλογος δεν διαφέρει από τον Προκαταρκτικό.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if lists.final %}
+    <p>
+        <strong><span data-ui-text>Τελικός Κατάλογος Δικαιούχων:</span></strong> <span data-ui-text>εκδόθηκε στις</span> {{ lists.final.finalized_at|date:"d/m/Y H:i" }}
+        {% if lists.final.notifications_sent_at %}· <span data-ui-text>γνωστοποιήθηκε στους αιτητές</span> {{ lists.final.notifications_sent_at|date:"d/m/Y H:i" }}{% endif %}
+        · <span data-ui-text>διαθέσιμα οικόπεδα:</span> <strong>{{ lists.final.plots_count }}</strong>
+    </p>
+    {% else %}
+    <form method="post" action="{% url 'announcements:issue_final_list' cycle.pk %}" class="filter-form" style="margin-top: 1rem;"
+          data-confirm="Έκδοση του Τελικού Καταλόγου Δικαιούχων και αποστολή email σε δικαιούχους οικοπέδου και επιλαχόντες;">
+        {% csrf_token %}
+        <div>
+            <label for="final_decided_on">Ημερομηνία Τελικού Καταλόγου</label>
+            <input type="date" name="decided_on" id="final_decided_on" class="input" value="{{ cycle.objections_committee_date|date:'Y-m-d' }}">
+        </div>
+        <div>
+            <button type="submit" class="btn btn-primary" data-issue-final-and-email>
+                Έκδοση Τελικού Καταλόγου &amp; Αποστολή Email σε Δικαιούχους και Επιλαχόντες (Ενότ. 7, 8)
+            </button>
+        </div>
+    </form>
+    {% endif %}
+    {% else %}
+    <p class="text-muted" style="margin-top: 0.75rem;">Το στάδιο ενεργοποιείται μετά την εξέταση των ενστάσεων (Στάδιο 4).</p>
+    {% endif %}
+</div>

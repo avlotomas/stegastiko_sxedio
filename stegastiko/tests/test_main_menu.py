@@ -20,9 +20,8 @@ def test_menu_groups_requests_and_settings(client, make_user):
     nav = _nav(client.get(reverse("home")).content.decode())
     order = [
         "Αρχική",
-        "Αιτήσεις",
-        "Διαχωρισμού",
-        "Παραχώρησης οικοπέδου (Παρ. 3)",
+        "Αιτήσεις Διαχωρισμού",
+        "Γνωστοποιήσεις",
         "Υπενθυμίσεις",
         "Ρυθμίσεις",
         "Βασικές",
@@ -30,7 +29,9 @@ def test_menu_groups_requests_and_settings(client, make_user):
     positions = [nav.index(label) for label in order]
     assert positions == sorted(positions)
     assert reverse("cases:list") in nav
-    assert reverse("plot_applications:list") in nav
+    assert reverse("plot_applications:list") not in nav
+    assert reverse("plot_applications:prioritization") not in nav
+    assert reverse("announcements:list") in nav
     assert reverse("system_configuration") in nav
     assert "Εισαγωγή Excel" not in nav
     assert "/admin/" not in nav
@@ -51,7 +52,7 @@ def test_system_entry_is_the_technical_admin_for_staff_only(client):
 def test_menu_shows_only_permitted_sub_entries(client, make_user):
     client.force_login(make_user("engineer", "Τεχνικός λειτουργός"))
     nav = _nav(client.get(reverse("home")).content.decode())
-    assert "Διαχωρισμού" in nav
+    assert "Αιτήσεις Διαχωρισμού" in nav
     assert "Απόκτησης οικοπέδου" not in nav
     assert "Ρυθμίσεις" not in nav
 
@@ -63,14 +64,14 @@ def test_menu_labels_are_edited_from_basic_settings(client, make_user):
     page = client.get(url).content.decode()
     assert "Ονόματα μενού" in page
     data = {f"menu_{key}": DEFAULT_MENU_LABELS[key] for key, _, _ in MENU_LABEL_FIELDS}
-    data["menu_applications"] = "Φάκελοι"
+    data["menu_applications_division"] = "Φάκελοι Διαχωρισμού"
     data["menu_settings_basic"] = "Παράμετροι"
     assert client.post(url, data).status_code == 302
 
     nav = _nav(client.get(reverse("home")).content.decode())
-    assert "Φάκελοι" in nav
+    assert "Φάκελοι Διαχωρισμού" in nav
     assert "Παράμετροι" in nav
-    assert ">Αιτήσεις<" not in nav
+    assert ">Αιτήσεις Διαχωρισμού<" not in nav
 
 
 @pytest.mark.django_db

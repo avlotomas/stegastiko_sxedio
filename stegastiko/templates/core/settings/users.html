@@ -12,8 +12,8 @@
 <div class="page-header">
     <h1>Χρήστες</h1>
     <p class="page-header__lead">
-        Κάθε χρήστης αποκτά πρόσβαση μόνο μέσω των ρόλων του. Τα δικαιώματα ορίζονται στους
-        <a href="{% url 'settings_roles' %}">Ρόλους και δικαιώματα</a>.
+        <span data-ui-text>Κάθε χρήστης αποκτά πρόσβαση μόνο μέσω των ρόλων του. Τα δικαιώματα ορίζονται στους</span>
+        <a href="{% url 'settings_roles' %}" data-ui-text>Ρόλους και δικαιώματα</a>.
     </p>
 </div>
 
@@ -45,9 +45,9 @@
                 <td>
                     {% if item.is_superuser %}<span class="badge badge--pass">Υπερχρήστης — πλήρης πρόσβαση</span>{% endif %}
                     {% for role in item.app_roles.all %}
-                        {{ role.name }}{% if not role.is_active %} <span class="text-muted">(ανενεργός)</span>{% endif %}{% if not forloop.last %}<br>{% endif %}
+                        {{ role.name }}{% if not role.is_active %} <span class="text-muted" data-ui-text>(ανενεργός)</span>{% endif %}{% if not forloop.last %}<br>{% endif %}
                     {% empty %}
-                        {% if not item.is_superuser %}<span class="text-muted">Χωρίς ρόλο</span>{% endif %}
+                        {% if not item.is_superuser %}<span class="text-muted" data-ui-text>Χωρίς ρόλο</span>{% endif %}
                     {% endfor %}
                 </td>
                 <td>

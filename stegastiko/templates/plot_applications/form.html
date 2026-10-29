@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% load static %}
 
+{% block body_class %}case-work{% endblock %}
+
 {% block title %}{% if is_create %}Νέα αίτηση παραχώρησης οικοπέδου{% else %}Επεξεργασία {{ application.protocol_number }}{% endif %}{% endblock %}
 
 {% block content %}
@@ -31,387 +33,428 @@
     ο αιτητής υποβάλλει νέα, εφόσον η προθεσμία είναι ανοιχτή.
 </div>
 
-<div class="card">
 <form method="post" class="app-form plot-application-form" novalidate data-plot-application-form
       data-person-lookup-url="{% url 'plot_applications:person_lookup' %}">
     {% csrf_token %}
-    {% if form.non_field_errors %}
-    <div class="alert alert--error form-span-all">{% for error in form.non_field_errors %}{{ error }} {% endfor %}</div>
+
+    {% include "plot_applications/_toolbar.html" with is_edit_mode=True %}
+
+    {% if not is_create %}
+    <div data-plot-application-email-status></div>
     {% endif %}
 
-    <div data-plot-subsection="basic" {% if not is_create and not sub_edit.basic %}hidden data-subsection-hidden{% endif %}>
-        {% if is_create or sub_edit.basic %}<h3 class="form-section-title">Αίτηση</h3>{% endif %}
-        {% if not is_create %}<p class="form-readonly"><strong>Αρ. Πρωτοκόλλου:</strong> {{ application.protocol_number }}</p>{% endif %}
-        <div class="form-grid">
-            {% include "plot_applications/_field.html" with field=form.community wide=True %}
-            {% include "plot_applications/_field.html" with field=form.submitted_on %}
-        </div>
-    </div>
+    <div class="plot-app-edit-layout">
+        <aside class="plot-app-edit-layout__aside" aria-label="Έλεγχος πληρότητας αίτησης">
+            <div class="card completeness-panel {% if form_is_complete %}is-complete{% else %}is-incomplete{% endif %}"
+                 data-completeness-panel
+                 data-completeness-state="{% if form_is_complete %}complete{% else %}incomplete{% endif %}">
+                <div class="completeness-panel__header">
+                    <h2 class="completeness-panel__title">Πληρότητα αίτησης</h2>
+                    <span class="badge {% if form_is_complete %}badge--pass{% else %}badge--fail{% endif %}"
+                          data-completeness-panel-badge
+                          data-ui-skip>
+                        {% if form_is_complete %}ΠΛΗΡΗΣ{% else %}ΕΛΛΙΠΗΣ{% endif %}
+                    </span>
+                </div>
+                <p class="completeness-panel__summary" data-completeness-panel-summary data-ui-skip>
+                    {% if form_is_complete %}
+                    Η αίτηση είναι συμπληρωμένη. Όλα τα υποχρεωτικά πεδία και τα απαιτούμενα δικαιολογητικά έχουν συμπληρωθεί.
+                    {% else %}
+                    Η αίτηση είναι ελλιπής. Συμπληρώστε τα πεδία και τα δικαιολογητικά που λείπουν.
+                    {% endif %}
+                </p>
 
-    {# ───────────── 1 ───────────── #}
-    <div data-plot-subsection="section_1" {% if not is_create and not sub_edit.section_1 %}hidden data-subsection-hidden{% endif %}>
-        {% if is_create or sub_edit.section_1 %}<h3 class="form-section-title">1. Προσωπικά στοιχεία αιτητή/αιτήτριας</h3>{% endif %}
-        <div class="form-grid">
-            {% include "plot_applications/_person_fields.html" with person_form=forms.applicant %}
-            {% with p=forms.applicant_party %}
-            {% include "plot_applications/_field.html" with field=p.social_insurance_number %}
-            {% include "plot_applications/_field.html" with field=p.refugee_identity_number %}
-            {% include "plot_applications/_field.html" with field=p.citizenship %}
-            <div data-show-when="applicant_party-citizenship=other" hidden>
-                {% include "plot_applications/_field.html" with field=p.citizenship_other required=True %}
-            </div>
-            {% include "plot_applications/_field.html" with field=p.mobile_phone %}
-            {% include "plot_applications/_field.html" with field=p.landline_phone %}
-            {% endwith %}
-            {% include "plot_applications/_field.html" with field=form.email %}
-        </div>
-        <p class="helptext">Θα πρέπει να δηλωθεί έγκυρη ηλεκτρονική διεύθυνση για την επίσημη επικοινωνία και κοινοποίηση αποφάσεων (Ενότ. 6, 7).</p>
-        <h4 class="form-section-subtitle">Διεύθυνση αλληλογραφίας <span class="text-muted">(αν διαφέρει από τη διεύθυνση διαμονής)</span></h4>
-        <div class="form-grid">
-            {% include "plot_applications/_field.html" with field=form.correspondence_street %}
-            {% include "plot_applications/_field.html" with field=form.correspondence_number %}
-            {% include "plot_applications/_field.html" with field=form.correspondence_apartment %}
-            {% include "plot_applications/_field.html" with field=form.correspondence_community %}
-            {% include "plot_applications/_field.html" with field=form.correspondence_postal_code %}
-            {% include "plot_applications/_field.html" with field=form.correspondence_district %}
-        </div>
-    </div>
+                <div class="completeness-panel__section" data-missing-fields-section>
+                    <div class="completeness-panel__section-header">
+                        <h3 class="completeness-panel__section-title">Πεδία που λείπουν</h3>
+                        <span class="badge {% if not missing_completeness_fields %}badge--pass{% else %}badge--fail{% endif %}"
+                              data-missing-fields-count
+                              data-ui-skip>{{ missing_completeness_fields|length }}</span>
+                    </div>
+                    <ul class="completeness-panel__list"
+                        data-missing-fields-list
+                        data-ui-skip
+                        {% if not missing_completeness_fields %}hidden{% endif %}>
+                        {% for field_name, field_label in missing_completeness_fields %}
+                        <li class="completeness-panel__item" data-missing-field="{{ field_name }}">
+                            <button type="button"
+                                    class="completeness-panel__jump"
+                                    data-focus-field="{{ field_name }}">
+                                {{ field_label }}
+                            </button>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    <p class="completeness-panel__empty"
+                       data-missing-fields-empty
+                       data-ui-skip
+                       {% if missing_completeness_fields %}hidden{% endif %}>
+                        Όλα τα υποχρεωτικά πεδία έχουν συμπληρωθεί.
+                    </p>
+                </div>
 
-    {# ───────────── 2 ───────────── #}
-    <div data-plot-subsection="section_2" {% if not is_create and not sub_edit.section_2 %}hidden data-subsection-hidden{% endif %}>
-        {% if is_create or sub_edit.section_2 %}<h3 class="form-section-title">2. Τόπος διαμονής αιτητή/αιτήτριας</h3>{% endif %}
-        <p class="helptext">Οι όροι ερμηνεύονται στην Ενότητα 11 του Σχεδίου. Επισυνάπτονται τα πιστοποιητικά του Καταλόγου Δικαιολογητικών (Γ).</p>
-        <div class="form-grid">
-            {% include "plot_applications/_field.html" with field=form.residence_category wide=True %}
-        </div>
-        <h4 class="form-section-subtitle">Δήλωση διεύθυνσης (υφιστάμενη)</h4>
-        <div class="form-grid">
-            {% include "plot_applications/_field.html" with field=form.residence_street %}
-            {% include "plot_applications/_field.html" with field=form.residence_number %}
-            {% include "plot_applications/_field.html" with field=form.residence_apartment %}
-            {% include "plot_applications/_field.html" with field=form.residence_postal_code %}
-            <div class="form-span-all" data-show-when="main-residence_category=autochthon,displaced,repatriated,internal_emigrant" hidden>
-                {% include "plot_applications/_field.html" with field=form.residence_community wide=True %}
+                <div class="completeness-panel__section" data-missing-documents-section>
+                    <div class="completeness-panel__section-header">
+                        <h3 class="completeness-panel__section-title">Δικαιολογητικά που λείπουν</h3>
+                        <span class="badge {% if documents_is_complete %}badge--pass{% else %}badge--fail{% endif %}"
+                              data-missing-documents-count
+                              data-ui-skip>{{ missing_required_documents|length }}</span>
+                    </div>
+                    <ul class="completeness-panel__list"
+                        data-missing-documents-list
+                        data-ui-skip
+                        {% if documents_is_complete or not missing_required_documents %}hidden{% endif %}>
+                        {% for doc_code, doc_label in missing_required_documents %}
+                        <li class="completeness-panel__item" data-missing-document="{{ doc_code }}">
+                            <button type="button"
+                                    class="completeness-panel__jump"
+                                    data-focus-document="{{ doc_code }}">
+                                {{ doc_label }}
+                            </button>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    <p class="completeness-panel__empty"
+                       data-missing-documents-empty
+                       data-ui-skip
+                       {% if not documents_is_complete %}hidden{% endif %}>
+                        {% if form.documents_complete_override.value and documents_missing_count %}
+                        Ορίστηκε ότι τα δικαιολογητικά είναι εντάξει (παρά τις ελλείψεις).
+                        {% else %}
+                        Όλα τα απαιτούμενα δικαιολογητικά έχουν επισυναφθεί.
+                        {% endif %}
+                    </p>
+                    {% if is_create or sub_edit.documents or sub_view.documents %}
+                    <div class="completeness-panel__actions">
+                        <button type="button"
+                                class="btn btn-secondary btn-sm completeness-panel__docs-btn"
+                                data-completeness-open-documents>
+                            Άνοιγμα δικαιολογητικών
+                        </button>
+                    </div>
+                    {% endif %}
+                </div>
             </div>
-            <div class="form-span-all" data-show-when="main-residence_category=neighbouring" hidden>
-                {% include "plot_applications/_field.html" with field=form.neighbouring_community wide=True %}
-            </div>
-            {% include "plot_applications/_field.html" with field=form.resides_in_controlled_areas wide=True %}
-        </div>
+        </aside>
 
-        <div data-show-when="main-residence_category=internal_emigrant" hidden>
-            <h4 class="form-section-subtitle">(Β) Απόδημος Εσωτερικού</h4>
+        <div class="plot-app-edit-layout__main">
+    <div class="card">
+        {% if form.non_field_errors %}
+        <div class="alert alert--error form-span-all">{% for error in form.non_field_errors %}{{ error }} {% endfor %}</div>
+        {% endif %}
+
+        <div data-plot-subsection="basic" {% if not is_create and not sub_edit.basic %}hidden data-subsection-hidden{% endif %}>
+            {% if is_create or sub_edit.basic %}<h3 class="form-section-title">Αίτηση</h3>{% endif %}
+            {% if not is_create %}<p class="form-readonly"><strong><span data-ui-text>Αρ. Πρωτοκόλλου:</span></strong> {{ application.protocol_number }}</p>{% endif %}
             <div class="form-grid">
-                {% include "plot_applications/_field.html" with field=form.origin_parent_description wide=True %}
-                {% include "plot_applications/_field.html" with field=form.previous_residence_address wide=True %}
+                {% include "plot_applications/_field.html" with field=form.announcement wide=True %}
+                {% include "plot_applications/_field.html" with field=form.submitted_on %}
             </div>
         </div>
 
-        <div class="form-grid">
-            {% include "plot_applications/_field.html" with field=form.residence_notes wide=True %}
-        </div>
-    </div>
-
-    {# ───────────── 3 ───────────── #}
-    <div data-plot-subsection="section_3" {% if not is_create and not sub_edit.section_3 %}hidden data-subsection-hidden{% endif %}>
-        {% if is_create or sub_edit.section_3 %}<h3 class="form-section-title">3. Οικογενειακή κατάσταση</h3>{% endif %}
-        <p class="helptext">Μονήρη άτομα δεν είναι δικαιούχοι (Ενότ. 10.Α). Ο αριθμός τέκνων προκύπτει από τον πίνακα της Ενότητας 7.</p>
-        <div class="form-grid">
-            {% include "plot_applications/_field.html" with field=form.family_status %}
-            <div data-show-when="main-family_status=single_parent" hidden>
-                {% include "plot_applications/_field.html" with field=form.single_parent_status %}
-                {% include "plot_applications/_field.html" with field=form.single_parent_other %}
-            </div>
-        </div>
-    </div>
-
-    {# ───────────── 4 ───────────── #}
-    <div data-plot-subsection="section_4" {% if not is_create and not sub_edit.section_4 %}hidden data-subsection-hidden{% endif %}>
-        {% if is_create or sub_edit.section_4 %}<h3 class="form-section-title">4. Επαγγελματική και άλλη κατάσταση αιτητή/αιτήτριας</h3>{% endif %}
-        {% include "plot_applications/_employment.html" with p=forms.applicant_party %}
-    </div>
-
-    <div data-show-when="main-family_status=couple_with_children,couple_without_children" hidden>
-        {# ───────────── 5 ───────────── #}
-        <div data-plot-subsection="section_5" {% if not is_create and not sub_edit.section_5 %}hidden data-subsection-hidden{% endif %}>
-            {% if is_create or sub_edit.section_5 %}<h3 class="form-section-title">5. Προσωπικά στοιχεία συζύγου / συμβίου</h3>{% endif %}
+        {# ───────────── 1 ───────────── #}
+        <div data-plot-subsection="section_1" {% if not is_create and not sub_edit.section_1 %}hidden data-subsection-hidden{% endif %}>
+            {% if is_create or sub_edit.section_1 %}<h3 class="form-section-title">1. Προσωπικά στοιχεία αιτητή/αιτήτριας</h3>{% endif %}
             <div class="form-grid">
-                {% include "plot_applications/_person_fields.html" with person_form=forms.spouse %}
-                {% with p=forms.spouse_party %}
+                {% include "plot_applications/_person_fields.html" with person_form=forms.applicant %}
+                {% with p=forms.applicant_party %}
                 {% include "plot_applications/_field.html" with field=p.social_insurance_number %}
                 {% include "plot_applications/_field.html" with field=p.refugee_identity_number %}
-                {% include "plot_applications/_field.html" with field=p.alien_registration_number %}
                 {% include "plot_applications/_field.html" with field=p.citizenship %}
-                <div data-show-when="spouse_party-citizenship=other" hidden>
+                <div data-show-when="applicant_party-citizenship=other" hidden>
                     {% include "plot_applications/_field.html" with field=p.citizenship_other required=True %}
                 </div>
                 {% include "plot_applications/_field.html" with field=p.mobile_phone %}
                 {% include "plot_applications/_field.html" with field=p.landline_phone %}
-                {% include "plot_applications/_field.html" with field=p.email %}
                 {% endwith %}
+                {% include "plot_applications/_field.html" with field=form.email %}
+            </div>
+            <p class="helptext">Θα πρέπει να δηλωθεί έγκυρη ηλεκτρονική διεύθυνση για την επίσημη επικοινωνία και κοινοποίηση αποφάσεων (Ενότ. 6, 7).</p>
+            <h4 class="form-section-subtitle"><span data-ui-text>Διεύθυνση αλληλογραφίας</span> <span class="text-muted" data-ui-text>(αν διαφέρει από τη διεύθυνση διαμονής)</span></h4>
+            <div class="form-grid">
+                {% include "plot_applications/_field.html" with field=form.correspondence_street %}
+                {% include "plot_applications/_field.html" with field=form.correspondence_number %}
+                {% include "plot_applications/_field.html" with field=form.correspondence_apartment %}
+                {% include "plot_applications/_field.html" with field=form.correspondence_community %}
+                {% include "plot_applications/_field.html" with field=form.correspondence_postal_code %}
+                {% include "plot_applications/_field.html" with field=form.correspondence_district %}
             </div>
         </div>
 
-        {# ───────────── 6 ───────────── #}
-        <div data-plot-subsection="section_6" {% if not is_create and not sub_edit.section_6 %}hidden data-subsection-hidden{% endif %}>
-            {% if is_create or sub_edit.section_6 %}<h3 class="form-section-title">6. Επαγγελματική και άλλη κατάσταση συζύγου / συμβίου</h3>{% endif %}
-            {% include "plot_applications/_employment.html" with p=forms.spouse_party %}
-        </div>
-    </div>
-
-    {# ───────────── 7 ───────────── #}
-    <div data-plot-subsection="section_7" {% if not is_create and not sub_edit.section_7 %}hidden data-subsection-hidden{% endif %}>
-        {% if is_create or sub_edit.section_7 %}<h3 class="form-section-title">7. Τέκνα αιτητή/τριας που ζουν στην ίδια κατοικία</h3>{% endif %}
-        <p class="helptext">«Τέκνα» κατά την Ενότ. 10.Α: ανήλικα μέχρι 18, φοιτητές (μέχρι 23 θήλυ / 25 άρρεν), εθνοφρουροί, ενήλικα ΑμεΑ που δεν μπορούν να διαβιούν ανεξάρτητα.</p>
-        {% include "plot_applications/_formset.html" with formset=forms.children title="Τέκνο" add_label="+ Προσθήκη τέκνου" %}
-    </div>
-
-    {# ───────────── 8 ───────────── #}
-    <div data-plot-subsection="section_8" {% if not is_create and not sub_edit.section_8 %}hidden data-subsection-hidden{% endif %}>
-        {% if is_create or sub_edit.section_8 %}<h3 class="form-section-title">8. Εισοδήματα</h3>{% endif %}
-        <p class="helptext">«Οικογενειακό Ακαθάριστο Εισόδημα» του έτους που προηγείται της αίτησης (Ενότ. 10.Στ). Δεν λαμβάνονται υπόψη φοιτητική χορηγία, επίδομα τέκνου, μη επαναλαμβανόμενα επιδόματα και επιδόματα αναπηρίας τέκνων ΑμεΑ.</p>
-        {% include "plot_applications/_formset.html" with formset=forms.incomes title="Εισόδημα" add_label="+ Προσθήκη εισοδήματος" %}
-        <dl class="detail-grid" data-income-summary>
-            <div>
-                <dt>Σύσταση οικογένειας</dt>
-                <dd data-income-composition>—</dd>
+        {# ───────────── 2 ───────────── #}
+        <div data-plot-subsection="section_2" {% if not is_create and not sub_edit.section_2 %}hidden data-subsection-hidden{% endif %}>
+            {% if is_create or sub_edit.section_2 %}<h3 class="form-section-title">2. Τόπος διαμονής αιτητή/αιτήτριας</h3>{% endif %}
+            <p class="helptext">Οι όροι ερμηνεύονται στην Ενότητα 11 του Σχεδίου. Επισυνάπτονται τα πιστοποιητικά του Καταλόγου Δικαιολογητικών (Γ).</p>
+            <div class="form-grid">
+                {% include "plot_applications/_field.html" with field=form.residence_category wide=True %}
             </div>
-            <div>
-                <dt>Οικογενειακό ακαθάριστο εισόδημα</dt>
-                <dd>€ <span data-family-income-total>0.00</span></dd>
-            </div>
-            <div>
-                <dt>Ανώτατο όριο εισοδήματος (Ενότ. 10.Στ)</dt>
-                <dd data-income-limit>—</dd>
-            </div>
-            <div>
-                <dt>Κριτήριο εισοδήματος (Ενότ. 10.Στ)</dt>
-                <dd>
-                    <span class="badge badge--pending" data-income-criterion-badge>ΕΚΚΡΕΜΕΙ</span>
-                    <span data-income-criterion-note></span>
-                </dd>
-            </div>
-        </dl>
-    </div>
-
-    {# ───────────── 9 ───────────── #}
-    <div data-plot-subsection="section_9" {% if not is_create and not sub_edit.section_9 %}hidden data-subsection-hidden{% endif %}>
-        {% if is_create or sub_edit.section_9 %}<h3 class="form-section-title">9. Άλλη ακίνητη ιδιοκτησία</h3>{% endif %}
-        <p class="helptext">Σε απάντηση «Όχι» υποβάλλονται τα προβλεπόμενα Πιστοποιητικά ΤΚΧ. Σε απάντηση «Ναι» δίνονται διευκρινίσεις. Ισχύει χωριστά για κάθε πρόσωπο του Ζεύγους (Ενότ. 10.Δ).</p>
-        <div class="form-grid">
-            {% include "plot_applications/_field.html" with field=form.has_dwelling wide=True %}
-            {% include "plot_applications/_field.html" with field=form.has_dwelling_details wide=True %}
-            {% include "plot_applications/_field.html" with field=form.has_residential_land wide=True %}
-            {% include "plot_applications/_field.html" with field=form.has_residential_land_details wide=True %}
-        </div>
-    </div>
-
-    {# ───────────── 10 ───────────── #}
-    <div data-plot-subsection="section_10" {% if not is_create and not sub_edit.section_10 %}hidden data-subsection-hidden{% endif %}>
-        {% if is_create or sub_edit.section_10 %}<h3 class="form-section-title">10. Αποξένωση ακίνητης ιδιοκτησίας</h3>{% endif %}
-        <p class="helptext">Σε απάντηση «Όχι» υποβάλλονται τα προβλεπόμενα Πιστοποιητικά ΤΚΧ. Σε απάντηση «Ναι» δίνονται διευκρινίσεις. Ισχύει χωριστά για κάθε πρόσωπο του Ζεύγους (Ενότ. 10.Ε).</p>
-        <div class="form-grid">
-            {% include "plot_applications/_field.html" with field=form.has_alienated_property wide=True %}
-            {% include "plot_applications/_field.html" with field=form.has_alienated_property_details wide=True %}
-        </div>
-    </div>
-
-    {# ───────────── 11 ───────────── #}
-    <div data-plot-subsection="section_11" {% if not is_create and not sub_edit.section_11 %}hidden data-subsection-hidden{% endif %}>
-        {% if is_create or sub_edit.section_11 %}<h3 class="form-section-title">11. Παραχώρηση άλλης κρατικής στεγαστικής βοήθειας</h3>{% endif %}
-        <div class="form-grid">
-            {% include "plot_applications/_field.html" with field=form.previous_housing_aid wide=True %}
-            {% include "plot_applications/_field.html" with field=form.previous_housing_aid_details wide=True %}
-        </div>
-    </div>
-
-    {# ───────────── 12 ───────────── #}
-    <div data-plot-subsection="section_12" {% if not is_create and not sub_edit.section_12 %}hidden data-subsection-hidden{% endif %}>
-        {% if is_create or sub_edit.section_12 %}<h3 class="form-section-title">12. Υπεύθυνη δήλωση για τη δηλωθείσα ηλεκτρονική διεύθυνση</h3>{% endif %}
-        <div class="form-grid">
-            {% include "plot_applications/_field.html" with field=form.applicant_signed %}
-            <div data-show-when="main-family_status=couple_with_children,couple_without_children" hidden>
-                {% include "plot_applications/_field.html" with field=form.spouse_signed %}
-            </div>
-        </div>
-    </div>
-
-    <div data-plot-subsection="sworn_declaration" {% if not is_create and not sub_edit.sworn_declaration %}hidden data-subsection-hidden{% endif %}>
-        {% if is_create or sub_edit.sworn_declaration %}<h3 class="form-section-title">Ένορκη δήλωση</h3>{% endif %}
-        <div class="form-grid">
-            {% include "plot_applications/_field.html" with field=form.sworn_by_applicant %}
-            <div data-show-when="main-family_status=couple_with_children,couple_without_children" hidden>
-                {% include "plot_applications/_field.html" with field=form.sworn_by_spouse %}
-            </div>
-            {% include "plot_applications/_field.html" with field=form.sworn_declaration_date %}
-            {% include "plot_applications/_field.html" with field=form.sworn_court %}
-        </div>
-    </div>
-
-    <dialog id="plot-application-documents-dialog"
-            class="modal modal--wide modal--documents"
-            aria-labelledby="plot-application-documents-dialog-title"
-            data-plot-subsection="documents"
-            data-documents-modal
-            {% if not is_create and not sub_edit.documents %}hidden data-subsection-hidden{% endif %}>
-        <div class="approved-design-plots-workspace__header">
-            <div>
-                {% if is_create or sub_edit.documents %}<h3 class="form-section-title" id="plot-application-documents-dialog-title">Κατάλογος απαιτούμενων δικαιολογητικών εγγράφων</h3>{% endif %}
-                <p class="helptext">Σημειώστε ό,τι επισυνάπτεται. Χωρίς τα έγγραφα που εφαρμόζονται, η αίτηση ΔΕΝ θεωρείται πλήρης (Ενότ. 5, 20.2).</p>
-            </div>
-            <button type="button" class="btn btn-secondary btn-sm" data-dialog-close>Κλείσιμο</button>
-        </div>
-        <dl class="detail-grid" data-documents-completeness-summary>
-            <div>
-                <dt>Κατάσταση δικαιολογητικών</dt>
-                <dd>
-                    <span class="badge {% if documents_is_complete %}badge--pass{% else %}badge--fail{% endif %}"
-                          data-documents-completeness-badge>
-                        {% if documents_is_complete %}ΟΛΟΚΛΗΡΩΜΕΝΗ{% else %}ΕΛΛΙΠΗΣ{% endif %}
-                    </span>
-                </dd>
-            </div>
-            <div>
-                <dt>Απαιτούμενα / Επισυναπτόμενα</dt>
-                <dd data-documents-completeness-counts>
-                    {{ documents_attached_count }} από {{ documents_required_count }} απαιτούμενα
-                    ({% if documents_missing_count %}{{ documents_missing_count }} ελλείποντα{% else %}χωρίς ελλείψεις{% endif %})
-                </dd>
-            </div>
-        </dl>
-        {% if form.attached_documents.errors %}<ul class="errorlist">{% for e in form.attached_documents.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
-        {% for title, choices, group_visible in document_groups %}
-        <fieldset class="child-formset" data-document-group>
-            <legend>{{ title }}</legend>
-            <div class="document-checklist">
-                {% for choice in choices %}
-                <div class="document-checklist__row" data-document-row="{{ choice.data.value }}">
-                    <div class="document-checklist__item">
-                        <label class="checkbox-label{% if choice.data.value not in visible_documents %} is-disabled{% endif %}" data-document-code="{{ choice.data.value }}">{{ choice.tag }} <span>{{ choice.choice_label }}</span></label>
-                        <button type="button"
-                                class="document-note-btn{% if choice.note %} has-note{% endif %}"
-                                data-document-note-toggle="{{ choice.data.value }}"
-                                data-ui-skip
-                                aria-label="Σημείωση για το πιστοποιητικό"
-                                aria-expanded="false"
-                                title="{% if choice.note %}Σημείωση: {{ choice.note }}{% else %}Προσθήκη σημείωσης{% endif %}">
-                            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
-                                <path fill="currentColor" d="M2.5 1A1.5 1.5 0 0 0 1 2.5v8A1.5 1.5 0 0 0 2.5 12H5v2.5a.5.5 0 0 0 .85.35L8.7 12h4.8A1.5 1.5 0 0 0 15 10.5v-8A1.5 1.5 0 0 0 13.5 1h-11zm0 1h11a.5.5 0 0 1 .5.5v8a.5.5 0 0 1-.5.5H8.5a.5.5 0 0 0-.35.15L6 13.29V11.5a.5.5 0 0 0-.5-.5h-3a.5.5 0 0 1-.5-.5v-8a.5.5 0 0 1 .5-.5zm2 2a.5.5 0 0 0 0 1h7a.5.5 0 0 0 0-1h-7zm0 2.5a.5.5 0 0 0 0 1h7a.5.5 0 0 0 0-1h-7zm0 2.5a.5.5 0 0 0 0 1h4a.5.5 0 0 0 0-1h-4z"/>
-                            </svg>
-                        </button>
-                    </div>
-                    <div class="document-checklist__note" data-document-note-wrap="{{ choice.data.value }}" hidden>
-                        <input type="text"
-                               name="document_note_{{ choice.data.value }}"
-                               value="{{ choice.note }}"
-                               class="input document-note-input"
-                               data-document-note-input="{{ choice.data.value }}"
-                               placeholder="Σημείωση για το πιστοποιητικό…">
-                    </div>
+            <h4 class="form-section-subtitle">Δήλωση διεύθυνσης (υφιστάμενη)</h4>
+            <div class="form-grid">
+                {% include "plot_applications/_field.html" with field=form.residence_street %}
+                {% include "plot_applications/_field.html" with field=form.residence_number %}
+                {% include "plot_applications/_field.html" with field=form.residence_apartment %}
+                {% include "plot_applications/_field.html" with field=form.residence_postal_code %}
+                <div class="form-span-all" data-show-when="main-residence_category=autochthon,displaced,repatriated,internal_emigrant" hidden>
+                    {% include "plot_applications/_field.html" with field=form.residence_community wide=True %}
                 </div>
-                {% endfor %}
+                <div class="form-span-all" data-show-when="main-residence_category=neighbouring" hidden>
+                    {% include "plot_applications/_field.html" with field=form.neighbouring_community wide=True %}
+                </div>
+                {% include "plot_applications/_field.html" with field=form.resides_in_controlled_areas wide=True %}
             </div>
-        </fieldset>
-        {% endfor %}
-        <div class="form-grid">
-            {% include "plot_applications/_field.html" with field=form.other_documents wide=True %}
-            {% include "plot_applications/_field.html" with field=form.documents_complete_override wide=True %}
-            <div class="form-span-all" data-show-when="main-documents_complete_override=on" {% if not form.documents_complete_override.value %}hidden{% endif %}>
-                {% include "plot_applications/_field.html" with field=form.documents_complete_reason wide=True %}
-            </div>
-        </div>
-        <div class="form-actions">
-            <button type="button" class="btn btn-primary" data-dialog-close>Κλείσιμο</button>
-        </div>
-    </dialog>
 
-    {% if not is_create %}
-    <div data-plot-application-email-status></div>
-    <div data-plot-subsection="email_history" {% if not sub_edit.email_history %}hidden data-subsection-hidden{% endif %}>
-        {% if sub_edit.email_history %}
-        <h4 class="form-section-subtitle">Ιστορικό απεσταλμένων email</h4>
-        {% include "plot_applications/_email_log.html" %}
+            <div data-show-when="main-residence_category=internal_emigrant" hidden>
+                <h4 class="form-section-subtitle">(Β) Απόδημος Εσωτερικού</h4>
+                <div class="form-grid">
+                    {% include "plot_applications/_field.html" with field=form.origin_parent_description wide=True %}
+                    {% include "plot_applications/_field.html" with field=form.previous_residence_address wide=True %}
+                </div>
+            </div>
+
+            <div class="form-grid">
+                {% include "plot_applications/_field.html" with field=form.residence_notes wide=True %}
+            </div>
+        </div>
+
+        {# ───────────── 3 ───────────── #}
+        <div data-plot-subsection="section_3" {% if not is_create and not sub_edit.section_3 %}hidden data-subsection-hidden{% endif %}>
+            {% if is_create or sub_edit.section_3 %}<h3 class="form-section-title">3. Οικογενειακή κατάσταση</h3>{% endif %}
+            <p class="helptext">Μονήρη άτομα δεν είναι δικαιούχοι (Ενότ. 10.Α). Ο αριθμός τέκνων προκύπτει από τον πίνακα της Ενότητας 7.</p>
+            <div class="form-grid">
+                {% include "plot_applications/_field.html" with field=form.family_status %}
+                <div data-show-when="main-family_status=single_parent" hidden>
+                    {% include "plot_applications/_field.html" with field=form.single_parent_status %}
+                    {% include "plot_applications/_field.html" with field=form.single_parent_other %}
+                </div>
+            </div>
+        </div>
+
+        {# ───────────── 4 ───────────── #}
+        <div data-plot-subsection="section_4" {% if not is_create and not sub_edit.section_4 %}hidden data-subsection-hidden{% endif %}>
+            {% if is_create or sub_edit.section_4 %}<h3 class="form-section-title">4. Επαγγελματική και άλλη κατάσταση αιτητή/αιτήτριας</h3>{% endif %}
+            {% include "plot_applications/_employment.html" with p=forms.applicant_party %}
+        </div>
+
+        <div data-show-when="main-family_status=couple_with_children,couple_without_children" hidden>
+            {# ───────────── 5 ───────────── #}
+            <div data-plot-subsection="section_5" {% if not is_create and not sub_edit.section_5 %}hidden data-subsection-hidden{% endif %}>
+                {% if is_create or sub_edit.section_5 %}<h3 class="form-section-title">5. Προσωπικά στοιχεία συζύγου / συμβίου</h3>{% endif %}
+                <div class="form-grid">
+                    {% include "plot_applications/_person_fields.html" with person_form=forms.spouse %}
+                    {% with p=forms.spouse_party %}
+                    {% include "plot_applications/_field.html" with field=p.social_insurance_number %}
+                    {% include "plot_applications/_field.html" with field=p.refugee_identity_number %}
+                    {% include "plot_applications/_field.html" with field=p.alien_registration_number %}
+                    {% include "plot_applications/_field.html" with field=p.citizenship %}
+                    <div data-show-when="spouse_party-citizenship=other" hidden>
+                        {% include "plot_applications/_field.html" with field=p.citizenship_other required=True %}
+                    </div>
+                    {% include "plot_applications/_field.html" with field=p.mobile_phone %}
+                    {% include "plot_applications/_field.html" with field=p.landline_phone %}
+                    {% include "plot_applications/_field.html" with field=p.email %}
+                    {% endwith %}
+                </div>
+            </div>
+
+            {# ───────────── 6 ───────────── #}
+            <div data-plot-subsection="section_6" {% if not is_create and not sub_edit.section_6 %}hidden data-subsection-hidden{% endif %}>
+                {% if is_create or sub_edit.section_6 %}<h3 class="form-section-title">6. Επαγγελματική και άλλη κατάσταση συζύγου / συμβίου</h3>{% endif %}
+                {% include "plot_applications/_employment.html" with p=forms.spouse_party %}
+            </div>
+        </div>
+
+        {# ───────────── 7 ───────────── #}
+        <div data-plot-subsection="section_7" {% if not is_create and not sub_edit.section_7 %}hidden data-subsection-hidden{% endif %}>
+            {% if is_create or sub_edit.section_7 %}<h3 class="form-section-title">7. Τέκνα αιτητή/τριας που ζουν στην ίδια κατοικία</h3>{% endif %}
+            <p class="helptext">«Τέκνα» κατά την Ενότ. 10.Α: ανήλικα μέχρι 18, φοιτητές (μέχρι 23 θήλυ / 25 άρρεν), εθνοφρουροί, ενήλικα ΑμεΑ που δεν μπορούν να διαβιούν ανεξάρτητα.</p>
+            {% include "plot_applications/_formset.html" with formset=forms.children title="Τέκνο" add_label="+ Προσθήκη τέκνου" %}
+        </div>
+
+        {# ───────────── 8 ───────────── #}
+        <div data-plot-subsection="section_8" {% if not is_create and not sub_edit.section_8 %}hidden data-subsection-hidden{% endif %}>
+            {% if is_create or sub_edit.section_8 %}<h3 class="form-section-title">8. Εισοδήματα</h3>{% endif %}
+            <p class="helptext">«Οικογενειακό Ακαθάριστο Εισόδημα» του έτους που προηγείται της αίτησης (Ενότ. 10.Στ). Δεν λαμβάνονται υπόψη φοιτητική χορηγία, επίδομα τέκνου, μη επαναλαμβανόμενα επιδόματα και επιδόματα αναπηρίας τέκνων ΑμεΑ.</p>
+            {% include "plot_applications/_formset.html" with formset=forms.incomes title="Εισόδημα" add_label="+ Προσθήκη εισοδήματος" %}
+            <dl class="detail-grid" data-income-summary>
+                <div>
+                    <dt>Σύσταση οικογένειας</dt>
+                    <dd data-income-composition>—</dd>
+                </div>
+                <div>
+                    <dt>Οικογενειακό ακαθάριστο εισόδημα</dt>
+                    <dd>€ <span data-family-income-total>0.00</span></dd>
+                </div>
+                <div>
+                    <dt>Ανώτατο όριο εισοδήματος (Ενότ. 10.Στ)</dt>
+                    <dd data-income-limit>—</dd>
+                </div>
+                <div>
+                    <dt>Κριτήριο εισοδήματος (Ενότ. 10.Στ)</dt>
+                    <dd>
+                        <span class="badge badge--pending" data-income-criterion-badge>ΕΚΚΡΕΜΕΙ</span>
+                        <span data-income-criterion-note></span>
+                    </dd>
+                </div>
+            </dl>
+        </div>
+
+        {# ───────────── 9 ───────────── #}
+        <div data-plot-subsection="section_9" {% if not is_create and not sub_edit.section_9 %}hidden data-subsection-hidden{% endif %}>
+            {% if is_create or sub_edit.section_9 %}<h3 class="form-section-title">9. Άλλη ακίνητη ιδιοκτησία</h3>{% endif %}
+            <p class="helptext">Σε απάντηση «Όχι» υποβάλλονται τα προβλεπόμενα Πιστοποιητικά ΤΚΧ. Σε απάντηση «Ναι» δίνονται διευκρινίσεις. Ισχύει χωριστά για κάθε πρόσωπο του Ζεύγους (Ενότ. 10.Δ).</p>
+            <div class="form-grid">
+                {% include "plot_applications/_field.html" with field=form.has_dwelling wide=True %}
+                {% include "plot_applications/_field.html" with field=form.has_dwelling_details wide=True %}
+                {% include "plot_applications/_field.html" with field=form.has_residential_land wide=True %}
+                {% include "plot_applications/_field.html" with field=form.has_residential_land_details wide=True %}
+            </div>
+        </div>
+
+        {# ───────────── 10 ───────────── #}
+        <div data-plot-subsection="section_10" {% if not is_create and not sub_edit.section_10 %}hidden data-subsection-hidden{% endif %}>
+            {% if is_create or sub_edit.section_10 %}<h3 class="form-section-title">10. Αποξένωση ακίνητης ιδιοκτησίας</h3>{% endif %}
+            <p class="helptext">Σε απάντηση «Όχι» υποβάλλονται τα προβλεπόμενα Πιστοποιητικά ΤΚΧ. Σε απάντηση «Ναι» δίνονται διευκρινίσεις. Ισχύει χωριστά για κάθε πρόσωπο του Ζεύγους (Ενότ. 10.Ε).</p>
+            <div class="form-grid">
+                {% include "plot_applications/_field.html" with field=form.has_alienated_property wide=True %}
+                {% include "plot_applications/_field.html" with field=form.has_alienated_property_details wide=True %}
+            </div>
+        </div>
+
+        {# ───────────── 11 ───────────── #}
+        <div data-plot-subsection="section_11" {% if not is_create and not sub_edit.section_11 %}hidden data-subsection-hidden{% endif %}>
+            {% if is_create or sub_edit.section_11 %}<h3 class="form-section-title">11. Παραχώρηση άλλης κρατικής στεγαστικής βοήθειας</h3>{% endif %}
+            <div class="form-grid">
+                {% include "plot_applications/_field.html" with field=form.previous_housing_aid wide=True %}
+                {% include "plot_applications/_field.html" with field=form.previous_housing_aid_details wide=True %}
+            </div>
+        </div>
+
+        {# ───────────── 12 ───────────── #}
+        <div data-plot-subsection="section_12" {% if not is_create and not sub_edit.section_12 %}hidden data-subsection-hidden{% endif %}>
+            {% if is_create or sub_edit.section_12 %}<h3 class="form-section-title">12. Υπεύθυνη δήλωση για τη δηλωθείσα ηλεκτρονική διεύθυνση</h3>{% endif %}
+            <div class="form-grid">
+                {% include "plot_applications/_field.html" with field=form.applicant_signed %}
+                <div data-show-when="main-family_status=couple_with_children,couple_without_children" hidden>
+                    {% include "plot_applications/_field.html" with field=form.spouse_signed %}
+                </div>
+            </div>
+        </div>
+
+        <div data-plot-subsection="sworn_declaration" {% if not is_create and not sub_edit.sworn_declaration %}hidden data-subsection-hidden{% endif %}>
+            {% if is_create or sub_edit.sworn_declaration %}<h3 class="form-section-title">Ένορκη δήλωση</h3>{% endif %}
+            <div class="form-grid">
+                {% include "plot_applications/_field.html" with field=form.sworn_by_applicant %}
+                <div data-show-when="main-family_status=couple_with_children,couple_without_children" hidden>
+                    {% include "plot_applications/_field.html" with field=form.sworn_by_spouse %}
+                </div>
+                {% include "plot_applications/_field.html" with field=form.sworn_declaration_date %}
+                {% include "plot_applications/_field.html" with field=form.sworn_court %}
+            </div>
+        </div>
+
+        {% if is_create or sub_edit.documents %}
+        <dialog id="plot-application-documents-dialog"
+                class="modal modal--wide modal--documents"
+                aria-labelledby="plot-application-documents-dialog-title"
+                data-plot-subsection="documents"
+                data-documents-modal>
+            <div class="approved-design-plots-workspace__header">
+                <div>
+                    <h3 class="form-section-title" id="plot-application-documents-dialog-title">Κατάλογος απαιτούμενων δικαιολογητικών εγγράφων</h3>
+                    <p class="helptext">Σημειώστε ό,τι επισυνάπτεται. Χωρίς τα έγγραφα που εφαρμόζονται, η αίτηση ΔΕΝ θεωρείται πλήρης (Ενότ. 5, 20.2).</p>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" data-dialog-close>Κλείσιμο</button>
+            </div>
+            <dl class="detail-grid" data-documents-completeness-summary>
+                <div>
+                    <dt>Κατάσταση δικαιολογητικών</dt>
+                    <dd>
+                        <span class="badge {% if documents_is_complete %}badge--pass{% else %}badge--fail{% endif %}"
+                              data-documents-completeness-badge>
+                            {% if documents_is_complete %}ΟΛΟΚΛΗΡΩΜΕΝΗ{% else %}ΕΛΛΙΠΗΣ{% endif %}
+                        </span>
+                    </dd>
+                </div>
+                <div>
+                    <dt>Απαιτούμενα / Επισυναπτόμενα</dt>
+                    <dd data-documents-completeness-counts>
+                        {{ documents_attached_count }} από {{ documents_required_count }} απαιτούμενα
+                        ({% if documents_missing_count %}{{ documents_missing_count }} ελλείποντα{% else %}χωρίς ελλείψεις{% endif %})
+                    </dd>
+                </div>
+            </dl>
+            {% if form.attached_documents.errors %}<ul class="errorlist">{% for e in form.attached_documents.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+            {% for title, choices, group_visible in document_groups %}
+            <fieldset class="child-formset" data-document-group>
+                <legend>{{ title }}</legend>
+                <div class="document-checklist">
+                    {% for choice in choices %}
+                    <div class="document-checklist__row" data-document-row="{{ choice.data.value }}">
+                        <div class="document-checklist__item">
+                            <label class="checkbox-label{% if choice.data.value not in visible_documents %} is-disabled{% endif %}" data-document-code="{{ choice.data.value }}">{{ choice.tag }} <span>{{ choice.choice_label }}</span></label>
+                            <button type="button"
+                                    class="document-note-btn{% if choice.note %} has-note{% endif %}"
+                                    data-document-note-toggle="{{ choice.data.value }}"
+                                    data-ui-skip
+                                    aria-label="Σημείωση για το πιστοποιητικό"
+                                    aria-expanded="false"
+                                    title="{% if choice.note %}Σημείωση: {{ choice.note }}{% else %}Προσθήκη σημείωσης{% endif %}">
+                                <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+                                    <path fill="currentColor" d="M2.5 1A1.5 1.5 0 0 0 1 2.5v8A1.5 1.5 0 0 0 2.5 12H5v2.5a.5.5 0 0 0 .85.35L8.7 12h4.8A1.5 1.5 0 0 0 15 10.5v-8A1.5 1.5 0 0 0 13.5 1h-11zm0 1h11a.5.5 0 0 1 .5.5v8a.5.5 0 0 1-.5.5H8.5a.5.5 0 0 0-.35.15L6 13.29V11.5a.5.5 0 0 0-.5-.5h-3a.5.5 0 0 1-.5-.5v-8a.5.5 0 0 1 .5-.5zm2 2a.5.5 0 0 0 0 1h7a.5.5 0 0 0 0-1h-7zm0 2.5a.5.5 0 0 0 0 1h7a.5.5 0 0 0 0-1h-7zm0 2.5a.5.5 0 0 0 0 1h4a.5.5 0 0 0 0-1h-4z"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="document-checklist__note" data-document-note-wrap="{{ choice.data.value }}" hidden>
+                            <input type="text"
+                                   name="document_note_{{ choice.data.value }}"
+                                   value="{{ choice.note }}"
+                                   class="input document-note-input"
+                                   data-document-note-input="{{ choice.data.value }}"
+                                   placeholder="Σημείωση για το πιστοποιητικό…">
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </fieldset>
+            {% endfor %}
+            <div class="form-grid">
+                {% include "plot_applications/_field.html" with field=form.other_documents wide=True %}
+                {% include "plot_applications/_field.html" with field=form.documents_complete_override wide=True %}
+                <div class="form-span-all" data-show-when="main-documents_complete_override=on" {% if not form.documents_complete_override.value %}hidden{% endif %}>
+                    {% include "plot_applications/_field.html" with field=form.documents_complete_reason wide=True %}
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-primary" data-dialog-close>Κλείσιμο</button>
+            </div>
+        </dialog>
+        {% else %}
+        <div data-plot-subsection="documents" hidden data-subsection-hidden></div>
+        {% endif %}
+
+        {% if not is_create %}
+        <div data-plot-subsection="email_history" {% if not sub_edit.email_history and not sub_view.email_history %}hidden data-subsection-hidden{% endif %}>
+            {% if sub_edit.email_history or sub_view.email_history %}
+            <h4 class="form-section-subtitle">Ιστορικό απεσταλμένων email</h4>
+            {% include "plot_applications/_email_log.html" %}
+            {% endif %}
+        </div>
+        {% else %}
+        <p class="helptext">Αποθηκεύστε την αίτηση για αποστολή email στον αιτητή και τήρηση ιστορικού απεσταλμένων email.</p>
         {% endif %}
     </div>
-    {% else %}
-    <p class="helptext">Αποθηκεύστε την αίτηση για αποστολή email στον αιτητή και τήρηση ιστορικού απεσταλμένων email.</p>
-    {% endif %}
-
-    <div class="form-actions form-actions--sticky" data-sticky-form-actions>
-        <div class="form-actions__group">
-            <span class="save-btn-wrapper" data-save-button-wrapper>
-                <button type="submit" class="btn btn-primary" data-save-button>Αποθήκευση</button>
-                <div class="save-btn-tooltip" role="tooltip" data-save-tooltip hidden></div>
-            </span>
-            {% if not is_create and access.plot_applications.view %}
-            <a href="{% url 'plot_applications:detail' application.pk %}" class="btn btn-secondary">Κατάσταση</a>
-            {% endif %}
-            <a href="{% url 'plot_applications:list' %}" class="btn btn-secondary">{% if is_create %}Ακύρωση{% else %}Πίσω στον κατάλογο{% endif %}</a>
         </div>
-        <div class="form-actions__group">
-            {% if is_create or sub_edit.documents %}
-            <button type="button"
-                    class="btn btn-secondary"
-                    data-dialog-open="plot-application-documents-dialog"
-                    data-documents-modal-open
-                    aria-controls="plot-application-documents-dialog">
-                <span>Απαιτούμενα δικαιολογητικά</span>
-                <span class="badge {% if documents_is_complete %}badge--pass{% else %}badge--fail{% endif %}"
-                      data-documents-button-badge
-                      data-ui-skip>
-                    {% if documents_is_complete %}Ολοκληρωμένη{% else %}Ελλιπής{% endif %}
-                </span>
-            </button>
-            {% endif %}
-            {% if not is_create and can_send_email %}
-            <button type="button"
-                    class="btn btn-secondary"
-                    data-dialog-open="plot-application-email-dialog"
-                    data-email-action="{% url 'plot_applications:email_send' application.pk %}"
-                    data-email-subject="{{ email_subject }}"
-                    data-email-recipient="{{ application.email }}"
-                    data-copy-text="{{ missing_documents_text }}"
-                    data-check-label="Αίτηση {{ application.protocol_number }}"
-                    data-collect-live-missing="1">
-                Αποστολή Email
-            </button>
-            {% endif %}
-            {% if not is_create and sub_view.change_history %}
-            <button type="button"
-                    class="btn btn-secondary"
-                    data-history-timeline-open="{% url 'plot_applications:history' application.pk %}"
-                    aria-controls="history-timeline-dialog">
-                Ιστορικό αλλαγών
-            </button>
-            {% endif %}
-        </div>
-        {% if not is_create and access.plot_applications.delete %}
-        <div class="form-actions__group form-actions__group--end">
-            <button type="submit"
-                    form="plot-application-delete-form"
-                    class="btn btn-danger"
-                    {% if delete_refusal %}disabled title="{{ delete_refusal }}"{% endif %}>
-                Διαγραφή
-            </button>
-        </div>
-        {% endif %}
     </div>
 </form>
-{% if not is_create and access.plot_applications.delete %}
-<form id="plot-application-delete-form"
-      method="post"
-      action="{% url 'plot_applications:delete' application.pk %}"
-      data-confirm="Διαγραφή της αίτησης {{ application.protocol_number }};">
-    {% csrf_token %}
-</form>
+
+{% if not is_create and not sub_edit.documents and sub_view.documents %}
+{% include "plot_applications/_documents_readonly_dialog.html" %}
 {% endif %}
-</div>
-{% if not is_create and can_send_email %}
-{% include "plot_applications/_email_dialog.html" %}
+
+{% if not is_create %}
+{% include "plot_applications/_action_dialogs.html" %}
 {% endif %}
-{% if not is_create and sub_view.change_history %}
-{% include "core/_history_timeline_dialog.html" with timeline_subject=application.protocol_number %}
-{% endif %}
+
 {% include "plot_applications/_formset_dialogs.html" %}
 <dialog id="person-edit-dialog" class="modal" data-person-edit-dialog>
     <div class="alert alert--error" data-person-edit-errors hidden></div>
@@ -419,6 +462,6 @@
 </dialog>
 {{ form.community_names|json_script:"community-names" }}
 {{ income_parameters|json_script:"income-parameters" }}
-<script src="{% static 'js/plot_application.js' %}?v=15"></script>
+<script src="{% static 'js/plot_application.js' %}?v=17"></script>
 <script src="{% static 'js/plot_application_person.js' %}?v=2"></script>
 {% endblock %}

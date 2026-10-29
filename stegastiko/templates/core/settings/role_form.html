@@ -7,12 +7,12 @@
 <span>/</span>
 <a href="{% url 'settings_roles' %}">Ρόλοι και δικαιώματα</a>
 <span>/</span>
-<span>{% if role %}{{ role.name }}{% else %}Νέος ρόλος{% endif %}</span>
+<span{% if role %} data-ui-skip{% endif %}>{% if role %}{{ role.name }}{% else %}Νέος ρόλος{% endif %}</span>
 {% endblock %}
 
 {% block settings_main %}
 <div class="page-header">
-    <h1>{% if role %}Ρόλος «{{ role.name }}»{% else %}Νέος ρόλος{% endif %}</h1>
+    <h1>{% if role %}<span data-ui-text>Ρόλος</span> «{{ role.name }}»{% else %}Νέος ρόλος{% endif %}</h1>
     {% if not can_edit %}
     <p class="page-header__lead">Προβολή μόνο — δεν έχετε δικαίωμα τροποποίησης ρόλων.</p>
     {% endif %}
@@ -126,14 +126,14 @@
             {{ member.username }}
             {% endif %}
             {% if member.get_full_name %}— {{ member.get_full_name }}{% endif %}
-            {% if not member.is_active %}<span class="text-muted">(ανενεργός)</span>{% endif %}
+            {% if not member.is_active %}<span class="text-muted" data-ui-text>(ανενεργός)</span>{% endif %}
         </li>
         {% endfor %}
     </ul>
     {% else %}
     <p class="text-muted">Ο ρόλος δεν έχει ανατεθεί σε χρήστη.</p>
     {% endif %}
-    <p class="helptext">Η ανάθεση ρόλου γίνεται από την οθόνη <a href="{% url 'settings_users' %}">Χρήστες</a>.</p>
+    <p class="helptext"><span data-ui-text>Η ανάθεση ρόλου γίνεται από την οθόνη</span> <a href="{% url 'settings_users' %}" data-ui-text>Χρήστες</a>.</p>
 </div>
 
 {% if can_delete %}

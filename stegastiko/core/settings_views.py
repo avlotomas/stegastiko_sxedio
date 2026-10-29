@@ -7,17 +7,25 @@ from django.views.decorators.http import require_POST
 
 from cases.case_label_groups import case_label_groups, section_toc_label
 from core.configuration_forms import (
+    AgreementTemplateUploadForm,
     SystemBrandingSettingsForm,
     SystemCaseLabelSettingsForm,
     SystemEmailSettingsForm,
     SystemMenuLabelSettingsForm,
+    SystemPlotApplicationGridSettingsForm,
     SystemPlotApplicationLabelSettingsForm,
     SystemSectionLabelSettingsForm,
     SystemSubsectionLabelSettingsForm,
     SystemWorkflowSettingsForm,
 )
-from core.function_catalog import EDIT, VIEW
+from core.docx_merge import (
+    AGREEMENT_DISTRICT_OFFICER_DEFAULT,
+    AGREEMENT_DISTRICT_OFFICER_KEY,
+    AGREEMENT_PLACEHOLDERS,
+)
+from core.function_catalog import EDIT, IMPORT, VIEW
 from core.permissions import access_required, has_access
+from core.services import get_setting, set_setting
 from core.settings_navigation import settings_nav
 from core.ui_texts import (
     UI_EDIT_MODE_SESSION_KEY,
@@ -216,6 +224,22 @@ def system_settings_plot_application_labels(request):
     )
 
 
+@access_required("settings_plot_application_labels", post_action=EDIT)
+def system_settings_plot_application_grid(request):
+    return _settings_form_view(
+        request,
+        section_key="plot_application_grid",
+        function_code="settings_plot_application_labels",
+        form_class=SystemPlotApplicationGridSettingsForm,
+        template_name="core/settings/form_page.html",
+        page_title="Πίνακας αιτήσεων παραχώρησης οικοπέδου",
+        page_lead=(
+            "Επιλογή των ορατών στηλών στον πίνακα των αιτήσεων παραχώρησης οικοπέδου "
+            "και πλήθος σταθερών (locked) στηλών από την αρχή κατά την οριζόντια κύλιση."
+        ),
+    )
+
+
 @access_required("settings_section_labels", post_action=EDIT)
 def system_settings_section_labels(request):
     return redirect("system_settings_case_labels")
@@ -235,7 +259,66 @@ def system_settings_email(request):
         form_class=SystemEmailSettingsForm,
         template_name="core/settings/form_page.html",
         page_title="Αποστολή email (SMTP)",
-        page_lead="Διακομιστής για το email ελλείψεων (2.2) και προεπιλεγμένο θέμα.",
+        page_lead="Διακομιστής SMTP και πρότυπα θεμάτων/κειμένων email (ελλείψεις, Προκαταρκτικός/Τελικός Κατάλογος, ενστάσεις, κλήρωση, Συμφωνία, επιλαχόντες).",
+    )
+
+
+@access_required("settings_agreement_templates")
+def system_settings_agreement_templates(request):
+    from allocation.models import AgreementTemplate
+
+    can_upload = has_access(request.user, "settings_agreement_templates", IMPORT) or has_access(
+        request.user, "settings_agreement_templates", EDIT
+    )
+    if request.method == "POST":
+        if not can_upload:
+            raise PermissionDenied("Δεν έχετε δικαίωμα μεταφόρτωσης προτύπου Συμφωνίας.")
+        if "save_agreement_settings" in request.POST or (
+            f"setting_{AGREEMENT_DISTRICT_OFFICER_KEY}" in request.POST
+            and "template_file" not in request.FILES
+        ):
+            raw_officer = (
+                request.POST.get(f"setting_{AGREEMENT_DISTRICT_OFFICER_KEY}")
+                or request.POST.get(AGREEMENT_DISTRICT_OFFICER_KEY)
+                or ""
+            ).strip()
+            set_setting(
+                AGREEMENT_DISTRICT_OFFICER_KEY,
+                raw_officer,
+                "Έπαρχος στη Συμφωνία Παραχώρησης (Παράρτημα 4, Ενότ. 12)",
+            )
+            messages.success(request, "Οι ρυθμίσεις αποθηκεύτηκαν.")
+            return redirect("system_settings_agreement_templates")
+        form = AgreementTemplateUploadForm(request.POST, request.FILES)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Το πρότυπο Συμφωνίας Παραχώρησης αποθηκεύτηκε.")
+            return redirect("system_settings_agreement_templates")
+    else:
+        form = AgreementTemplateUploadForm()
+    if not can_upload:
+        for field in form.fields.values():
+            field.disabled = True
+    templates = AgreementTemplate.objects.order_by("-is_active", "-id")
+    district_officer = get_setting(
+        AGREEMENT_DISTRICT_OFFICER_KEY, AGREEMENT_DISTRICT_OFFICER_DEFAULT
+    )
+    return render(
+        request,
+        "core/settings/agreement_templates.html",
+        {
+            "form": form,
+            "can_edit": can_upload,
+            "templates": templates,
+            "placeholders": AGREEMENT_PLACEHOLDERS,
+            "district_officer": district_officer,
+            "settings_nav": settings_nav(request.user, "agreement_templates"),
+            "page_title": "Πρότυπο Συμφωνίας Παραχώρησης (Παράρτημα 4)",
+            "page_lead": (
+                "Παράμετροι και πρότυπο αρχείου Word (.docx) για την αυτόματη συμπλήρωση των στοιχείων της αίτησης "
+                "και του οικοπέδου κατά την υπογραφή της Συμφωνίας Παραχώρησης (Ενότ. 12, 15)."
+            ),
+        },
     )
 
 

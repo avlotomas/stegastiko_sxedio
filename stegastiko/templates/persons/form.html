@@ -6,7 +6,7 @@
 <nav class="breadcrumb" aria-label="Πλοήγηση">
     <a href="{% url 'persons:list' %}">Άτομα</a>
     <span>/</span>
-    <span>{% if is_create %}Νέο άτομο{% else %}{{ person.identity_number }}{% endif %}</span>
+    <span{% if not is_create %} data-ui-skip{% endif %}>{% if is_create %}Νέο άτομο{% else %}{{ person.identity_number }}{% endif %}</span>
 </nav>
 
 <div class="page-header">
@@ -82,7 +82,7 @@
                     </td>
                     <td>{{ application.community.name }}</td>
                     <td>{{ application.submitted_on|date:"d/m/Y"|default:"—" }}</td>
-                    <td>{% if application.applicant_id == person.pk %}Αιτητής/τρια{% else %}Σύζυγος/Συμβίος{% endif %}</td>
+                    <td>{% if application.applicant_id == person.pk %}<span data-ui-text>Αιτητής/τρια</span>{% else %}<span data-ui-text>Σύζυγος/Συμβίος</span>{% endif %}</td>
                     <td>
                         <span class="badge badge--{{ application.stage_badge }}" data-application-stage-badge>
                             {{ application.application_stage_label }}
@@ -99,16 +99,20 @@
                             {{ application.get_documents_completeness_display }}
                         </span>
                     </td>
-                    <td><span class="badge badge--{{ application.eligibility_result }}">{{ application.get_eligibility_result_display }}</span></td>
+                    <td>{% if application.eligibility_label %}<span class="badge badge--{{ application.eligibility_result }}">{{ application.eligibility_label }}</span>{% else %}—{% endif %}</td>
                     <td>
+                        {% if application.beneficiary_label %}
                         <span class="badge badge--{{ application.beneficiary_status }}" data-application-beneficiary-badge>
                             {{ application.beneficiary_label }}
                         </span>
+                        {% else %}—{% endif %}
                     </td>
                     <td>
+                        {% if application.plot_allocation_label %}
                         <span class="badge badge--{{ application.plot_allocation_badge }}" data-application-plot-allocation-badge>
-                            {{ application.get_plot_allocation_status_display }}
+                            {{ application.plot_allocation_label }}
                         </span>
+                        {% else %}—{% endif %}
                     </td>
                     <td class="data-table__actions">
                         {% if access.plot_applications.view %}

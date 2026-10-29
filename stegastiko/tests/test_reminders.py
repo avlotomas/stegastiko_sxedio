@@ -56,13 +56,26 @@ def _division_consultation(case, due_date):
     )
 
 
+def _dashboard_reminders_card_html(html: str) -> str:
+    """Isolate the dashboard reminders card; case numbers also appear in the cases pipeline table."""
+    marker = "data-dashboard-reminders-card"
+    start = html.find(marker)
+    if start < 0:
+        return ""
+    end = html.find("data-dashboard-announcements-pipeline", start)
+    if end < 0:
+        end = len(html)
+    return html[start:end]
+
+
 @pytest.mark.django_db
 def test_marking_reminder_as_read_hides_it_from_dashboard_but_keeps_it_on_reminders_page(
     officer_client,
 ):
     case, consultation = _case_with_consultation(timezone.localdate() + timedelta(days=2))
     dashboard_html = officer_client.get(reverse("home")).content.decode()
-    assert case.case_number in dashboard_html
+    reminders_card = _dashboard_reminders_card_html(dashboard_html)
+    assert case.case_number in reminders_card
 
     response = officer_client.post(
         reverse("reminder_mark_read"),
@@ -75,7 +88,8 @@ def test_marking_reminder_as_read_hides_it_from_dashboard_but_keeps_it_on_remind
     assert response.status_code == 302
 
     dashboard_html = officer_client.get(reverse("home")).content.decode()
-    assert case.case_number not in dashboard_html
+    reminders_card = _dashboard_reminders_card_html(dashboard_html)
+    assert case.case_number not in reminders_card
 
     reminders_html = officer_client.get(reverse("reminders")).content.decode()
     assert case.case_number in reminders_html
@@ -100,9 +114,10 @@ def test_consultation_reminders_follow_the_configured_days_threshold(officer_cli
     due_now_case, _ = _case_with_consultation(timezone.localdate() + timedelta(days=1))
 
     dashboard_html = officer_client.get(reverse("home")).content.decode()
-    assert due_now_case.case_number in dashboard_html
-    assert far_case.case_number not in dashboard_html
-    assert "Δεν υπάρχουν υπενθυμίσεις" not in dashboard_html
+    reminders_card = _dashboard_reminders_card_html(dashboard_html)
+    assert due_now_case.case_number in reminders_card
+    assert far_case.case_number not in reminders_card
+    assert "Δεν υπάρχουν υπενθυμίσεις για εκκρεμείς διαβουλεύσεις." not in reminders_card
     reminders_html = officer_client.get(reverse("reminders")).content.decode()
     assert due_now_case.case_number in reminders_html
     assert far_case.case_number not in reminders_html

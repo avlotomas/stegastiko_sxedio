@@ -52,10 +52,22 @@ SETTINGS_NAV_SECTIONS = (
         "function": "settings_plot_application_labels",
     },
     {
+        "key": "plot_application_grid",
+        "url_name": "system_settings_plot_application_grid",
+        "label": "Πίνακας αιτήσεων παραχώρησης οικοπέδου",
+        "function": "settings_plot_application_labels",
+    },
+    {
         "key": "email",
         "url_name": "system_settings_email",
         "label": "Αποστολή email (SMTP)",
         "function": "settings_email",
+    },
+    {
+        "key": "agreement_templates",
+        "url_name": "system_settings_agreement_templates",
+        "label": "Πρότυπο Συμφωνίας (Παράρτημα 4)",
+        "function": "settings_agreement_templates",
     },
 )
 

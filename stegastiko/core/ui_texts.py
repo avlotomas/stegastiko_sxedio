@@ -113,7 +113,7 @@ def get_ui_text_overrides() -> dict[str, str]:
     return overrides
 
 
-def _require_non_empty_text(value: str, max_length: int = 512) -> str:
+def _require_non_empty_text(value: str, max_length: int = 2000) -> str:
     cleaned = (value or "").strip()
     if not cleaned:
         raise ValidationError("Το κείμενο δεν μπορεί να είναι κενό.")
@@ -193,7 +193,7 @@ def save_ui_text_entry(
         if reset:
             delete_setting(key)
             return ""
-        cleaned = _require_non_empty_text(value, max_length=512)
+        cleaned = _require_non_empty_text(value, max_length=2000)
         desc = (description or "").strip()[:255] or f"Κείμενο οθόνης ({key})"
         set_setting(key, cleaned, desc)
         return cleaned

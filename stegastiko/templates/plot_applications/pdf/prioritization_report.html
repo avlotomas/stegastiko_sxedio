@@ -110,7 +110,7 @@
 <div id="report_footer">
     <table>
         <tr>
-            <td style="font-size: 7pt;">Κατάλογος προτεραιοποίησης · Κοινότητα {{ community.name }} · Έκδοση {{ issued_at|date:"d/m/Y H:i" }}</td>
+            <td style="font-size: 7pt;">{{ report_title|capfirst }} · Κοινότητα {{ community.name }} · Εξαγωγή {{ issued_at|date:"d/m/Y H:i" }}</td>
             <td style="font-size: 7pt; text-align: right;">Σελίδα <pdf:pagenumber> από <pdf:pagecount></td>
         </tr>
     </table>
@@ -123,14 +123,26 @@
 </div>
 
 <h1>{{ report_title }}</h1>
+{% if is_final_draft %}
+<p class="muted">Ο Τελικός Κατάλογος διαμορφώνεται στην περίοδο ενστάσεων (Ενότ. 7) και δεν έχει εκδοθεί. Προκαταρκτικός Κατάλογος: εκδόθηκε {{ lists.preliminary.finalized_at|date:"d/m/Y H:i" }}.</p>
+{% endif %}
 
 <table class="case-info">
     <tr><td class="label">Κοινότητα / Δ.Δ.</td><td>{{ community.name }}</td></tr>
     <tr><td class="label">Επαρχία</td><td>{{ community.district|default:"—" }}</td></tr>
-    <tr><td class="label">Ημερομηνία έκδοσης</td><td>{{ issued_at|date:"d/m/Y H:i" }}</td></tr>
+    {% if ranking_list %}
+    <tr><td class="label">Ημερομηνία έκδοσης καταλόγου</td><td>{{ ranking_list.finalized_at|date:"d/m/Y H:i" }}</td></tr>
+    {% if ranking_list.objection_deadline %}
+    <tr><td class="label">Λήξη περιόδου ενστάσεων (Ενότ. 7)</td><td>{{ ranking_list.objection_deadline|date:"d/m/Y" }}</td></tr>
+    {% endif %}
+    {% if is_final %}
+    <tr><td class="label">Διαθέσιμα οικόπεδα (Ενότ. 8)</td><td>{{ ranking_list.plots_count|default:"0" }}</td></tr>
+    {% endif %}
+    {% endif %}
+    <tr><td class="label">Ημερομηνία εξαγωγής</td><td>{{ issued_at|date:"d/m/Y H:i" }}</td></tr>
     <tr>
         <td class="label">Πλήθος αιτήσεων</td>
-        <td>{{ prioritization.beneficiaries|length }} δικαιούχοι · {{ prioritization.others|length }} μη δικαιούχοι / εκκρεμείς</td>
+        <td>{{ prioritization.beneficiaries|length }} δικαιούχοι · {{ prioritization.others|length }} μη δικαιούχοι{% if not ranking_list %} / εκκρεμείς{% endif %}</td>
     </tr>
 </table>
 
@@ -145,7 +157,7 @@
         <th width="15%">Τόπος διαμονής (Ενότ. 11.1)</th>
         <th width="13%">Σύνθεση οικογένειας (Ενότ. 11.2)</th>
         <th width="5%">Τέκνα (10.Α)</th>
-        <th width="6%">Σειρά λογισμικού</th>
+        <th width="6%">{% if is_final %}Αποτέλεσμα (Ενότ. 8){% elif ranking_list or is_final_draft %}Αποτέλεσμα{% else %}Σειρά λογισμικού{% endif %}</th>
         <th width="14%">Παρατηρήσεις</th>
     </tr>
     {% for row in prioritization.beneficiaries %}
@@ -158,13 +170,20 @@
         <td>{% if app.spouse %}{{ app.spouse.first_name }} {{ app.spouse.last_name }}<br><span class="muted">ΑΔΤ {{ app.spouse.identity_number }}</span>{% else %}—{% endif %}</td>
         <td>{{ row.primary_label }}</td>
         <td>{{ row.secondary_label }}</td>
-        <td class="num">{{ app.recognized_children_count }}</td>
+        <td class="num">{{ row.children_count }}</td>
+        {% if row.list_status %}
+        <td class="status-{{ row.list_status_badge }}">{{ row.list_status }}</td>
+        {% elif is_final_draft %}
+        <td class="status-pass">ΔΙΚΑΙΟΥΧΟΣ</td>
+        {% else %}
         <td class="num">{{ row.auto_position }}</td>
+        {% endif %}
         <td>
             {% if row.is_moved %}Χειροκίνητη αλλαγή σειράς.<br>{% endif %}
             {% if row.tied_with %}Ισοψηφία με {{ row.tied_with|join:", " }} — κλήρωση (Ενότ. 8, 11.3).<br>{% endif %}
-            {% if app.eligibility_override == "pass" %}Χειροκίνητα ΔΙΚΑΙΟΥΧΟΣ: {{ app.eligibility_override_reason|linebreaksbr }}{% endif %}
-            {% if not row.is_moved and not row.tied_with and app.eligibility_override != "pass" %}—{% endif %}
+            {% if row.override_pass_reason %}Χειροκίνητα ΔΙΚΑΙΟΥΧΟΣ: {{ row.override_pass_reason|linebreaksbr }}<br>{% endif %}
+            {% if row.changed_since_preliminary %}{{ row.preliminary_note }}<br>{% endif %}
+            {% if not row.is_moved and not row.tied_with and not row.override_pass_reason and not row.changed_since_preliminary %}—{% endif %}
         </td>
     </tr>
     {% endwith %}
@@ -173,7 +192,7 @@
     {% endfor %}
 </table>
 
-<h2>2. Μη δικαιούχοι / εκκρεμείς — λόγος (Ενότ. 6, 10, 20)</h2>
+<h2>2. {% if ranking_list %}Μη δικαιούχοι — απόρριψη από την Επιτροπή{% else %}Μη δικαιούχοι / εκκρεμείς{% endif %} — λόγος (Ενότ. 6, 10, 20)</h2>
 <table class="grid" repeat="1">
     <tr>
         <th width="5%">Α/Α</th>
@@ -192,8 +211,12 @@
         <td>{{ app.submitted_on|date:"d/m/Y"|default:"—" }}</td>
         <td>{{ app.applicant.first_name }} {{ app.applicant.last_name }}<br><span class="muted">ΑΔΤ {{ app.applicant.identity_number }}</span></td>
         <td>{% if app.spouse %}{{ app.spouse.first_name }} {{ app.spouse.last_name }}<br><span class="muted">ΑΔΤ {{ app.spouse.identity_number }}</span>{% else %}—{% endif %}</td>
-        <td class="status-{{ app.beneficiary_status }}">{{ app.beneficiary_label }}</td>
-        <td>{% for reason in row.reasons %}{{ reason }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</td>
+        {% if row.list_status %}
+        <td class="status-{{ row.list_status_badge }}">{{ row.list_status }}</td>
+        {% else %}
+        <td class="status-{{ app.beneficiary_status }}">{{ app.beneficiary_label|default:"—" }}</td>
+        {% endif %}
+        <td>{% for reason in row.reasons %}{{ reason }}{% if not forloop.last %}<br>{% endif %}{% endfor %}{% if row.changed_since_preliminary %}<br>{{ row.preliminary_note }}{% endif %}</td>
     </tr>
     {% endwith %}
     {% empty %}

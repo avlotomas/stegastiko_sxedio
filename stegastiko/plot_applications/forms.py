@@ -5,6 +5,7 @@ from django.db.models import Count, Q
 
 from applications.models import Person
 from applications.person_identity import PERSON_FIELD_LABELS
+from cases.models import SubmissionCycle
 from core.appendix1 import appendix1_choices
 from core.forms import IsoDateInput
 from core.models import Community
@@ -17,6 +18,8 @@ from plot_applications.models import (
     ApplicationParty,
     EligibilityOverride,
     IncomeDeclaration,
+    Objection,
+    PendingRequirement,
     PlotApplication,
     ResidenceCategory,
 )
@@ -28,7 +31,11 @@ COMMUNITY_LOCKED_CATEGORIES = (
     ResidenceCategory.REPATRIATED,
 )
 
-YES_NO_CHOICES = (("True", "Ναι"), ("False", "Όχι"))
+YES_NO_CHOICES = (
+    ("True", "Ναι"),
+    ("False", "Όχι"),
+    ("", "Μη ορισμένο"),
+)
 
 
 def _style(form):
@@ -204,7 +211,7 @@ class PlotApplicationForm(forms.ModelForm):
     class Meta:
         model = PlotApplication
         fields = [
-            "community",
+            "announcement",
             "submitted_on",
             "email",
             "correspondence_street",
@@ -246,7 +253,7 @@ class PlotApplicationForm(forms.ModelForm):
             "documents_complete_reason",
         ]
         labels = {
-            "community": "Κοινότητα στην οποία ζητείται η παραχώρηση οικοπέδου",
+            "announcement": "Γνωστοποίηση υποβολής αιτήσεων",
             "submitted_on": "Ημερομηνία υποβολής",
             "email": "Ηλεκτρονική Διεύθυνση",
             "correspondence_street": "Οδός",
@@ -303,24 +310,73 @@ class PlotApplicationForm(forms.ModelForm):
             ),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, data=None, *args, **kwargs):
         kwargs.pop("is_draft", None)
-        super().__init__(*args, **kwargs)
-        # Η Αίτηση δεν συνδέεται με Γνωστοποιήσεις: προσφέρονται οι ενεργές Κοινότητες που
-        # έχουν διαθέσιμα Οικόπεδα, με τον αριθμό τους. Στην επεξεργασία μένει μόνο η υπάρχουσα.
-        communities = Community.objects.annotate(
-            available_plots=Count("plots", filter=Q(plots__in=Plot.objects.available()))
-        )
-        if self.instance.pk:
-            communities = communities.filter(pk=self.instance.community_id)
+        prefix = kwargs.get("prefix")
+        ann_key = f"{prefix}-announcement" if prefix else "announcement"
+        comm_key = f"{prefix}-community" if prefix else "community"
+        if data is not None and ann_key not in data and comm_key in data:
+            data = data.copy()
+            raw_comm = str(data.get(comm_key) or "").strip()
+            if raw_comm.isdigit():
+                comm_id = int(raw_comm)
+                cycle = (
+                    SubmissionCycle.objects.filter(plots__community_id=comm_id)
+                    .exclude(stage=SubmissionCycle.Stage.CLOSED)
+                    .order_by("-published_at", "-announcement_date", "-pk")
+                    .first()
+                    or SubmissionCycle.objects.filter(plots__community_id=comm_id)
+                    .order_by("-published_at", "-announcement_date", "-pk")
+                    .first()
+                )
+                if cycle is not None:
+                    data[ann_key] = str(cycle.pk)
+                else:
+                    data[ann_key] = ""
+            else:
+                data[ann_key] = raw_comm
+        super().__init__(data, *args, **kwargs)
+        # Η Αίτηση συνδέεται με τη Γνωστοποίηση (η οποία προσφέρει τα οικόπεδα μίας Κοινότητας).
+        announcements = SubmissionCycle.objects.prefetch_related("plots__community")
+        if self.instance.pk and self.instance.announcement_id:
+            announcements = announcements.filter(pk=self.instance.announcement_id)
         else:
-            communities = communities.filter(is_active=True, available_plots__gt=0)
-        community_field = self.fields["community"]
-        community_field.queryset = communities.order_by("name")
-        community_field.label_from_instance = lambda community: (
-            f"{community.name} ({community.available_plots})"
-        )
-        self.community_names = {str(c.pk): c.name for c in communities}
+            available_ids = (
+                SubmissionCycle.objects.exclude(stage=SubmissionCycle.Stage.CLOSED)
+                .filter(
+                    plots__valuation_amount__isnull=False,
+                    plots__disposal_price__isnull=False,
+                    plots__community__is_active=True,
+                )
+                .exclude(plots__allocations__status="active")
+                .values_list("pk", flat=True)
+            )
+            bound_id = None
+            if self.is_bound:
+                raw = self.data.get(self.add_prefix("announcement"))
+                if raw and str(raw).isdigit():
+                    bound_id = int(raw)
+            elif self.initial.get("announcement"):
+                init_val = self.initial["announcement"]
+                bound_id = init_val.pk if hasattr(init_val, "pk") else (int(init_val) if str(init_val).isdigit() else None)
+            q = Q(pk__in=available_ids)
+            if bound_id:
+                q |= Q(pk=bound_id)
+            announcements = announcements.filter(q).distinct()
+        announcement_field = self.fields["announcement"]
+        announcement_field.queryset = announcements.order_by("-announcement_date", "-id")
+
+        def _label(cycle: SubmissionCycle) -> str:
+            comm = cycle.community
+            plots_cnt = len(list(cycle.plots.all()))
+            if comm is not None:
+                return f"{comm.name} ({plots_cnt}) — γνωστοποίηση {cycle.announcement_date:%d/%m/%Y}"
+            return f"Γνωστοποίηση {cycle.announcement_date:%d/%m/%Y} ({plots_cnt})"
+
+        announcement_field.label_from_instance = _label
+        self.community_names = {
+            str(c.pk): (c.community.name if c.community is not None else "") for c in announcements
+        }
         for name in ("submitted_on", "email", "residence_category", "family_status"):
             self.fields[name].required = not self.is_bound
         self.fields["residence_community"].required = False
@@ -328,17 +384,19 @@ class PlotApplicationForm(forms.ModelForm):
             field.help_text = ""
         if self.instance.pk and self.instance.residence_category == ResidenceCategory.NEIGHBOURING:
             self.initial.setdefault("neighbouring_community", self.instance.residence_community)
-        if self.instance.pk:
-            for bool_field in (
-                "has_dwelling",
-                "has_residential_land",
-                "has_alienated_property",
-                "previous_housing_aid",
-            ):
-                val = getattr(self.instance, bool_field)
-                self.initial.setdefault(
-                    bool_field, "" if val is None else ("True" if val else "False")
-                )
+        for bool_field in (
+            "has_dwelling",
+            "has_residential_land",
+            "has_alienated_property",
+            "previous_housing_aid",
+        ):
+            val = self.initial.get(bool_field, getattr(self.instance, bool_field, None))
+            if val is True or val == "True":
+                self.initial[bool_field] = "True"
+            elif val is False or val == "False":
+                self.initial[bool_field] = "False"
+            else:
+                self.initial[bool_field] = ""
         for name in ("residence_category", "family_status"):
             self.fields[name].choices = [c for c in self.fields[name].choices if c[0]]
         self.fields["single_parent_status"].choices = [
@@ -348,10 +406,10 @@ class PlotApplicationForm(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
-        if self.instance.pk and cleaned.get("community") and (
-            cleaned["community"].pk != self.instance.community_id
+        if self.instance.pk and cleaned.get("announcement") and (
+            cleaned["announcement"].pk != self.instance.announcement_id
         ):
-            self.add_error("community", "Η Κοινότητα δεν αλλάζει μετά την καταχώριση.")
+            self.add_error("announcement", "Η Γνωστοποίηση δεν αλλάζει μετά την καταχώριση.")
         if self.fields["family_status"].disabled and self.instance.pk:
             cleaned["family_status"] = self.instance.family_status
             cleaned["single_parent_status"] = self.instance.single_parent_status
@@ -379,7 +437,10 @@ class PlotApplicationForm(forms.ModelForm):
     def _clean_residence_community(self, cleaned):
         category = cleaned.get("residence_category")
         if category in COMMUNITY_LOCKED_CATEGORIES:
-            community = cleaned.get("community")
+            announcement = cleaned.get("announcement") or (
+                self.instance.announcement if self.instance.pk and self.instance.announcement_id else None
+            )
+            community = announcement.community if announcement else None
             cleaned["residence_community"] = community.name if community else ""
         elif category == ResidenceCategory.NEIGHBOURING:
             chosen = cleaned.get("neighbouring_community") or ""
@@ -715,24 +776,27 @@ class PlotApplicationEligibilityOverrideForm(forms.Form):
 
 
 class PlotApplicationIncompleteRejectionForm(forms.Form):
-    """Απόρριψη ελλιπούς αίτησης λόγω έλλειψης στοιχείων ή πιστοποιητικών (Ενότ. 5(β), 20.2)."""
+    """Απόρριψη αίτησης από τον λειτουργό με υποχρεωτικό λόγο σε ελεύθερο κείμενο."""
+
+    required_css_class = "required"
 
     incomplete_rejection_reason = forms.CharField(
-        label="Αιτιολογία απόρριψης",
+        label="Λόγος απόρριψης",
         widget=forms.Textarea(
             attrs={
                 "class": "input",
                 "rows": 3,
-                "placeholder": "Περιγράψτε τα στοιχεία ή πιστοποιητικά που λείπουν…",
+                "required": "required",
+                "placeholder": "Αναφέρετε τον λόγο απόρριψης της αίτησης…",
             }
         ),
-        error_messages={"required": "Η αιτιολογία απόρριψης είναι υποχρεωτική."},
+        error_messages={"required": "Ο λόγος απόρριψης είναι υποχρεωτικός."},
     )
 
     def clean_incomplete_rejection_reason(self):
         reason = (self.cleaned_data.get("incomplete_rejection_reason") or "").strip()
         if not reason:
-            raise forms.ValidationError("Η αιτιολογία απόρριψης είναι υποχρεωτική.")
+            raise forms.ValidationError("Ο λόγος απόρριψης είναι υποχρεωτικός.")
         return reason
 
 

@@ -1,0 +1,145 @@
+{# Στάδιο 2: Υποβολή αιτήσεων (Ενότ. 5) #}
+<div class="card" data-announcement-stage="submission" data-scroll-anchor="stage-submission">
+    <div class="card__header-row" style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+        <h2 class="card__title" style="margin-bottom: 0;" data-ui-suffix=" ({{ applications|length }})">
+            2. Υποβολή αιτήσεων ({{ applications|length }}){% if stage_done.submission %} <span class="badge badge--pass">Ολοκληρώθηκε</span>{% endif %}
+        </h2>
+        <div class="toolbar" style="margin: 0;">
+            {% if access.plot_applications.create and submission_open %}
+            <a href="{% url 'plot_applications:create' %}?announcement={{ cycle.pk }}" class="btn btn-primary btn-sm" data-new-announcement-application>
+                Νέα αίτηση στη γνωστοποίηση
+            </a>
+            {% endif %}
+            {% if cycle.community and not lists.preliminary %}
+            <a href="{% url 'plot_applications:prioritization' %}?community_id={{ cycle.community.pk }}" class="btn btn-secondary btn-sm" data-embed-title="Προτεραιοποίηση αιτήσεων παραχώρησης οικοπέδου" data-open-prioritization>
+                Πίνακας προτεραιοποίησης
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if cycle.submission_closed_early %}
+    <div class="alert alert--error" data-submission-deadline-banner data-submission-closed-early style="margin-top: 0.75rem;">
+        <span data-ui-text>Η περίοδος υποβολής αιτήσεων (προθεσμία</span> {{ cycle.submission_end_date|date:"d/m/Y" }}) <span data-ui-text>έκλεισε πρόωρα κατόπιν αποδοχής
+        της προειδοποίησης· δεν επιτρέπεται προσθήκη ή επεξεργασία αιτήσεων (Ενότ. 4, 5).</span>
+    </div>
+    {% elif not submission_open %}
+    <div class="alert alert--error" data-submission-deadline-banner style="margin-top: 0.75rem;">
+        <span data-ui-text>Η προθεσμία υποβολής αιτήσεων</span> ({{ cycle.submission_end_date|date:"d/m/Y" }}) <span data-ui-text>έχει λήξει· δεν επιτρέπεται προσθήκη
+        ή επεξεργασία αιτήσεων (Ενότ. 4, 5).</span>
+    </div>
+    {% elif submission_deadline_warning %}
+    <div class="alert alert--error" data-submission-deadline-banner data-submission-deadline-warning style="margin-top: 0.75rem;">
+        <span data-ui-text>Προσοχή: η προθεσμία υποβολής αιτήσεων λήγει στις</span> <strong>{{ cycle.submission_end_date|date:"d/m/Y" }}</strong>
+        ({% if submission_days_remaining == 0 %}<span data-ui-text>λήγει σήμερα</span>{% elif submission_days_remaining == 1 %}<span data-ui-text>απομένει 1 ημέρα</span>{% else %}<span data-ui-text>απομένουν</span> {{ submission_days_remaining }} <span data-ui-text>ημέρες</span>{% endif %}).
+    </div>
+    {% else %}
+    <div class="alert alert--warning" data-submission-deadline-banner style="margin-top: 0.75rem;">
+        <span data-ui-text>Η προθεσμία υποβολής αιτήσεων είναι ανοικτή έως τις</span> <strong>{{ cycle.submission_end_date|date:"d/m/Y" }}</strong>
+        (<span data-ui-text>απομένουν</span> {{ submission_days_remaining }} <span data-ui-text>ημέρες</span>). <span data-ui-text>Μπορείτε να προσθέσετε αιτήσεις και να επεξεργαστείτε όλα τα στοιχεία τους έως την προθεσμία.</span>
+    </div>
+    {% endif %}
+
+    <p class="helptext">
+        Για να προχωρήσει η γνωστοποίηση στο Στάδιο 3 (Επιτροπή Εξέτασης Αιτήσεων), όλες οι αιτήσεις πρέπει
+        να έχουν περάσει το στάδιο πληρότητας (πλήρης συλλογή στοιχείων και πιστοποιητικών ή απόρριψη από λειτουργό).
+    </p>
+    {% if blockers %}
+    <div class="alert alert--warning" data-stage1-blockers>
+        <span data-ui-text>Εκκρεμεί έλεγχος πληρότητας / επιλεξιμότητας για τις αιτήσεις:</span>
+        {% for b in blockers %}
+        <a href="{% url 'plot_applications:detail' b.pk %}"><strong>{{ b.protocol_number }}</strong></a>{% if not forloop.last %}, {% endif %}
+        {% endfor %}
+    </div>
+    {% endif %}
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Αρ. Πρωτ.</th>
+                    <th>Αιτητής/τρια</th>
+                    <th>Ημ. Υποβολής</th>
+                    <th>Πληρότητα</th>
+                    <th>Δικαιούχος</th>
+                    <th>Στάδιο</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for app in applications %}
+                <tr>
+                    <td><a href="{% url 'plot_applications:detail' app.pk %}"><strong>{{ app.protocol_number }}</strong></a></td>
+                    <td>{{ app.applicant.first_name }} {{ app.applicant.last_name }}</td>
+                    <td>{{ app.submitted_on|date:"d/m/Y"|default:"—" }}</td>
+                    <td>
+                        <span class="badge {% if app.is_complete and app.is_documents_complete %}badge--pass{% else %}badge--fail{% endif %}">
+                            {{ app.get_completeness_result_display }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if app.beneficiary_label %}
+                        <span class="badge badge--{{ app.beneficiary_status }}">{{ app.beneficiary_label }}</span>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        <span class="badge badge--{{ app.stage_badge }}">{{ app.application_stage_label }}</span>
+                        {% if app.is_pending_extra_info %}
+                        <span class="badge badge--pending" data-pending-badge data-ui-skip>
+                            <span data-ui-text>PENDING:</span> {% for req in app.open_pending_requirements %}{{ req.description }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td><a href="{% url 'plot_applications:detail' app.pk %}" class="btn btn-ghost btn-sm">Άνοιγμα</a></td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="7">Δεν έχουν καταχωριστεί αιτήσεις σε αυτή τη γνωστοποίηση.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if cycle.is_published and cycle.stage == 'submission' and not blockers and complete_applications %}
+    <form method="post" action="{% url 'announcements:start_committee' cycle.pk %}" class="app-form" style="margin-top: 1rem;" data-start-committee-form>
+        {% csrf_token %}
+        {% if submission_open %}
+        <div class="alert alert--error" data-submission-period-warning>
+            <span data-ui-text>Η προθεσμία υποβολής αιτήσεων (Ενότ. 4, 5) λήγει στις</span> {{ cycle.submission_end_date|date:"d/m/Y"|default:"—" }}. <span data-ui-text>Αν προχωρήσετε τώρα στην Επιτροπή Εξέτασης Αιτήσεων, η περίοδος υποβολής και επεξεργασίας αιτήσεων κλείνει πριν από τη λήξη της προθεσμίας. Η αποδοχή καταγράφεται στο ιστορικό.</span>
+        </div>
+        <label class="checkbox-label">
+            <input type="checkbox" name="accept_open_submission" value="1" required data-accept-open-submission>
+            <span>Αποδέχομαι να προχωρήσω στην Επιτροπή Εξέτασης Αιτήσεων πριν από τη λήξη της προθεσμίας υποβολής</span>
+        </label>
+        {% endif %}
+        <div class="filter-form" style="margin-top: 0.75rem;">
+            <div>
+                <label for="meeting_date">Ημερομηνία συνεδρίας Επιτροπής (Ενότ. 6)</label>
+                <input type="date" name="meeting_date" id="meeting_date" class="input" value="{{ cycle.applications_committee_date|date:'Y-m-d' }}">
+            </div>
+            <div>
+                <button type="submit" class="btn btn-primary" data-start-committee-btn>Μετάβαση στο Στάδιο 3 (Επιτροπή Εξέτασης Αιτήσεων)</button>
+            </div>
+        </div>
+    </form>
+    {% elif can_complete_without_applications %}
+    <form method="post" action="{% url 'announcements:complete_agreements' cycle.pk %}" class="app-form" style="margin-top: 1rem;" data-complete-empty-submission-form>
+        {% csrf_token %}
+        <p class="helptext">
+            <span data-ui-text>Δεν υπάρχουν πλήρεις αιτήσεις στη γνωστοποίηση. Μπορείτε να ολοκληρώσετε τη γνωστοποίηση ώστε τα
+            οικόπεδά της</span> ({{ offered_plots|length }}) <span data-ui-text>να απελευθερωθούν και να είναι ξανά διαθέσιμα για νέα γνωστοποίηση (Ενότ. 8).</span>
+        </p>
+        {% if submission_open %}
+        <div class="alert alert--error" data-submission-period-warning>
+            <span data-ui-text>Η προθεσμία υποβολής αιτήσεων (Ενότ. 4, 5) λήγει στις</span> {{ cycle.submission_end_date|date:"d/m/Y"|default:"—" }}. <span data-ui-text>Αν προχωρήσετε τώρα στην Επιτροπή Εξέτασης Αιτήσεων, η περίοδος υποβολής και επεξεργασίας αιτήσεων κλείνει πριν από τη λήξη της προθεσμίας. Η αποδοχή καταγράφεται στο ιστορικό.</span>
+        </div>
+        <label class="checkbox-label">
+            <input type="checkbox" name="accept_open_submission" value="1" required data-accept-open-submission>
+            <span>Αποδέχομαι να ολοκληρώσω τη γνωστοποίηση πριν από τη λήξη της προθεσμίας υποβολής</span>
+        </label>
+        {% endif %}
+        <div class="form-actions" style="margin-top: 0.75rem;">
+            <button type="submit" class="btn btn-primary" data-complete-agreements-btn>
+                Ολοκλήρωση Γνωστοποίησης &amp; Απελευθέρωση Οικοπέδων
+            </button>
+        </div>
+    </form>
+    {% endif %}
+</div>

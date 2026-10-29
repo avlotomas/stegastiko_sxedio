@@ -1,0 +1,53 @@
+{# Στάδιο 3: Επιτροπή Εξέτασης Αιτήσεων (Ενότ. 6) #}
+<div class="card" data-announcement-stage="applications_committee" data-scroll-anchor="stage-applications-committee">
+    <h2 class="card__title">3. Επιτροπή Εξέτασης Αιτήσεων (Ενότ. 6){% if stage_done.applications_committee %} <span class="badge badge--pass">Ολοκληρώθηκε</span>{% endif %}</h2>
+    {% if lists.preliminary.notifications_sent_at %}
+    <p data-preliminary-summary>
+        <span data-ui-text>Ο Προκαταρκτικός Κατάλογος εκδόθηκε στις</span> {{ lists.preliminary.finalized_at|date:"d/m/Y H:i" }} <span data-ui-text>και γνωστοποιήθηκε
+        στους αιτητές στις</span> {{ lists.preliminary.notifications_sent_at|date:"d/m/Y H:i" }}· <span data-ui-text>δεν αλλάζει και αποτελεί
+        τη βάση (input) για το Στάδιο 5 («Τελικός Κατάλογος Δικαιούχων»).</span>
+    </p>
+    <button type="button" class="btn btn-secondary" data-dialog-open="preliminary-list-dialog" data-open-preliminary-list>
+        Προκαταρκτικός Κατάλογος
+    </button>
+    {% include "plots/_preliminary_list_dialog.html" %}
+    {% else %}
+    <p class="helptext">
+        Η Επιτροπή αξιολογεί τις πλήρεις αιτήσεις στον πίνακα προτεραιοποίησης: αλλάζει τη σειρά προτεραιότητας
+        (drag &amp; drop) και, με το «Αλλαγή αποτελέσματος», θέτει χειροκίνητα μια αίτηση ως ΔΙΚΑΙΟΥΧΟ ή ΜΗ ΔΙΚΑΙΟΥΧΟ.
+        Ό,τι κάνει η Επιτροπή αποθηκεύεται στον Προκαταρκτικό Κατάλογο και αποτελεί τη βάση (input) για το μεθεπόμενο
+        Στάδιο 5 («Τελικός Κατάλογος Δικαιούχων»). Με την αποστολή των email το στάδιο ολοκληρώνεται, ο Προκαταρκτικός
+        Κατάλογος κλειδώνει και αρχίζουν οι 21 ημέρες για ενστάσεις (Ενότ. 6(β), 7(α)).
+    </p>
+    {% if cycle.stage == 'applications_committee' %}
+    {% if cycle.community %}
+    <div class="toolbar" style="margin: 0 0 0.75rem;">
+        <a href="{% url 'plot_applications:prioritization' %}?community_id={{ cycle.community.pk }}" class="btn btn-secondary btn-sm" data-embed-title="Πίνακας προτεραιοποίησης — Επιτροπή Εξέτασης Αιτήσεων" data-stage2-prioritization>
+            Πίνακας προτεραιοποίησης
+        </a>
+    </div>
+    {% endif %}
+    {% if lists.preliminary %}
+    <div class="alert alert--warning" data-preliminary-not-notified>
+        <span data-ui-text>Ο Προκαταρκτικός Κατάλογος εκδόθηκε στις</span> {{ lists.preliminary.finalized_at|date:"d/m/Y H:i" }} <span data-ui-text>από την οθόνη
+        προτεραιοποίησης, χωρίς αποστολή email. Η προθεσμία ενστάσεων θα μετρά από την ημερομηνία αποστολής.</span>
+    </div>
+    {% endif %}
+    <form method="post" action="{% url 'announcements:committee_decision' cycle.pk %}" class="filter-form"
+          data-confirm="Αποστολή του Προκαταρκτικού Καταλόγου σε όλους τους αιτητές; Μετά την αποστολή ο κατάλογος δεν αλλάζει και η γνωστοποίηση προχωρά στο Στάδιο 4 (Ενστάσεις).">
+        {% csrf_token %}
+        <div>
+            <label for="committee_decided_on">Ημερομηνία συνεδρίας / απόφασης Επιτροπής</label>
+            <input type="date" name="decided_on" id="committee_decided_on" class="input" value="{{ cycle.applications_committee_date|date:'Y-m-d' }}">
+        </div>
+        <div>
+            <button type="submit" class="btn btn-primary" data-issue-preliminary-and-email>
+                {% if lists.preliminary %}Αποστολή Email Προκαταρκτικού Καταλόγου (Ενότ. 6(β)){% else %}Έκδοση Προκαταρκτικού Καταλόγου &amp; Αποστολή Email (Ενότ. 6){% endif %}
+            </button>
+        </div>
+    </form>
+    {% else %}
+    <p class="text-muted">Το στάδιο ενεργοποιείται με τη μετάβαση από το Στάδιο 2 (Υποβολή αιτήσεων).</p>
+    {% endif %}
+    {% endif %}
+</div>

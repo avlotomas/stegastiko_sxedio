@@ -18,6 +18,11 @@ view modal. Requires: case, communications; optional owner_label (first column, 
                 </button>
             </th>
             <th>
+                <button type="button" class="btn-link btn-link--table" data-communication-sort="sender">
+                    Αποστολέας (Χρήστης)
+                </button>
+            </th>
+            <th>
                 <button type="button" class="btn-link btn-link--table" data-communication-sort="subject">
                     Θέμα
                 </button>
@@ -40,6 +45,7 @@ view modal. Requires: case, communications; optional owner_label (first column, 
             <tr class="communication-email-row" data-communication-row>
                 <td data-sort-check="{{ communication.content_object.row_label|default:''|lower }}">{{ communication.content_object.row_label|default:"—" }}</td>
                 <td data-sort-recipient="{{ communication.recipient|lower }}">{{ communication.recipient }}</td>
+                <td data-sort-sender="{{ communication.sender_label|lower }}" data-email-sender>{{ communication.sender_label }}</td>
                 <td data-sort-subject="{{ communication.subject|lower }}">{{ communication.subject }}</td>
                 <td data-sort-status="{{ communication.status }}">{% if communication.status == "sent" %}Απεστάλη{% elif communication.status == "failed" %}Αποτυχία αποστολής{% elif communication.status == "sending" %}Σε αποστολή{% else %}Προσχέδιο{% endif %}</td>
                 <td data-sort-sent-at="{{ communication.sent_at|date:'Y-m-d H:i:s' }}">{{ communication.sent_at|default:"—" }}</td>
@@ -54,7 +60,7 @@ view modal. Requires: case, communications; optional owner_label (first column, 
             </tr>
         {% empty %}
             <tr>
-                <td colspan="6">{{ empty_message|default:"Δεν έχουν σταλεί email ελλείψεων." }}</td>
+                <td colspan="7">{{ empty_message|default:"Δεν έχουν σταλεί email ελλείψεων." }}</td>
             </tr>
         {% endfor %}
         </tbody>

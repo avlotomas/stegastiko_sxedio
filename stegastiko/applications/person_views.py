@@ -31,8 +31,8 @@ def person_applications(person):
     """Αιτήσεις παραχώρησης οικοπέδου στις οποίες συμμετέχει το άτομο (ως αιτητής ή σύζυγος)."""
     return (
         PlotApplication.objects.filter(Q(applicant=person) | Q(spouse=person))
-        .select_related("community", "applicant", "spouse")
-        .prefetch_related("parties", "children", "incomes")
+        .select_related("announcement", "applicant", "spouse")
+        .prefetch_related("announcement__plots__community", "parties", "children", "incomes")
         .order_by(F("preference_order").asc(nulls_last=True), "submitted_on", "id")
     )
 

@@ -1,0 +1,58 @@
+{# Modal προβολής των στοιχείων της γνωστοποίησης (9.1, οικόπεδα, 9.2 δημοσιεύσεις). #}
+<dialog id="announcement-details-dialog" class="modal modal--list" aria-labelledby="announcement-details-dialog-title" data-announcement-details-dialog>
+    <div class="modal__header" style="display: flex; justify-content: space-between; align-items: center; gap: 1rem;">
+        <h2 id="announcement-details-dialog-title" class="card__title" style="margin: 0;">
+            Στοιχεία γνωστοποίησης (Ενότ. 4, 9.1–9.2)
+        </h2>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <a href="{% url 'announcements:detail' cycle.pk %}?stage=details" class="btn btn-secondary btn-sm">
+                Μετάβαση στο Στάδιο 1
+            </a>
+            <button type="button" class="btn btn-secondary btn-sm" data-dialog-close>Κλείσιμο</button>
+        </div>
+    </div>
+
+    <div class="announcement-summary-header" style="margin-top: 0.75rem;">
+        <div class="announcement-summary-header__row">
+            <span><strong>Κοινότητα:</strong> {{ cycle.communities_label }}</span>
+            <span><strong>Ημερομηνία γνωστοποίησης:</strong> {{ cycle.announcement_date|date:"d/m/Y" }}</span>
+            <span><strong>Διάρκεια υποβολής:</strong> {{ cycle.submission_months }} <span data-ui-text>μήνες</span></span>
+            <span><strong>Τελευταία ημέρα υποβολής:</strong> {{ cycle.submission_end_date|date:"d/m/Y" }}</span>
+        </div>
+    </div>
+
+    <h3 class="form-section-title" data-ui-suffix=" ({{ offered_plots|length }})">Οικόπεδα γνωστοποίησης ({{ offered_plots|length }})</h3>
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Οικόπεδο</th>
+                    <th>Εμβαδόν (τ.μ.)</th>
+                    <th>Τιμή διάθεσης (€)</th>
+                    <th>Κατάσταση</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for plot in offered_plots %}
+                <tr>
+                    <td><strong>{{ plot.row_label }}</strong></td>
+                    <td>{{ plot.final_area_sqm|default:"—" }}</td>
+                    <td>{{ plot.disposal_price|default:"—" }}</td>
+                    <td>
+                        {% if plot.pk in allocated_plot_ids %}
+                        <span class="badge badge--pass">Έχει δοθεί σε αιτητή</span>
+                        {% else %}
+                        <span class="badge badge--pending">Διαθέσιμο</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="4" class="text-muted">Δεν έχουν επιλεγεί οικόπεδα.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <h3 class="form-section-title" style="margin-top: 1rem;">9.2 Τρόποι δημοσίευσης / γνωστοποίησης</h3>
+    {% include "plots/_publication_grid.html" with publication_readonly=True %}
+</dialog>

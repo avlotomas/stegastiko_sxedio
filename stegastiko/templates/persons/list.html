@@ -67,7 +67,7 @@
     {% if page_obj.has_previous %}
     <a href="?{% if filter_query %}{{ filter_query }}&amp;{% endif %}page={{ page_obj.previous_page_number }}" class="btn btn-ghost btn-sm" rel="prev">« Προηγούμενη</a>
     {% endif %}
-    <span class="text-muted">Σελίδα {{ page_obj.number }} από {{ page_obj.paginator.num_pages }} · {{ page_obj.paginator.count }} άτομα</span>
+    <span class="text-muted"><span data-ui-text>Σελίδα</span> {{ page_obj.number }} <span data-ui-text>από</span> {{ page_obj.paginator.num_pages }} · {{ page_obj.paginator.count }} <span data-ui-text>άτομα</span></span>
     {% if page_obj.has_next %}
     <a href="?{% if filter_query %}{{ filter_query }}&amp;{% endif %}page={{ page_obj.next_page_number }}" class="btn btn-ghost btn-sm" rel="next">Επόμενη »</a>
     {% endif %}

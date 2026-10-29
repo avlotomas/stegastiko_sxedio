@@ -1,0 +1,199 @@
+{# Στάδιο 7: Υπογραφή Συμφωνίας, Πληρωμή & Επιλαχόντες (Ενότ. 8, 9, 12, 15) #}
+<div class="card" data-announcement-stage="agreements" data-scroll-anchor="stage-agreements">
+    <h2 class="card__title">7. Υπογραφή Συμφωνίας, Πληρωμή &amp; Επιλαχόντες (Ενότ. 8, 9, 12, 15){% if stage_done.agreements %} <span class="badge badge--pass">Ολοκληρώθηκε</span>{% endif %}</h2>
+    <p class="helptext">
+        Οι δικαιούχοι καλούνται να προσέλθουν σε συγκεκριμένη ημερομηνία για να καταβάλουν την τιμή διάθεσης (25%)
+        και να υπογράψουν τη Συμφωνία Παραχώρησης (Παράρτημα 4, εκτυπώνεται σε Word <code>.docx</code>).
+        Αν δεν προσέλθουν να πληρώσουν ή να υπογράψει ο δικαιούχος, η αίτηση απορρίπτεται και το οικόπεδο ανατίθεται σε επιλαχόντα.
+    </p>
+
+    {% for alloc in active_allocations %}
+    <div class="card" style="margin-bottom: 1rem;" data-allocation-row="{{ alloc.pk }}" data-scroll-anchor="allocation-{{ alloc.pk }}">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+            <div>
+                <strong><span data-ui-text>Αίτηση</span> <a href="{% url 'plot_applications:detail' alloc.application.pk %}">{{ alloc.application.protocol_number }}</a></strong>
+                — {{ alloc.application.applicant.first_name }} {{ alloc.application.applicant.last_name }}
+                · <strong>{{ alloc.parcel.row_label }}</strong> (<span data-ui-text>Τιμή διάθεσης:</span> € {{ alloc.parcel.disposal_price }})
+                · <span class="badge badge--{{ alloc.application.stage_badge }}">{{ alloc.application.application_stage_label }}</span>
+            </div>
+            <div>
+                <a href="{% url 'announcements:agreement_docx' cycle.pk alloc.pk %}" class="btn btn-secondary btn-sm" data-download-agreement-docx="{{ alloc.pk }}">
+                    Εκτύπωση Συμφωνίας (.docx)
+                </a>
+            </div>
+        </div>
+
+        <form method="post" action="{% url 'announcements:invite_agreement' cycle.pk alloc.pk %}" class="filter-form" style="margin-top: 0.75rem;">
+            {% csrf_token %}
+            <div>
+                <label>Ημ/νία &amp; ώρα προσέλευσης</label>
+                <input type="datetime-local" name="appointment_at" class="input" value="{{ alloc.agreement.appointment_at|date:'Y-m-d\TH:i' }}">
+            </div>
+            <div>
+                <label>Προθεσμία έως</label>
+                <input type="date" name="deadline" class="input" value="{{ alloc.agreement.deadline|date:'Y-m-d' }}">
+            </div>
+            <div>
+                <label>Τόπος</label>
+                <input type="text" name="location" class="input" value="{{ cycle.agreement_location|default:'Επαρχιακή Διοίκηση' }}">
+            </div>
+            <div>
+                <button type="submit" class="btn btn-secondary btn-sm">Αποστολή πρόσκλησης email</button>
+            </div>
+        </form>
+
+        <form method="post" action="{% url 'announcements:record_signature_payment' cycle.pk alloc.pk %}" class="filter-form" style="margin-top: 0.75rem;" data-signature-payment-form="{{ alloc.pk }}">
+            {% csrf_token %}
+            <div>
+                <label class="checkbox-label">
+                    <input type="checkbox" name="paid" value="1" {% if alloc.payment.status == 'paid' %}checked{% endif %}>
+                    <span data-ui-suffix=" (€ {{ alloc.payment.amount }})">Πληρώθηκε (€ {{ alloc.payment.amount }})</span>
+                </label>
+                <input type="date" name="paid_on" class="input" value="{{ alloc.payment.paid_on|date:'Y-m-d' }}">
+            </div>
+            <div>
+                <label class="checkbox-label">
+                    <input type="checkbox" name="signed" value="1" {% if alloc.agreement.status == 'signed' %}checked{% endif %}>
+                    <span>Υπογράφηκε η Συμφωνία</span>
+                </label>
+                <input type="date" name="signed_on" class="input" value="{{ alloc.agreement.signed_on|date:'Y-m-d' }}">
+            </div>
+            <div>
+                <button type="submit" class="btn btn-primary btn-sm">Καταχώριση πληρωμής &amp; υπογραφής</button>
+            </div>
+        </form>
+
+        {% if alloc.agreement.status != 'signed' or alloc.payment.status != 'paid' %}
+        <form method="post" action="{% url 'announcements:forfeit_allocation' cycle.pk alloc.pk %}" class="filter-form" style="margin-top: 0.75rem;" data-forfeit-form="{{ alloc.pk }}">
+            {% csrf_token %}
+            <div>
+                <label>Κατάσταση υπογραφής</label>
+                <select name="agreement_status" class="input">
+                    <option value="no_show">Μη προσέλευση</option>
+                    <option value="not_signed">Μη υπογραμμένη</option>
+                </select>
+            </div>
+            <div>
+                <label>Κατάσταση πληρωμής</label>
+                <select name="payment_status" class="input">
+                    <option value="unpaid">Μη πληρωμένη</option>
+                </select>
+            </div>
+            <div style="flex: 1;">
+                <label>Αιτιολογία απόρριψης (Ενότ. 8)</label>
+                <input type="text" name="reason" class="input" placeholder="π.χ. Δεν προσήλθε εμπρόθεσμα για πληρωμή και υπογραφή..." required>
+            </div>
+            <div>
+                <button type="submit" class="btn btn-danger btn-sm">Απόρριψη &amp; Αποδέσμευση Οικοπέδου</button>
+            </div>
+        </form>
+        {% endif %}
+    </div>
+    {% empty %}
+    <p class="text-muted">Δεν υπάρχουν ενεργές κατανομές οικοπέδων.</p>
+    {% endfor %}
+
+    {% if lists.final and unallocated_plots and available_runner_ups %}
+    <div class="card" style="margin-top: 1rem;" data-runner-up-assignment-card data-scroll-anchor="runner-up">
+        <h3 class="card__title">Ανάθεση διαθέσιμου οικοπέδου σε Επιλαχόντα (Ενότ. 8)</h3>
+        <p class="helptext">
+            <span data-ui-text>Προτεινόμενος επόμενος επιλαχών κατά σειρά Τελικού Καταλόγου:</span>
+            <strong>{{ proposed_runner_up.protocol_number }} ({{ proposed_runner_up.applicant.first_name }} {{ proposed_runner_up.applicant.last_name }})</strong>.
+            <span data-ui-text>Αν επιλεγεί άλλος επιλαχών, απαιτείται αιτιολογία.</span>
+        </p>
+        <form method="post" action="{% url 'announcements:promote_runner_up' cycle.pk %}" class="filter-form" data-promote-runner-up-form>
+            {% csrf_token %}
+            <div>
+                <label for="ru_plot_id">Διαθέσιμο οικόπεδο</label>
+                <select name="plot_id" id="ru_plot_id" class="input" required>
+                    {% for plot in unallocated_plots %}
+                    <option value="{{ plot.pk }}">{{ plot.row_label }} (€ {{ plot.disposal_price }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="ru_application_id">Επιλαχών</label>
+                <select name="application_id" id="ru_application_id" class="input" required>
+                    {% for ru in available_runner_ups %}
+                    <option value="{{ ru.pk }}" {% if proposed_runner_up and ru.pk == proposed_runner_up.pk %}selected{% endif %}>
+                        {{ ru.protocol_number }} — {{ ru.applicant.first_name }} {{ ru.applicant.last_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div style="flex: 1;">
+                <label for="ru_justification">Αιτιολογία (υποχρεωτική αν δεν επιλεγεί ο αμέσως επόμενος)</label>
+                <input type="text" name="justification" id="ru_justification" class="input">
+            </div>
+            <div>
+                <button type="submit" class="btn btn-primary btn-sm">Ανάθεση σε Επιλαχόντα &amp; Αποστολή Πρόσκλησης</button>
+            </div>
+        </form>
+    </div>
+    {% endif %}
+
+    {% if cycle.stage == 'closed' %}
+    <div class="card" style="margin-top: 1rem;" data-released-plots-card data-complete-announcement-card>
+        <h3 class="card__title">Ολοκλήρωση Γνωστοποίησης &amp; Αδιάθετα οικόπεδα που απελευθερώθηκαν (Ενότ. 8)</h3>
+        <p>
+            <span class="badge badge--pass">Η γνωστοποίηση ολοκληρώθηκε</span>
+            · <span data-ui-text>Προσφερόμενα οικόπεδα:</span> <strong>{{ offered_plots|length }}</strong>
+            · <span data-ui-text>Διατεθέντα:</span> <strong>{{ active_allocations|length }}</strong>
+            · <span data-ui-text>Αδιάθετα που απελευθερώθηκαν:</span> <strong>{{ unallocated_plots|length }}</strong>
+        </p>
+        {% if unallocated_plots %}
+        <p class="helptext">
+            Η γνωστοποίηση ολοκλήρωσε το τελικό της στάδιο. Τα παρακάτω οικόπεδα δεν δόθηκαν και απελευθερώθηκαν,
+            ώστε να είναι ξανά διαθέσιμα για νέα γνωστοποίηση:
+        </p>
+        <ul>
+            {% for plot in unallocated_plots %}
+            <li data-released-plot="{{ plot.pk }}">
+                <strong>{{ plot.row_label }}</strong> (<span data-ui-text>Τιμή διάθεσης:</span> € {{ plot.disposal_price }})
+                <span class="badge badge--pass">Διαθέσιμο για νέα γνωστοποίηση</span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="helptext">Όλα τα οικόπεδα της γνωστοποίησης διατέθηκαν σε δικαιούχους.</p>
+        {% endif %}
+    </div>
+    {% elif cycle.stage == 'agreements' %}
+    <div class="card" style="margin-top: 1rem;" data-unallocated-plots-card data-complete-announcement-card>
+        <h3 class="card__title">Ολοκλήρωση Γνωστοποίησης &amp; Οικόπεδα χωρίς ενεργή κατανομή (Ενότ. 8)</h3>
+        <p>
+            <span data-ui-text>Προσφερόμενα οικόπεδα:</span> <strong>{{ offered_plots|length }}</strong>
+            · <span data-ui-text>Ενεργές κατανομές:</span> <strong>{{ active_allocations|length }}</strong>
+            · <span data-ui-text>Αδιάθετα οικόπεδα:</span> <strong>{{ unallocated_plots|length }}</strong>
+        </p>
+        {% if unallocated_plots %}
+        <p class="helptext">
+            Όσα οικόπεδα δεν δοθούν με την ολοκλήρωση της γνωστοποίησης θα απελευθερωθούν και θα γίνουν ξανά διαθέσιμα για νέα γνωστοποίηση:
+        </p>
+        <ul>
+            {% for plot in unallocated_plots %}
+            <li><strong>{{ plot.row_label }}</strong> (<span data-ui-text>Τιμή διάθεσης:</span> € {{ plot.disposal_price }})</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+        {% if can_complete_agreements %}
+        <form method="post" action="{% url 'announcements:complete_agreements' cycle.pk %}" style="margin-top: 0.75rem;" data-complete-agreements-form>
+            {% csrf_token %}
+            <button type="submit" class="btn btn-primary btn-sm" data-complete-agreements-btn>
+                Ολοκλήρωση Γνωστοποίησης &amp; Απελευθέρωση Αδιάθετων Οικοπέδων
+            </button>
+        </form>
+        {% else %}
+        <div class="alert alert--warning" style="margin-top: 0.75rem;" data-pending-agreements-notice>
+            <span data-ui-text>Για να ολοκληρωθεί η γνωστοποίηση, πρέπει πρώτα να καταχωριστεί η υπογραφή και πληρωμή (ή η απόρριψη/αποδέσμευση) για τις ενεργές κατανομές:</span>
+            {% for pending_alloc in pending_agreement_allocations %}
+            <strong>{{ pending_alloc.application.protocol_number }}</strong> ({{ pending_alloc.parcel.row_label }}){% if not forloop.last %}, {% endif %}
+            {% endfor %}.
+        </div>
+        <button type="button" class="btn btn-primary btn-sm" disabled style="margin-top: 0.5rem;" data-complete-agreements-btn-disabled>
+            Ολοκλήρωση Γνωστοποίησης &amp; Απελευθέρωση Αδιάθετων Οικοπέδων
+        </button>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>

@@ -37,10 +37,14 @@ COPIED_FIELDS = (
 
 class PlotQuerySet(AuditedModel.AuditedQuerySet):
     def available(self):
-        """Plots an announcement may offer: value and price recorded, no active allocation."""
-        return self.filter(
-            valuation_amount__isnull=False, disposal_price__isnull=False
-        ).exclude(allocations__status="active")
+        """Plots an announcement may offer: value and price recorded, not in an active announcement, and no active allocation."""
+        from cases.models import SubmissionCycle
+
+        return (
+            self.filter(valuation_amount__isnull=False, disposal_price__isnull=False)
+            .exclude(submission_cycles__stage__in=SubmissionCycle.ACTIVE_STAGES)
+            .exclude(allocations__status="active")
+        )
 
 
 class PlotManager(AuditedModel.AuditedManager):
@@ -160,10 +164,65 @@ class Plot(DisposalPriceMixin, AuditedModel):
 
     @property
     def is_allocated(self):
-        """Whether an allocation (Ενότητα 10+) already points at this plot."""
+        """Whether an active allocation (Ενότητα 10+) already points at this plot."""
         if not self.pk:
             return False
-        return self.allocations.exists()
+        if "allocations" in getattr(self, "_prefetched_objects_cache", {}):
+            return any(a.status == "active" for a in self.allocations.all())
+        return self.allocations.filter(status="active").exists()
+
+    @property
+    def is_valued(self) -> bool:
+        """Whether both valuation amount and disposal price have been recorded (8.2)."""
+        return self.valuation_amount is not None and self.disposal_price is not None
+
+    @property
+    def active_announcement(self):
+        """The active announcement (`SubmissionCycle`) currently offering this plot, or None."""
+        if not self.pk:
+            return None
+        from cases.models import SubmissionCycle
+
+        if "submission_cycles" in getattr(self, "_prefetched_objects_cache", {}):
+            active = [
+                c
+                for c in self.submission_cycles.all()
+                if c.stage in SubmissionCycle.ACTIVE_STAGES
+            ]
+            active.sort(key=lambda c: (c.announcement_date, c.pk or 0), reverse=True)
+            return active[0] if active else None
+        return (
+            self.submission_cycles.filter(stage__in=SubmissionCycle.ACTIVE_STAGES)
+            .order_by("-announcement_date", "-id")
+            .first()
+        )
+
+    @property
+    def is_in_active_announcement(self) -> bool:
+        """Whether this plot is currently tied to an uncompleted announcement."""
+        return self.active_announcement is not None
+
+    @property
+    def is_available_for_announcement(self) -> bool:
+        """Whether this plot can be included in a new announcement (`Plot.objects.available()`)."""
+        if not self.pk:
+            return False
+        return (
+            self.is_valued
+            and not self.is_allocated
+            and not self.is_in_active_announcement
+        )
+
+    @property
+    def announcement_unavailability_reason(self) -> str:
+        """Reason why the plot is not available for a new announcement (empty if available)."""
+        if self.is_available_for_announcement:
+            return ""
+        if self.is_allocated:
+            return "Έχει κατανομή"
+        if self.is_in_active_announcement:
+            return "Σε ενεργή γνωστοποίηση"
+        return "Εκκρεμεί αξία/τιμή διάθεσης"
 
     def copy_from(self, design_plot) -> list:
         """Take over the 7.3 data of `design_plot`; returns the names of the changed fields."""

@@ -1,0 +1,118 @@
+{% comment %}
+Κοινή γραμμή εργαλείων στην κορυφή της αίτησης παραχώρησης οικοπέδου (Προβολή & Επεξεργασία),
+με dropdown επιλογών/ενεργειών ώστε οι διαθέσιμες ενέργειες να είναι ίδιες και στις δύο οθόνες.
+{% endcomment %}
+<div class="toolbar toolbar--sticky form-actions--sticky plot-app-toolbar"
+     data-sticky-toolbar
+     data-sticky-form-actions>
+    <div class="toolbar__group form-actions__group">
+        {% if is_edit_mode %}
+        <span class="save-btn-wrapper" data-save-button-wrapper>
+            <button type="submit" class="btn btn-primary" data-save-button>Αποθήκευση</button>
+            <div class="save-btn-tooltip" role="tooltip" data-save-tooltip hidden></div>
+        </span>
+        {% if not is_create and access.plot_applications.view %}
+        <a href="{% url 'plot_applications:detail' application.pk %}" class="btn btn-secondary">Κατάσταση</a>
+        {% endif %}
+        <a href="{% url 'plot_applications:list' %}" class="btn btn-secondary">{% if is_create %}Ακύρωση{% else %}Πίσω στον κατάλογο{% endif %}</a>
+        {% else %}
+        {% if access.plot_applications.edit and not application.submission_locked %}
+        <a href="{% url 'plot_applications:edit' application.pk %}" class="btn btn-primary">Επεξεργασία</a>
+        {% endif %}
+        <a href="{% url 'plot_applications:list' %}" class="btn btn-secondary">Πίσω στον κατάλογο</a>
+        {% endif %}
+    </div>
+
+    {% if is_create or sub_view.documents or sub_edit.documents or sub_view.eligibility or can_send_email or can_override_eligibility or can_reject_incomplete or can_revoke_incomplete_rejection or sub_view.change_history or access.plot_applications.delete %}
+    <div class="toolbar__group form-actions__group toolbar__group--end form-actions__group--end">
+        <div class="actions-dropdown" data-actions-dropdown>
+            <button type="button"
+                    class="btn btn-secondary actions-dropdown__toggle"
+                    data-actions-dropdown-toggle
+                    aria-haspopup="true"
+                    aria-expanded="false">
+                <span data-ui-text>Επιλογές αίτησης</span>
+                <span class="actions-dropdown__caret" aria-hidden="true">▾</span>
+            </button>
+            <div class="actions-dropdown__menu" data-actions-dropdown-menu role="menu">
+                {% if is_create or sub_view.documents or sub_edit.documents %}
+                <button type="button"
+                        class="btn btn-secondary actions-dropdown__item"
+                        data-dialog-open="plot-application-documents-dialog"
+                        data-documents-modal-open
+                        aria-controls="plot-application-documents-dialog">
+                    <span data-ui-text>Απαιτούμενα δικαιολογητικά</span>
+                    <span class="badge {% if documents_is_complete %}badge--pass{% else %}badge--fail{% endif %}"
+                          data-documents-button-badge
+                          data-ui-skip>
+                        {% if documents_is_complete %}Ολοκληρωμένη{% else %}Ελλιπής{% endif %}
+                    </span>
+                </button>
+                {% endif %}
+                {% if not is_create and sub_view.eligibility %}
+                <a href="{% url 'plot_applications:eligibility_report_pdf' application.pk %}"
+                   class="btn btn-secondary actions-dropdown__item"
+                   data-eligibility-report-pdf-link>
+                    Εξαγωγή PDF ελέγχου κριτηρίων
+                </a>
+                {% endif %}
+                {% if not is_create and can_send_email %}
+                <button type="button"
+                        class="btn btn-secondary actions-dropdown__item"
+                        data-dialog-open="plot-application-email-dialog"
+                        data-email-action="{% url 'plot_applications:email_send' application.pk %}"
+                        data-email-subject="{{ email_subject }}"
+                        data-email-recipient="{{ application.email }}"
+                        data-copy-text="{{ missing_documents_text }}"
+                        data-check-label="Αίτηση {{ application.protocol_number }}"
+                        data-collect-live-missing="1">
+                    Αποστολή Email
+                </button>
+                {% endif %}
+                {% if not is_create and can_override_eligibility %}
+                <button type="button"
+                        class="btn btn-secondary actions-dropdown__item"
+                        data-dialog-open="plot-application-eligibility-override-dialog"
+                        data-eligibility-override-open
+                        aria-controls="plot-application-eligibility-override-dialog">
+                    Χειροκίνητη αλλαγή επιλεξιμότητας
+                </button>
+                {% endif %}
+                {% if not is_create and can_reject_incomplete %}
+                <button type="button"
+                        class="btn btn-danger actions-dropdown__item"
+                        data-dialog-open="plot-application-incomplete-reject-dialog"
+                        data-incomplete-reject-open
+                        aria-controls="plot-application-incomplete-reject-dialog">
+                    Απόρριψη
+                </button>
+                {% elif not is_create and can_revoke_incomplete_rejection %}
+                <button type="submit"
+                        form="plot-application-incomplete-revoke-form"
+                        class="btn btn-secondary actions-dropdown__item"
+                        data-incomplete-reject-revoke-btn>
+                    Ανάκληση απόρριψης
+                </button>
+                {% endif %}
+                {% if not is_create and sub_view.change_history %}
+                <button type="button"
+                        class="btn btn-secondary actions-dropdown__item"
+                        data-history-timeline-open="{% url 'plot_applications:history' application.pk %}"
+                        aria-controls="history-timeline-dialog">
+                    Ιστορικό αλλαγών
+                </button>
+                {% endif %}
+                {% if not is_create and access.plot_applications.delete %}
+                <div class="actions-dropdown__divider" role="separator"></div>
+                <button type="submit"
+                        form="plot-application-delete-form"
+                        class="btn btn-danger actions-dropdown__item"
+                        {% if delete_refusal %}disabled title="{{ delete_refusal }}"{% endif %}>
+                    Διαγραφή
+                </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>

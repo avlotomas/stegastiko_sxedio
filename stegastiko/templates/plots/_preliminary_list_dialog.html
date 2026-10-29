@@ -1,0 +1,126 @@
+{% comment %}
+Προβολή (μόνο για ανάγνωση) του Προκαταρκτικού Καταλόγου όπως εκδόθηκε και των email που στάλθηκαν
+στους αιτητές (Ενότ. 6(β)), μετά την ολοκλήρωση του Σταδίου 2.
+{% endcomment %}
+<dialog id="preliminary-list-dialog"
+        class="modal modal--list"
+        aria-labelledby="preliminary-list-dialog-title"
+        data-preliminary-list-dialog>
+    <div class="approved-design-plots-workspace__header">
+        <div>
+            <h2 class="card__title" id="preliminary-list-dialog-title">Προκαταρκτικός Κατάλογος Δικαιούχων (Ενότ. 6)</h2>
+            <p class="helptext">
+                <span data-ui-text>Εκδόθηκε στις</span> {{ lists.preliminary.finalized_at|date:"d/m/Y H:i" }} · <span data-ui-text>γνωστοποιήθηκε στους αιτητές</span>
+                {{ lists.preliminary.notifications_sent_at|date:"d/m/Y H:i" }} · <span data-ui-text>λήξη περιόδου ενστάσεων</span>
+                {{ lists.objection_deadline|date:"d/m/Y" }}. <span data-ui-text>Ο κατάλογος δεν αλλάζει.</span>
+            </p>
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" data-dialog-close>Κλείσιμο</button>
+    </div>
+
+    <h3 class="form-section-title">Δικαιούχοι κατά σειρά προτεραιότητας</h3>
+    <div class="table-wrap">
+        <table class="data-table" data-preliminary-dialog-beneficiaries>
+            <thead>
+            <tr>
+                <th>Θέση</th>
+                <th>Αρ. Πρωτοκόλλου</th>
+                <th>Αιτητής/τρια</th>
+                <th>Τόπος διαμονής (Ενότ. 11.1)</th>
+                <th>Σύνθεση οικογένειας (Ενότ. 11.2)</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in preliminary_listing.beneficiaries %}
+            <tr>
+                <td>{{ row.position }}</td>
+                <td><strong>{{ row.application.protocol_number }}</strong></td>
+                <td>{{ row.application.applicant.first_name }} {{ row.application.applicant.last_name }}</td>
+                <td>{{ row.primary_label }}</td>
+                <td>{{ row.secondary_label }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="text-muted">Δεν υπάρχουν δικαιούχοι.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <h3 class="form-section-title">Μη δικαιούχοι</h3>
+    <div class="table-wrap">
+        <table class="data-table" data-preliminary-dialog-others>
+            <thead>
+            <tr>
+                <th>Αρ. Πρωτοκόλλου</th>
+                <th>Αιτητής/τρια</th>
+                <th>Λόγοι</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in preliminary_listing.others %}
+            <tr>
+                <td><strong>{{ row.application.protocol_number }}</strong></td>
+                <td>{{ row.application.applicant.first_name }} {{ row.application.applicant.last_name }}</td>
+                <td>{% for reason in row.reasons %}<div>{{ reason }}</div>{% empty %}—{% endfor %}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="3" class="text-muted">Δεν υπάρχουν μη δικαιούχοι.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <h3 class="form-section-title">Email που στάλθηκαν στους αιτητές (Ενότ. 6(β))</h3>
+    <div class="table-wrap">
+        <table class="data-table" data-preliminary-dialog-emails>
+            <thead>
+            <tr>
+                <th>Αρ. Πρωτοκόλλου</th>
+                <th>Αιτητής/τρια</th>
+                <th>Απόφαση</th>
+                <th>Παραλήπτης</th>
+                <th>Αποστολέας (Χρήστης)</th>
+                <th>Θέμα / κείμενο</th>
+                <th>Κατάσταση</th>
+                <th>Ημ. αποστολής</th>
+                <th>Επιβεβαίωση λήψης</th>
+                <th>Λήξη ένστασης</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for item in preliminary_notifications %}
+            <tr data-preliminary-email-row="{{ item.entry.application_id }}">
+                <td><strong>{{ item.entry.application.protocol_number }}</strong></td>
+                <td>{{ item.entry.application.applicant.first_name }} {{ item.entry.application.applicant.last_name }}</td>
+                <td>
+                    <span class="badge {% if item.entry.status == 'eligible' %}badge--pass{% else %}badge--fail{% endif %}"{% if item.entry.status == 'eligible' %} data-ui-suffix=" {{ item.entry.proposed_rank }}"{% endif %}>
+                        {% if item.entry.status == 'eligible' %}ΔΙΚΑΙΟΥΧΟΣ — θέση {{ item.entry.proposed_rank }}{% else %}ΜΗ ΔΙΚΑΙΟΥΧΟΣ{% endif %}
+                    </span>
+                </td>
+                <td>{{ item.communication.recipient|default:"—" }}</td>
+                <td data-preliminary-email-sender>{{ item.sender_label }}</td>
+                <td>
+                    {% if item.communication %}
+                    <div><strong>{{ item.communication.subject }}</strong></div>
+                    <div class="communication-email-inline-body">{{ item.communication.body|linebreaksbr }}</div>
+                    {% else %}—{% endif %}
+                </td>
+                <td><span class="badge badge--{{ item.status_badge }}">{{ item.status_label }}</span></td>
+                <td>{% if item.communication.sent_at %}{{ item.communication.sent_at|date:"d/m/Y H:i" }}{% else %}{{ item.entry.notified_at|date:"d/m/Y"|default:"—" }}{% endif %}</td>
+                <td>{{ item.entry.receipt_confirmed_on|date:"d/m/Y"|default:"—" }}</td>
+                <td>{{ item.entry.objection_deadline|date:"d/m/Y"|default:"—" }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="form-actions">
+        {% if cycle.community and access.plot_prioritization.export %}
+        <a href="{% url 'plot_applications:prioritization_report_pdf' %}?community_id={{ cycle.community.pk }}&amp;list=preliminary" class="btn btn-secondary" data-embed-skip>
+            Εξαγωγή PDF Προκαταρκτικού Καταλόγου
+        </a>
+        {% endif %}
+        <button type="button" class="btn btn-primary" data-dialog-close>Κλείσιμο</button>
+    </div>
+</dialog>

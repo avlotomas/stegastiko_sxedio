@@ -12,8 +12,18 @@
                 </button>
             </th>
             <th>
+                <button type="button" class="btn-link btn-link--table" data-communication-sort="stage">
+                    Στάδιο γνωστοποίησης
+                </button>
+            </th>
+            <th>
                 <button type="button" class="btn-link btn-link--table" data-communication-sort="recipient">
                     Παραλήπτης
+                </button>
+            </th>
+            <th>
+                <button type="button" class="btn-link btn-link--table" data-communication-sort="sender">
+                    Αποστολέας (Χρήστης)
                 </button>
             </th>
             <th>
@@ -41,9 +51,15 @@
                 <td data-sort-check="{{ communication.content_object.protocol_number|default:''|lower }}">
                     {{ communication.content_object.protocol_number|default:"—" }}
                 </td>
+                <td data-sort-stage="{{ communication.stage_label|default:''|lower }}" data-email-stage>
+                    {{ communication.stage_label|default:"—" }}
+                </td>
                 <td data-sort-recipient="{{ communication.recipient|lower }}">{{ communication.recipient }}</td>
+                <td data-sort-sender="{{ communication.sender_label|lower }}" data-email-sender>{{ communication.sender_label }}</td>
                 <td data-sort-subject="{{ communication.subject|lower }}">{{ communication.subject }}</td>
-                <td>{{ communication.body|default:"—"|truncatechars:80 }}</td>
+                <td data-email-body>
+                    <div class="communication-email-inline-body">{{ communication.body|default:"—"|linebreaksbr }}</div>
+                </td>
                 <td data-sort-status="{{ communication.status }}">
                     {% if communication.status == "sent" %}Απεστάλη{% elif communication.status == "failed" %}Αποτυχία αποστολής{% elif communication.status == "sending" %}Σε αποστολή{% else %}Προσχέδιο{% endif %}
                 </td>
@@ -59,7 +75,7 @@
             </tr>
         {% empty %}
             <tr>
-                <td colspan="7">{{ empty_message|default:"Δεν έχουν σταλεί email." }}</td>
+                <td colspan="9">{{ empty_message|default:"Δεν έχουν σταλεί email." }}</td>
             </tr>
         {% endfor %}
         </tbody>

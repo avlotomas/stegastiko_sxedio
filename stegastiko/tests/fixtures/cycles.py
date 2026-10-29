@@ -1,9 +1,12 @@
-"""Announcements (SubmissionCycle) for tests: one announcement may cover several communities."""
+"""Announcements (SubmissionCycle) for tests: each announcement offers plots of one community."""
 
 from cases.models import SubmissionCycle
 
 
-def make_cycle(*communities, **fields) -> SubmissionCycle:
+def make_cycle(*communities, plots=None, **fields) -> SubmissionCycle:
     cycle = SubmissionCycle.objects.create(**fields)
-    cycle.communities.add(*communities)
+    if communities:
+        cycle._fallback_community = communities[0]
+    if plots:
+        cycle.plots.add(*plots)
     return cycle

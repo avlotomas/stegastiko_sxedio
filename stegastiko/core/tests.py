@@ -124,3 +124,13 @@ def test_ui_text_save_and_reset_syncs_settings_and_audit_history(client):
     assert client.post(save_url, {"key": "smtpPassword", "value": "hacked"}).status_code == 400
     assert client.post(save_url, {"key": key, "value": "   "}).status_code == 400
 
+    # 4. Supports long helptext/lead paragraphs (> 512 chars, up to 2000 chars)
+    long_key = "uiText.desc_longhelptext"
+    long_text = "Επεξήγηση σταδίου ενστάσεων " * 25
+    assert len(long_text) > 512
+    resp_long = client.post(save_url, {"key": long_key, "value": long_text})
+    assert resp_long.status_code == 200
+    assert get_ui_text_overrides()[long_key] == long_text.strip()
+    assert client.post(save_url, {"key": long_key, "reset": "1"}).status_code == 200
+
+

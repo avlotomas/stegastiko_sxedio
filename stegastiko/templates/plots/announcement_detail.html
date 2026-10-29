@@ -3,87 +3,53 @@
 {% block title %}Γνωστοποίηση {{ cycle.announcement_date }}{% endblock %}
 
 {% block content %}
+<span hidden data-embed-workspace data-embed-stay-prefix="{% url 'announcements:detail' cycle.pk %}" data-keep-scroll></span>
 <nav class="breadcrumb" aria-label="Πλοήγηση">
-    <a href="{% url 'announcements:list' %}">Γνωστοποιήσεις</a>
+    <a href="{% url 'announcements:list' %}" data-embed-skip>Γνωστοποιήσεις</a>
     <span>/</span>
     <span>{{ cycle.communities_label }} — {{ cycle.announcement_date }}</span>
 </nav>
 
 <div class="page-header">
     <h1>Γνωστοποίηση έναρξης αιτήσεων</h1>
+    {% if selected_stage == 'details' %}
     <p class="page-header__lead">
-        {{ cycle.communities_label }} · γνωστοποίηση {{ cycle.announcement_date }} · προθεσμία
-        {{ cycle.submission_months }} μήνες, έως {{ cycle.submission_end_date }} · διαθέσιμα οικόπεδα
+        {{ cycle.communities_label }} · <span data-ui-text>γνωστοποίηση</span> {{ cycle.announcement_date }} · <span data-ui-text>προθεσμία</span>
+        {{ cycle.submission_months }} <span data-ui-text>μήνες, έως</span> {{ cycle.submission_end_date }} · <span data-ui-text>διαθέσιμα οικόπεδα</span>
         {{ cycle.available_plots_count }}
         ·
         {% if cycle.is_published %}
-        <span class="badge badge--pass">Εκδόθηκε {{ cycle.published_at }}</span>
+        <span class="badge badge--pass" data-ui-suffix=" {{ cycle.published_at }}">Εκδόθηκε {{ cycle.published_at }}</span>
         {% else %}
         <span class="badge badge--pending">Προσχέδιο</span>
         {% endif %}
+        ·
+        <span class="badge badge--{% if cycle.stage == 'closed' %}pass{% else %}pending{% endif %}" data-announcement-stage-badge>
+            {{ cycle.get_stage_display }}
+        </span>
     </p>
+    {% endif %}
 </div>
 
-{% if cycle.is_published %}
-<div class="alert alert--warning">Η ανακοίνωση έχει οριστικοποιηθεί (9.3)· τα στοιχεία της εμφανίζονται μόνο για ανάγνωση.</div>
+{% if selected_stage != 'details' %}
+{% include "plots/_announcement_header.html" %}
 {% endif %}
 
-<form method="post" class="app-form" novalidate>
-    {% csrf_token %}
-
-    <div class="card">
-        <h2 class="card__title">9.1 Στοιχεία γνωστοποίησης</h2>
-        {% if cycle_form.non_field_errors %}
-        <div class="alert alert--error">
-            {% for error in cycle_form.non_field_errors %}{{ error }}{% endfor %}
-        </div>
+<ol class="wizard-steps" aria-label="Στάδια γνωστοποίησης" data-announcement-stepper>
+    {% for step in stage_stepper %}
+    <li class="wizard-steps__item{% if step.current %} is-current{% elif step.done %} is-done{% endif %}{% if step.selected %} is-selected{% endif %}" data-stepper-stage="{{ step.code }}">
+        {% if step.available %}
+        <a href="{% url 'announcements:detail' cycle.pk %}?stage={{ step.code }}" class="wizard-steps__link" data-stage-tab="{{ step.code }}"{% if step.selected %} aria-current="step"{% endif %}>
+            {{ step.label }}
+        </a>
+        {% else %}
+        <span class="wizard-steps__link is-disabled" aria-disabled="true">{{ step.label }}</span>
         {% endif %}
-        <div class="form-grid">
-            {% include "includes/form_field.html" with field=cycle_form.announcement_date %}
-            {% include "includes/form_field.html" with field=cycle_form.submission_months %}
-        </div>
-        <h3 class="form-section-title">Οικόπεδα της γνωστοποίησης</h3>
-        {% include "plots/_plot_picker.html" with form=cycle_form %}
-    </div>
+    </li>
+    {% endfor %}
+</ol>
 
-    <div class="card">
-        <div class="form-actions" style="margin-top: 0; padding-top: 0; border-top: none;">
-            {% if not cycle.is_published and access.announcements.edit %}
-            <button type="submit" class="btn btn-primary">Αποθήκευση</button>
-            {% endif %}
-            <a href="{% url 'announcements:export' cycle.pk %}" class="btn btn-secondary">Export</a>
-            <a href="{% url 'announcements:list' %}" class="btn btn-secondary">Πίσω στις γνωστοποιήσεις</a>
-        </div>
-    </div>
-</form>
-
-<div class="card">
-    <h2 class="card__title">9.2 Τρόποι δημοσίευσης / γνωστοποίησης</h2>
-    <p class="helptext">Για τους τέσσερις τρόπους ορίστε απευθείας στον πίνακα την ημερομηνία (προαιρετικά, μία φορά ο καθένας)· «Άλλο» μπορεί να προστεθεί πολλές φορές, με ημερομηνία και σχόλια.</p>
-    <div data-publication-status></div>
-    {% include "plots/_publication_grid.html" %}
-</div>
-{% if not cycle.is_published and access.announcements.edit %}
-<dialog id="publication-dialog" class="modal" aria-labelledby="publication-dialog-title" data-publication-dialog>
-    <div class="alert alert--error" data-publication-errors hidden></div>
-    <div data-publication-dialog-body></div>
-</dialog>
-{% endif %}
-
-{% if not cycle.is_published %}
-{% if access.announcements.edit or access.announcements.publish %}
-<div class="card">
-    <h2 class="card__title">Ενέργειες ανακοίνωσης</h2>
-    <div class="toolbar">
-        {% if access.announcements.publish %}
-        <form method="post" action="{% url 'announcements:publish' cycle.pk %}">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-primary">Οριστικοποίηση και έκδοση</button>
-        </form>
-        {% endif %}
-    </div>
-    <p class="helptext">Η έκδοση επιτρέπεται όταν η γνωστοποίηση προσφέρει τουλάχιστον ένα οικόπεδο.</p>
-</div>
-{% endif %}
-{% endif %}
+{% include selected_stage_template %}
+{% include "plots/_stage_emails_card.html" %}
+{% include "plots/_announcement_emails_dialog.html" %}
 {% endblock %}

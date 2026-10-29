@@ -2,11 +2,12 @@
 <tr data-application-id="{{ app.pk }}"
     data-auto-position="{{ row.auto_position }}"
     data-sortable-row
-    {% if movable %}draggable="true"{% endif %}>
+    {% if row.locked %}data-row-locked{% endif %}
+    {% if movable and not row.locked %}draggable="true"{% endif %}>
     <td>
-        {% if movable %}<span class="drag-handle" aria-hidden="true" title="Σύρετε για αλλαγή σειράς">⋮⋮</span>{% endif %}
+        {% if movable and not row.locked %}<span class="drag-handle" aria-hidden="true" title="Σύρετε για αλλαγή σειράς">⋮⋮</span>{% endif %}
         <strong data-priority-position>{{ row.position }}</strong>
-        {% if movable %}
+        {% if movable and not row.locked %}
         <span class="priority-move" data-ui-skip>
             <button type="button" class="btn-link" data-priority-move="up" aria-label="Μετακίνηση πάνω" title="Μετακίνηση πάνω">▲</button>
             <button type="button" class="btn-link" data-priority-move="down" aria-label="Μετακίνηση κάτω" title="Μετακίνηση κάτω">▼</button>
@@ -26,20 +27,46 @@
     {% if row.group == "beneficiaries" %}
     <td>{{ row.primary_label }}</td>
     <td>{{ row.secondary_label }}</td>
-    <td>{{ app.recognized_children_count }}</td>
+    <td>{{ row.children_count }}</td>
+    {% if row.list_status %}
+    <td><span class="badge badge--{{ row.list_status_badge }}" data-list-status>{{ row.list_status }}</span></td>
+    {% else %}
     <td>{{ row.auto_position }}</td>
+    {% endif %}
     <td>
         <span class="badge badge--pending" data-priority-moved {% if not row.is_moved %}hidden{% endif %}>Χειροκίνητη σειρά</span>
         {% if row.tied_with %}<div>Ισοψηφία με {{ row.tied_with|join:", " }} — κλήρωση (Ενότ. 8, 11.3)</div>{% endif %}
-        {% if app.eligibility_override == "pass" %}<div>Χειροκίνητα ΔΙΚΑΙΟΥΧΟΣ: {{ app.eligibility_override_reason }}</div>{% endif %}
+        {% if row.override_pass_reason %}<div>Χειροκίνητα ΔΙΚΑΙΟΥΧΟΣ: {{ row.override_pass_reason }}</div>{% endif %}
+        {% for label in row.objection_labels %}<div data-objection-label>{{ label }}</div>{% endfor %}
+        {% if row.preliminary_note %}<div data-preliminary-note>{{ row.preliminary_note }}{% if row.changed_since_preliminary %} <span class="badge badge--pending">Αλλαγή έναντι Προκαταρκτικού</span>{% endif %}</div>{% endif %}
     </td>
     {% else %}
-    <td><span class="badge badge--{{ app.beneficiary_status }}">{{ app.beneficiary_label }}</span></td>
-    <td>{% for reason in row.reasons %}<div>{{ reason }}</div>{% endfor %}</td>
+    <td>
+        {% if row.list_status %}<span class="badge badge--{{ row.list_status_badge }}" data-list-status>{{ row.list_status }}</span>
+        {% elif app.beneficiary_label %}<span class="badge badge--{{ app.beneficiary_status }}">{{ app.beneficiary_label }}</span>{% else %}—{% endif %}
+    </td>
+    <td>
+        {% for reason in row.reasons %}<div>{{ reason }}</div>{% endfor %}
+        {% for label in row.objection_labels %}<div data-objection-label>{{ label }}</div>{% endfor %}
+        {% if row.preliminary_note %}<div data-preliminary-note>{{ row.preliminary_note }}{% if row.changed_since_preliminary %} <span class="badge badge--pending">Αλλαγή έναντι Προκαταρκτικού</span>{% endif %}</div>{% endif %}
+    </td>
     {% endif %}
     <td class="data-table__actions">
         {% if access.plot_applications.view %}
         <a href="{% url 'plot_applications:detail' app.pk %}" class="btn btn-secondary btn-sm">Κατάσταση</a>
+        {% if can_reorder and not row.locked %}
+        <a href="{% url 'plot_applications:detail' app.pk %}?open=eligibility-override" class="btn btn-secondary btn-sm" data-change-result-link>Αλλαγή αποτελέσματος</a>
+        {% endif %}
+        {% endif %}
+        {% if can_view_app_history %}
+        <button type="button"
+                class="btn btn-secondary btn-sm"
+                data-history-timeline-open="{% url 'plot_applications:history' app.pk %}"
+                data-history-timeline-title="{{ app.protocol_number }}"
+                data-history-timeline-lead="Χρονολόγιο των αλλαγών που έγιναν στην αίτηση, από ποιον χρήστη και σε ποιο στάδιο (§Β.1.3)."
+                aria-controls="history-timeline-dialog">
+            Ιστορικό αλλαγών
+        </button>
         {% endif %}
     </td>
 </tr>

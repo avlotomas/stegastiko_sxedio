@@ -1,15 +1,223 @@
 {% extends "base.html" %}
 
-{% block title %}Αρχική{% endblock %}
+{% block title %}Αρχική — Πίνακας ελέγχου{% endblock %}
 
 {% block content %}
 <div class="page-header">
     <h1>Πίνακας ελέγχου</h1>
+    <p class="page-header__lead">
+        Επισκόπηση Αιτήσεων Διαχωρισμού (Ενότητες 1–7), Γνωστοποιήσεων (Στάδια 1–7) και Παραχωρήσεων Οικοπέδων.
+    </p>
 </div>
 
+{# ── 1. Συγκεντρωτικοί Δείκτες (KPIs) ────────────────────────────────────────── #}
+{% if access.cases.view or access.announcements.view or access.plots.view %}
+<div class="dashboard-kpi-grid" data-dashboard-kpis>
+    {% if access.cases.view and kpi_cases %}
+    <div class="card dashboard-kpi-card" data-kpi-card="cases">
+        <div class="dashboard-kpi-card__header">
+            <span class="dashboard-kpi-card__title">Αιτήσεις Διαχωρισμού (Κ.Σ. / Δ.Δ.)</span>
+            <span class="dashboard-kpi-card__value">{{ kpi_cases.total }}</span>
+        </div>
+        <div class="dashboard-kpi-card__metrics">
+            <span>Σε εξέλιξη: <strong>{{ kpi_cases.active }}</strong></span>
+            <span>Ολοκληρωμένες: <strong>{{ kpi_cases.completed }}</strong></span>
+            <span>Εγκρίσεις ΥΠΕΣ: <strong class="text-pass">{{ kpi_cases.approved }}</strong></span>
+            <span>Απορρίψεις: <strong class="text-fail">{{ kpi_cases.rejected }}</strong></span>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if kpi_plots and access.plots.view or kpi_plots and access.announcements.view %}
+    <div class="card dashboard-kpi-card" data-kpi-card="plots">
+        <div class="dashboard-kpi-card__header">
+            <span class="dashboard-kpi-card__title">Οικόπεδα Σχεδίου (Ενότ. 2, 13)</span>
+            <span class="dashboard-kpi-card__value">{{ kpi_plots.total }}</span>
+        </div>
+        <div class="dashboard-kpi-card__metrics">
+            <span>Διαθέσιμα: <strong>{{ kpi_plots.available }}</strong></span>
+            <span>Σε ενεργές γνωστοποιήσεις: <strong>{{ kpi_plots.offered }}</strong></span>
+            <span>Κατανεμημένα σε δικαιούχους: <strong>{{ kpi_plots.allocated }}</strong></span>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if access.announcements.view and kpi_announcements %}
+    <div class="card dashboard-kpi-card" data-kpi-card="announcements">
+        <div class="dashboard-kpi-card__header">
+            <span class="dashboard-kpi-card__title">Γνωστοποιήσεις (Ενότ. 4, 9)</span>
+            <span class="dashboard-kpi-card__value">{{ kpi_announcements.total }}</span>
+        </div>
+        <div class="dashboard-kpi-card__metrics">
+            <span>Ενεργές (Στάδια 2–7): <strong>{{ kpi_announcements.active }}</strong></span>
+            <span>Προσχέδια (Στάδιο 1): <strong>{{ kpi_announcements.draft }}</strong></span>
+            <span>Ολοκληρωμένες: <strong>{{ kpi_announcements.closed }}</strong></span>
+        </div>
+    </div>
+
+    <div class="card dashboard-kpi-card" data-kpi-card="allocations">
+        <div class="dashboard-kpi-card__header">
+            <span class="dashboard-kpi-card__title">Αιτήσεις &amp; Παραχωρήσεις (Παρ. 3, 4)</span>
+            <span class="dashboard-kpi-card__value">{{ kpi_allocations.total_applications }}</span>
+        </div>
+        <div class="dashboard-kpi-card__metrics">
+            <span>Δικαιούχοι: <strong>{{ kpi_allocations.beneficiaries }}</strong></span>
+            <span>Ενεργές κατανομές: <strong>{{ kpi_allocations.active_allocations }}</strong></span>
+            <span>Υπογεγραμμένες &amp; Πληρωμένες: <strong>{{ kpi_allocations.signed_paid }}</strong></span>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+{# ── 2. Κέντρο Προθεσμιών & Εκκρεμών Ενεργειών ──────────────────────────────── #}
+{% if access.announcements.view %}
+{% for row in submission_deadline_alerts %}
+<div class="alert alert--error" data-submission-deadline-alert>
+    {% if row.expired %}
+    <span data-ui-text>Η προθεσμία υποβολής αιτήσεων της γνωστοποίησης</span> «{{ row.cycle.communities_label }}» <span data-ui-text>έληξε στις</span>
+    {{ row.cycle.submission_end_date|date:"d/m/Y" }}· <span data-ui-text>προχωρήστε στο Στάδιο 3 (Επιτροπή Εξέτασης Αιτήσεων).</span>
+    {% elif row.days_remaining == 0 %}
+    <span data-ui-text>Η προθεσμία υποβολής αιτήσεων της γνωστοποίησης</span> «{{ row.cycle.communities_label }}» <span data-ui-text>λήγει σήμερα</span>
+    ({{ row.cycle.submission_end_date|date:"d/m/Y" }}).
+    {% else %}
+    <span data-ui-text>Η προθεσμία υποβολής αιτήσεων της γνωστοποίησης</span> «{{ row.cycle.communities_label }}» <span data-ui-text>λήγει σε</span>
+    {{ row.days_remaining }} <span data-ui-text>ημέρ{{ row.days_remaining|pluralize:"α,ες" }}</span> ({{ row.cycle.submission_end_date|date:"d/m/Y" }}).
+    {% endif %}
+    <a href="{% url 'announcements:detail' row.cycle.pk %}?stage=submission" data-ui-text>Άνοιγμα γνωστοποίησης</a>
+</div>
+{% endfor %}
+
+<div class="card" data-submission-deadlines-card>
+    <h2 class="card__title">Προθεσμίες υποβολής αιτήσεων &amp; Εκκρεμείς ενέργειες γνωστοποιήσεων</h2>
+    {% if submission_deadlines %}
+    <h3 class="form-section-title" style="margin-top: 0.25rem;">Ανοικτές περίοδοι υποβολής αιτήσεων (Στάδιο 2 — Ενότ. 4, 5)</h3>
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Γνωστοποίηση</th>
+                    <th>Ημ. γνωστοποίησης</th>
+                    <th>Λήξη προθεσμίας</th>
+                    <th>Ημέρες που απομένουν</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in submission_deadlines %}
+                <tr data-submission-deadline-row>
+                    <td><a href="{% url 'announcements:detail' row.cycle.pk %}?stage=submission"><strong>{{ row.cycle.communities_label }}</strong></a></td>
+                    <td>{{ row.cycle.announcement_date|date:"d/m/Y" }}</td>
+                    <td>{{ row.cycle.submission_end_date|date:"d/m/Y" }}</td>
+                    <td>
+                        {% if row.expired %}
+                        <span class="badge badge--fail">Έληξε</span>
+                        {% elif row.warning %}
+                        <span class="badge badge--fail">{{ row.days_remaining }}</span>
+                        {% else %}
+                        <span class="badge badge--pass">{{ row.days_remaining }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="{% url 'announcements:detail' row.cycle.pk %}?stage=submission" class="btn btn-secondary btn-sm">Άνοιγμα</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-muted">Δεν υπάρχουν γνωστοποιήσεις σε στάδιο υποβολής αιτήσεων.</p>
+    {% endif %}
+
+    {% if workflow_action_items %}
+    <h3 class="form-section-title" style="margin-top: 1rem;">Εκκρεμείς ενέργειες ανά στάδιο γνωστοποίησης (Στάδια 2–6)</h3>
+    <div class="table-wrap">
+        <table class="data-table" data-workflow-actions-table>
+            <thead>
+                <tr>
+                    <th>Κοινότητα / Γνωστοποίηση</th>
+                    <th>Στάδιο</th>
+                    <th>Εκκρεμής ενέργεια</th>
+                    <th>Προθεσμία</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in workflow_action_items %}
+                <tr>
+                    <td>
+                        <a href="{% url 'announcements:detail' item.cycle.pk %}?stage={{ item.stage_code }}">
+                            <strong>{{ item.cycle.communities_label }}</strong>
+                        </a>
+                        <span class="text-muted">({{ item.cycle.announcement_date|date:"d/m/Y" }})</span>
+                    </td>
+                    <td><span class="badge badge--{{ item.badge }}">{{ item.stage_label }}</span></td>
+                    <td><span data-ui-text>{{ item.summary }}</span></td>
+                    <td>{{ item.deadline|date:"d/m/Y"|default:"—" }}</td>
+                    <td>
+                        <a href="{% url 'announcements:detail' item.cycle.pk %}?stage={{ item.stage_code }}" class="btn btn-secondary btn-sm">Μετάβαση</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {% if pending_agreements %}
+    <h3 class="form-section-title" style="margin-top: 1rem;">Εκκρεμείς υπογραφές Συμφωνίας &amp; Πληρωμές (Στάδιο 7 — Ενότ. 9, 12, 15)</h3>
+    <div class="table-wrap">
+        <table class="data-table" data-pending-agreements-table>
+            <thead>
+                <tr>
+                    <th>Αίτηση / Δικαιούχος</th>
+                    <th>Κοινότητα</th>
+                    <th>Οικόπεδο &amp; Τιμή (25%)</th>
+                    <th>Ραντεβού / Προθεσμία</th>
+                    <th>Υπογραφή</th>
+                    <th>Πληρωμή</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for alloc in pending_agreements %}
+                <tr>
+                    <td>
+                        <strong>{{ alloc.application.protocol_number }}</strong>
+                        — {{ alloc.application.applicant.first_name }} {{ alloc.application.applicant.last_name }}
+                    </td>
+                    <td>{{ alloc.parcel.community.name }}</td>
+                    <td>{{ alloc.parcel.row_label }} (€ {{ alloc.parcel.disposal_price }})</td>
+                    <td>
+                        {% if alloc.agreement.appointment_at %}{{ alloc.agreement.appointment_at|date:"d/m/Y H:i" }}{% else %}—{% endif %}
+                        {% if alloc.agreement.deadline %}<span class="text-muted">(<span data-ui-text>έως</span> {{ alloc.agreement.deadline|date:"d/m/Y" }})</span>{% endif %}
+                    </td>
+                    <td>
+                        <span class="badge {% if alloc.agreement.status == 'signed' %}badge--pass{% else %}badge--pending{% endif %}">
+                            {{ alloc.agreement.get_status_display|default:"Εκκρεμεί" }}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="badge {% if alloc.payment.status == 'paid' %}badge--pass{% else %}badge--pending{% endif %}">
+                            {{ alloc.payment.get_status_display|default:"Εκκρεμεί" }}
+                        </span>
+                    </td>
+                    <td>
+                        <a href="{% url 'announcements:detail' alloc.application.announcement_id %}?stage=agreements" class="btn btn-secondary btn-sm">Στάδιο 7</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
 {% if access.reminders.view %}
-<div class="card">
-    <h2 class="card__title">Υπενθυμίσεις</h2>
+<div class="card" data-dashboard-reminders-card>
+    <h2 class="card__title">Υπενθυμίσεις διαβουλεύσεων (Ενότ. 5 &amp; 7.4)</h2>
     {% if dashboard_reminders %}
     <div class="table-wrap">
         <table class="data-table">
@@ -42,10 +250,10 @@
         </table>
     </div>
     {% if dashboard_reminders_total > dashboard_reminders|length %}
-    <p class="text-muted">Εμφανίζονται τα πρώτα 5 από {{ dashboard_reminders_total }} υπενθυμίσεις.</p>
+    <p class="text-muted"><span data-ui-text>Εμφανίζονται τα πρώτα 5 από</span> {{ dashboard_reminders_total }} <span data-ui-text>υπενθυμίσεις.</span></p>
     {% endif %}
     <p style="margin-top: 0.75rem;">
-        <a href="{% url 'reminders' %}">Προβολή όλων των υπενθυμίσεων</a>
+        <a href="{% url 'reminders' %}" data-ui-text>Προβολή όλων των υπενθυμίσεων</a>
     </p>
     {% else %}
     <p class="text-muted">Δεν υπάρχουν υπενθυμίσεις για εκκρεμείς διαβουλεύσεις.</p>
@@ -53,37 +261,188 @@
 </div>
 {% endif %}
 
-<div class="tile-grid">
-    {% if access.cases.view %}
-    <a href="{% url 'cases:list' %}" class="tile">
-        <p class="tile__title">Αιτήσεις Κ.Σ. / Δ.Δ. — Διαχωρισμός</p>
-        <p class="tile__desc">
-            Αιτήσεις Κοινοτικού Συμβουλίου / Δημοτικού Διαμερίσματος για διαχωρισμό κρατικής γης
-            σε οικόπεδα. Κατάλογος υπαρχουσών αιτήσεων, καταχώριση νέας και ενέργειες ανά υπόθεση
-            (Ενότητες 1–9).
-        </p>
-    </a>
-    {% endif %}
-    {% if access.plot_applications.any %}
-    <a href="{% url 'plot_applications:list' %}" class="tile">
-        <p class="tile__title">Αιτήσεις παραχώρησης οικοπέδου</p>
-        <p class="tile__desc">
-            Αιτήσεις πολιτών (Παράρτημα 3) για απόκτηση οικοπέδου, με αυτόματο κατ' αρχήν έλεγχο
-            κριτηρίων επιλεξιμότητας (Ενότητες 10, 20) και προτεραιοποίηση (Ενότητα 11).
-        </p>
-    </a>
-    {% endif %}
-    {% if access.settings.view %}
-    <a href="{% url 'system_configuration' %}" class="tile">
-        <p class="tile__title">Ρυθμίσεις συστήματος</p>
-        <p class="tile__desc">Χρήστες, ρόλοι και δικαιώματα, κατάλογοι και παράμετροι εφαρμογής.</p>
-    </a>
-    {% endif %}
-    {% if user.is_staff %}
-    <a href="/admin/" class="tile">
-        <p class="tile__title">Διαχείριση συστήματος</p>
-        <p class="tile__desc">Κοινότητες, γνωστοποιήσεις, ρυθμίσεις και κατάλογοι.</p>
-    </a>
-    {% endif %}
+{# ── 3. Πορεία Γνωστοποιήσεων & Παραχωρήσεων Οικοπέδων (Στάδια 1–7) ────────── #}
+{% if access.announcements.view %}
+<div class="card" data-dashboard-announcements-pipeline>
+    <div class="card__header-row" style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+        <h2 class="card__title" style="margin-bottom: 0;">Πορεία Γνωστοποιήσεων &amp; Παραχωρήσεων Οικοπέδων (Στάδια 1–7)</h2>
+        <div class="toolbar" style="margin: 0;">
+            {% if access.announcements.create %}
+            <a href="{% url 'announcements:create' %}" class="btn btn-primary btn-sm">Νέα γνωστοποίηση</a>
+            {% endif %}
+            <a href="{% url 'announcements:list' %}" class="btn btn-secondary btn-sm">Όλες οι γνωστοποιήσεις</a>
+        </div>
+    </div>
+
+    <div class="dashboard-stage-strip" data-announcement-stage-strip>
+        {% for st in announcement_stage_counts %}
+        <div class="dashboard-stage-pill{% if st.count %} is-populated{% endif %}">
+            <span class="dashboard-stage-pill__label">{{ st.label }}</span>
+            <span class="badge {% if st.code == 'closed' and st.count %}badge--pass{% elif st.count %}badge--pending{% else %}badge--neutral{% endif %}">{{ st.count }}</span>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="table-wrap" style="margin-top: 0.75rem;">
+        <table class="data-table" data-dashboard-announcements-table>
+            <thead>
+                <tr>
+                    <th>Κοινότητα &amp; Γνωστοποίηση</th>
+                    <th>Τρέχον Στάδιο</th>
+                    <th>Οικόπεδα (Διαθ. / Καταν. / Υπογρ.)</th>
+                    <th>Αιτήσεις (Σύν. / Δικαιούχοι)</th>
+                    <th>Ενστάσεις / Pending</th>
+                    <th>Κατάλογοι</th>
+                    <th>Επόμενη ενέργεια</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in announcement_rows %}
+                <tr data-dashboard-announcement-row="{{ row.cycle.pk }}">
+                    <td>
+                        <a href="{% url 'announcements:detail' row.cycle.pk %}?stage={{ row.stage_link_code }}">
+                            <strong>{{ row.cycle.communities_label }}</strong>
+                        </a>
+                        <div class="text-muted">
+                            {{ row.cycle.announcement_date|date:"d/m/Y" }} · <span data-ui-text>έως</span> {{ row.cycle.submission_end_date|date:"d/m/Y" }}
+                        </div>
+                    </td>
+                    <td>
+                        <span class="badge {% if row.cycle.stage == 'closed' %}badge--pass{% elif not row.cycle.is_published %}badge--neutral{% else %}badge--pending{% endif %}">
+                            {{ row.cycle.get_stage_display }}
+                        </span>
+                    </td>
+                    <td>
+                        <strong>{{ row.plots_count }}</strong> <span data-ui-text>προσφερόμενα</span>
+                        · <strong>{{ row.allocated_count }}</strong> <span data-ui-text>καταν.</span>
+                        · <strong>{{ row.signed_paid_count }}</strong> <span data-ui-text>υπογρ.</span>
+                    </td>
+                    <td>
+                        <strong>{{ row.applications_total }}</strong> <span data-ui-text>αιτήσεις</span>
+                        · <strong>{{ row.beneficiaries_count }}</strong> <span data-ui-text>δικαιούχοι</span>
+                        {% if row.blockers_count %}
+                        <div><span class="badge badge--fail" data-ui-prefix="{{ row.blockers_count }} ">{{ row.blockers_count }} εκκρεμής πληρότητα</span></div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if row.objections_total %}
+                        <strong>{{ row.objections_total }}</strong> <span data-ui-text>ενστάσεις</span>
+                        {% if row.undecided_objections_count %}
+                        <span class="badge badge--fail" data-ui-prefix="{{ row.undecided_objections_count }} ">{{ row.undecided_objections_count }} εκκρεμείς</span>
+                        {% endif %}
+                        {% else %}—{% endif %}
+                        {% if row.pending_reqs_count %}
+                        <div><span class="badge badge--pending" data-ui-suffix=" ({{ row.pending_reqs_count }})">PENDING ({{ row.pending_reqs_count }})</span></div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if row.final %}
+                        <span class="badge badge--pass">Τελικός</span>
+                        {% elif row.preliminary %}
+                        <span class="badge badge--pending">Προκαταρκτικός</span>
+                        {% else %}
+                        <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td><span data-ui-text>{{ row.next_action }}</span></td>
+                    <td>
+                        <a href="{% url 'announcements:detail' row.cycle.pk %}?stage={{ row.stage_link_code }}" class="btn btn-secondary btn-sm">
+                            Άνοιγμα
+                        </a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="8" class="text-muted">Δεν έχουν καταχωριστεί γνωστοποιήσεις.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
+{% endif %}
+
+{# ── 4. Πορεία Αιτήσεων Διαχωρισμού Κ.Σ. / Δ.Δ. (Ενότητες 1–7) ─────────────── #}
+{% if access.cases.view %}
+<div class="card" data-dashboard-cases-pipeline>
+    <div class="card__header-row" style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+        <h2 class="card__title" style="margin-bottom: 0;">Πορεία Αιτήσεων Διαχωρισμού Κ.Σ. / Δ.Δ. (Ενότητες 1–7)</h2>
+        <div class="toolbar" style="margin: 0;">
+            {% if access.cases.create %}
+            <a href="{% url 'cases:create' %}" class="btn btn-primary btn-sm">Νέα αίτηση Κ.Σ. / Δ.Δ.</a>
+            {% endif %}
+            <a href="{% url 'cases:list' %}" class="btn btn-secondary btn-sm">Όλες οι αιτήσεις διαχωρισμού</a>
+        </div>
+    </div>
+
+    <div class="dashboard-stage-strip" data-case-phase-strip>
+        {% for label, count, badge in case_phase_counts %}
+        <div class="dashboard-stage-pill{% if count %} is-populated{% endif %}">
+            <span class="dashboard-stage-pill__label">{{ label }}</span>
+            <span class="badge badge--{{ badge }}">{{ count }}</span>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="table-wrap" style="margin-top: 0.75rem;">
+        <table class="data-table" data-dashboard-cases-table>
+            <thead>
+                <tr>
+                    <th>Αρ. Υπόθεσης</th>
+                    <th>Κοινότητα</th>
+                    <th>Τύπος διαδικασίας</th>
+                    <th>Τρέχουσα Φάση</th>
+                    <th>Πληρότητα (Ενότ. 2)</th>
+                    <th>Απόφαση ΥΠΕΣ (Ενότ. 6)</th>
+                    <th>Υποδομές / Προϋπόθεση Προκήρυξης (Ενότ. 4, 7.6)</th>
+                    <th>Οικόπεδα (7.3)</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in case_rows %}
+                <tr data-dashboard-case-row="{{ item.case.pk }}">
+                    <td><a href="{% url 'cases:detail' item.case.pk %}"><strong>{{ item.case.case_number }}</strong></a></td>
+                    <td>{{ item.case.community.name }}</td>
+                    <td>{{ item.case.get_case_type_display }}</td>
+                    <td><span class="badge badge--{{ item.phase_badge }}">{{ item.phase_label }}</span></td>
+                    <td>
+                        {% if not item.case.is_new_division %}
+                        <span class="text-muted" data-ui-text>Δεν εφαρμόζεται</span>
+                        {% elif item.case.completeness_result == 'yes' %}
+                        <span class="badge badge--pass">Ναι</span>
+                        {% elif item.case.completeness_result == 'no' %}
+                        <span class="badge badge--fail">Όχι</span>
+                        {% else %}
+                        <span class="badge badge--pending">Εκκρεμεί</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if not item.case.is_new_division %}
+                        <span class="text-muted" data-ui-text>Δεν εφαρμόζεται</span>
+                        {% elif item.case.list_ministry_decision == 'approved' %}
+                        <span class="badge badge--pass">{{ item.case.latest_ministry_decision_display }}</span>
+                        {% elif item.case.list_ministry_decision == 'rejected' %}
+                        <span class="badge badge--fail">{{ item.case.latest_ministry_decision_display }}</span>
+                        {% elif item.case.latest_ministry_decision_display %}
+                        <span class="badge badge--pending">{{ item.case.latest_ministry_decision_display }}</span>
+                        {% else %}
+                        <span class="text-muted" data-ui-text>Εκκρεμεί</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="badge badge--{{ item.infra_badge }}">{{ item.infra_label }}</span>
+                    </td>
+                    <td><strong>{{ item.case.approved_design_plots_count }}</strong></td>
+                    <td>
+                        <a href="{% url 'cases:detail' item.case.pk %}" class="btn btn-secondary btn-sm">Φάκελος</a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="9" class="text-muted">Δεν έχουν καταχωριστεί αιτήσεις διαχωρισμού.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
 {% endblock %}

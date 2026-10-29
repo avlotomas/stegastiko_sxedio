@@ -30,12 +30,27 @@ from cases.services import (
     LAND_PLOT_EMAIL_SUBJECT_KEY,
 )
 from core.branding import APP_TITLE_DEFAULT, APP_TITLE_SETTING_KEY
+from core.docx_merge import (
+    AGREEMENT_DISTRICT_OFFICER_DEFAULT,
+    AGREEMENT_DISTRICT_OFFICER_KEY,
+)
 from core.menu_labels import MENU_LABEL_FIELDS, get_menu_labels, save_menu_label
 from core.reminders import (
     CONSULTATION_DUE_REMINDER_DAYS_DEFAULT,
     CONSULTATION_DUE_REMINDER_DAYS_KEY,
 )
 from core.services import SMTP_SECURITY_CHOICES, SMTP_SETTING_DEFAULTS, get_setting, set_setting
+from plot_applications.announcement_workflow import (
+    WORKFLOW_EMAIL_DEFAULTS,
+    WORKFLOW_EMAIL_TEMPLATES,
+)
+from plot_applications.grid_settings import (
+    PLOT_APPLICATION_GRID_COLUMNS,
+    get_plot_application_grid_columns,
+    get_plot_application_grid_locked_columns,
+    save_plot_application_grid_columns,
+    save_plot_application_grid_locked_columns,
+)
 from plot_applications.stage_labels import (
     DEFAULT_APPLICATION_STAGE_LABELS,
     get_application_stage_label,
@@ -49,15 +64,24 @@ WORKFLOW_SETTING_FIELDS = (
     ("applicationFolderPrefix", "Πρόθεμα Αρ. Φακέλου Αιτητή (10.1.1)"),
     ("folderSequenceDigits", "Πλήθος ψηφίων ακολουθίας ανά Κοινότητα"),
     (CASE_NUMBER_PREFIX_KEY, "Πρόθεμα αριθμού υπόθεσης (1.1)"),
+    (
+        AGREEMENT_DISTRICT_OFFICER_KEY,
+        "Έπαρχος στη Συμφωνία Παραχώρησης (Παράρτημα 4, Ενότ. 12)",
+    ),
 )
 SETTING_FIELD_DEFAULTS = {
     APP_TITLE_SETTING_KEY: APP_TITLE_DEFAULT,
     CASE_NUMBER_PREFIX_KEY: CASE_NUMBER_PREFIX_DEFAULT,
+    AGREEMENT_DISTRICT_OFFICER_KEY: AGREEMENT_DISTRICT_OFFICER_DEFAULT,
 }
 SETTING_FIELD_HELP_TEXTS = {
     CASE_NUMBER_PREFIX_KEY: (
         "Ο αριθμός υπόθεσης σχηματίζεται αυτόματα ως "
         "«πρόθεμα.αριθμός φακέλου Κοινότητας.αύξων αριθμός ανά Κοινότητα»."
+    ),
+    AGREEMENT_DISTRICT_OFFICER_KEY: (
+        "Κείμενο που αντικαθιστά τα πεδία «του Επάρχου» και «ΕΠΕΙΔΗ ο/η Έπαρχος» "
+        "στη Συμφωνία Παραχώρησης Οικοπέδου (Παράρτημα 4, Ενότ. 12)."
     ),
 }
 GENERAL_SETTING_FIELDS = (*BRANDING_SETTING_FIELDS, *WORKFLOW_SETTING_FIELDS)
@@ -65,12 +89,13 @@ EMAIL_SETTING_DEFAULTS = {
     **SMTP_SETTING_DEFAULTS,
     DEFICIENCY_EMAIL_SUBJECT_KEY: DEFICIENCY_EMAIL_SUBJECT_DEFAULT,
     LAND_PLOT_EMAIL_SUBJECT_KEY: LAND_PLOT_EMAIL_SUBJECT_DEFAULT,
+    **WORKFLOW_EMAIL_DEFAULTS,
 }
 
 
 def _email_setting_fields():
     """SMTP server and email texts; keyed by the SystemSetting key."""
-    return {
+    fields = {
         "smtpHost": forms.CharField(label="Διακομιστής SMTP", max_length=255, required=False),
         "smtpPort": forms.IntegerField(label="Θύρα SMTP", min_value=1, max_value=65535),
         "smtpSecurity": forms.ChoiceField(
@@ -103,6 +128,18 @@ def _email_setting_fields():
             ),
         ),
     }
+    for key, label, _default, help_text in WORKFLOW_EMAIL_TEMPLATES:
+        is_body = key.endswith("Body")
+        fields[key] = forms.CharField(
+            label=label,
+            max_length=4000 if is_body else 255,
+            required=False,
+            help_text=help_text,
+            widget=forms.Textarea(attrs={"class": "input", "rows": 3})
+            if is_body
+            else forms.TextInput(attrs={"class": "input"}),
+        )
+    return fields
 
 
 def income_limit_field_name(setting_key):
@@ -223,8 +260,45 @@ class SystemMenuLabelSettingsForm(forms.Form):
             save_menu_label(key, self.cleaned_data[f"menu_{key}"], description)
 
 
+class SystemPlotApplicationGridSettingsForm(forms.Form):
+    """Ρυθμίσεις πίνακα αιτήσεων παραχώρησης οικοπέδου (ορατές στήλες και κλειδωμένες στήλες)."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        max_locked = len(PLOT_APPLICATION_GRID_COLUMNS)
+        self.fields["grid_columns"] = forms.MultipleChoiceField(
+            label="Ορατές στήλες πίνακα",
+            choices=PLOT_APPLICATION_GRID_COLUMNS,
+            required=True,
+            initial=None if self.is_bound else get_plot_application_grid_columns(),
+            error_messages={
+                "required": "Επιλέξτε τουλάχιστον μία στήλη για εμφάνιση στον πίνακα.",
+            },
+            help_text="Επιλέξτε ποιες στήλες εμφανίζονται στον πίνακα των αιτήσεων παραχώρησης οικοπέδου.",
+            widget=forms.CheckboxSelectMultiple(attrs={"class": "checkbox-list"}),
+        )
+        self.fields["locked_columns"] = forms.IntegerField(
+            label="Κλειδωμένες στήλες από την αρχή (για οριζόντια κύλιση)",
+            min_value=0,
+            max_value=max_locked,
+            required=True,
+            initial=None if self.is_bound else get_plot_application_grid_locked_columns(),
+            help_text=(
+                "Πόσες από τις πρώτες ορατές στήλες παραμένουν σταθερές (locked) "
+                "κατά την οριζόντια κύλιση του πίνακα (0 = καμία)."
+            ),
+            widget=forms.NumberInput(
+                attrs={"class": "input", "min": "0", "max": str(max_locked)}
+            ),
+        )
+
+    def save(self):
+        save_plot_application_grid_columns(self.cleaned_data["grid_columns"])
+        save_plot_application_grid_locked_columns(self.cleaned_data["locked_columns"])
+
+
 class SystemPlotApplicationLabelSettingsForm(forms.Form):
-    """Τίτλοι εμφάνισης των σταδίων της αίτησης παραχώρησης οικοπέδου."""
+    """Τίτλοι εμφάνισης των σταδίων και ρυθμίσεις πίνακα της αίτησης παραχώρησης οικοπέδου."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -236,10 +310,44 @@ class SystemPlotApplicationLabelSettingsForm(forms.Form):
                 help_text=f"Προεπιλογή: «{default}».",
                 widget=forms.TextInput(attrs={"class": "input"}),
             )
+        self._has_grid_payload = bool(
+            self.is_bound
+            and ("locked_columns" in self.data or "grid_columns" in self.data)
+        )
+        max_locked = len(PLOT_APPLICATION_GRID_COLUMNS)
+        self.fields["grid_columns"] = forms.MultipleChoiceField(
+            label="Ορατές στήλες πίνακα",
+            choices=PLOT_APPLICATION_GRID_COLUMNS,
+            required=self._has_grid_payload,
+            initial=None if self.is_bound else get_plot_application_grid_columns(),
+            error_messages={
+                "required": "Επιλέξτε τουλάχιστον μία στήλη για εμφάνιση στον πίνακα.",
+            },
+            help_text="Επιλέξτε ποιες στήλες εμφανίζονται στον πίνακα των αιτήσεων παραχώρησης οικοπέδου.",
+            widget=forms.CheckboxSelectMultiple(attrs={"class": "checkbox-list"}),
+        )
+        self.fields["locked_columns"] = forms.IntegerField(
+            label="Κλειδωμένες στήλες από την αρχή (για οριζόντια κύλιση)",
+            min_value=0,
+            max_value=max_locked,
+            required=self._has_grid_payload,
+            initial=None if self.is_bound else get_plot_application_grid_locked_columns(),
+            help_text=(
+                "Πόσες από τις πρώτες ορατές στήλες παραμένουν σταθερές (locked) "
+                "κατά την οριζόντια κύλιση του πίνακα (0 = καμία)."
+            ),
+            widget=forms.NumberInput(
+                attrs={"class": "input", "min": "0", "max": str(max_locked)}
+            ),
+        )
 
     def save(self):
         for stage in DEFAULT_APPLICATION_STAGE_LABELS:
             save_application_stage_label(stage, self.cleaned_data[f"stage_{stage}"])
+        if self._has_grid_payload:
+            save_plot_application_grid_columns(self.cleaned_data["grid_columns"])
+            if self.cleaned_data.get("locked_columns") is not None:
+                save_plot_application_grid_locked_columns(self.cleaned_data["locked_columns"])
 
 
 class SystemWorkflowSettingsForm(forms.Form):
@@ -345,10 +453,66 @@ class SystemEmailSettingsForm(forms.Form):
     def save(self):
         for setting_key in EMAIL_SETTING_DEFAULTS:
             field_name = email_field_name(setting_key)
-            value = self.cleaned_data[field_name]
+            value = self.cleaned_data.get(field_name)
             if setting_key == "smtpPassword" and not value:
                 continue
+            if setting_key in WORKFLOW_EMAIL_DEFAULTS and not value:
+                if field_name not in self.data:
+                    continue
+                value = WORKFLOW_EMAIL_DEFAULTS[setting_key]
             set_setting(setting_key, str(value), str(self.fields[field_name].label))
+
+
+class AgreementTemplateUploadForm(forms.Form):
+    """Μεταφόρτωση προτύπου Συμφωνίας Παραχώρησης (.docx, Παράρτημα 4)."""
+
+    name = forms.CharField(
+        label="Ονομασία προτύπου",
+        max_length=255,
+        initial="Συμφωνία Παραχώρησης Οικοπέδου (Παράρτημα 4)",
+        widget=forms.TextInput(attrs={"class": "input"}),
+    )
+    version = forms.CharField(
+        label="Έκδοση",
+        max_length=64,
+        required=False,
+        initial="v1",
+        widget=forms.TextInput(attrs={"class": "input"}),
+    )
+    template_file = forms.FileField(
+        label="Αρχείο Word (.docx)",
+        help_text="Αρχείο .docx με πεδία {{placeholders}} (π.χ. {{applicant_name}}, {{plot_number}}, {{disposal_price}}).",
+    )
+    is_active = forms.BooleanField(
+        label="Ορισμός ως ενεργό πρότυπο",
+        required=False,
+        initial=True,
+    )
+
+    def clean_template_file(self):
+        from core.docx_merge import validate_agreement_template_file
+
+        uploaded = self.cleaned_data["template_file"]
+        name = (getattr(uploaded, "name", "") or "").lower()
+        if not name.endswith(".docx"):
+            raise forms.ValidationError("Επιτρέπονται μόνο αρχεία Word (.docx).")
+        validate_agreement_template_file(uploaded)
+        return uploaded
+
+    def save(self):
+        from allocation.models import AgreementTemplate
+
+        is_active = bool(self.cleaned_data.get("is_active", True))
+        if is_active:
+            for existing in AgreementTemplate.objects.filter(is_active=True):
+                existing.is_active = False
+                existing.save(update_fields=["is_active", "updated_at"])
+        return AgreementTemplate.objects.create(
+            name=self.cleaned_data["name"].strip(),
+            version=(self.cleaned_data.get("version") or "").strip(),
+            template_file=self.cleaned_data["template_file"],
+            is_active=is_active,
+        )
 
 
 class SystemConfigurationForm(forms.Form):
@@ -411,7 +575,11 @@ class SystemConfigurationForm(forms.Form):
         _save_income_limit_fields(self)
         for setting_key in EMAIL_SETTING_DEFAULTS:
             field_name = email_field_name(setting_key)
-            value = self.cleaned_data[field_name]
+            value = self.cleaned_data.get(field_name)
             if setting_key == "smtpPassword" and not value:
                 continue
+            if setting_key in WORKFLOW_EMAIL_DEFAULTS and not value:
+                if field_name not in self.data:
+                    continue
+                value = WORKFLOW_EMAIL_DEFAULTS[setting_key]
             set_setting(setting_key, str(value), str(self.fields[field_name].label))

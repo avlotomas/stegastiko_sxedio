@@ -12,8 +12,13 @@
                     {{ event.timestamp|date:"d/m/Y H:i:s" }}
                 </time>
                 <span class="history-timeline__actor">
-                    Χρήστης: <strong>{{ event.actor }}</strong>
+                    <span data-ui-text>Χρήστης:</span> <strong>{{ event.actor }}</strong>
                 </span>
+                {% if event.stage_label %}
+                <span class="history-timeline__stage" data-history-timeline-stage>
+                    <span data-ui-text>Στάδιο:</span> <strong><span data-ui-text>{{ event.stage_label }}</span></strong>
+                </span>
+                {% endif %}
             </div>
             <ul class="history-timeline__changes">
                 {% for change in event.changes %}

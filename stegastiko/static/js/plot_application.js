@@ -58,11 +58,15 @@
         single_parent: "Μονογονεϊκή οικογένεια",
     };
 
+    function announcementFieldName() {
+        return form.querySelector('[name="main-announcement"]') ? "main-announcement" : "main-community";
+    }
+
     function syncResidenceCommunity() {
         const input = form.querySelector('[name="main-residence_community"]');
         if (!input) return;
         if (LOCKED_CATEGORIES.includes(fieldValue("main-residence_category"))) {
-            input.value = communityNames[fieldValue("main-community")] || "";
+            input.value = communityNames[fieldValue(announcementFieldName())] || "";
             input.readOnly = true;
         } else if (input.readOnly) {
             input.readOnly = false;
@@ -682,9 +686,180 @@
         return required;
     }
 
-    function refreshDocumentChecklist() {
+    function documentLabelForCode(code) {
+        const labelEl = form.querySelector(`[data-document-code="${code}"]`);
+        if (labelEl) {
+            const textEl =
+                labelEl.querySelector("[data-ui-text-node]") ||
+                labelEl.querySelector("span");
+            const text = (textEl ? textEl.textContent : labelEl.textContent || "").trim();
+            if (text) return text;
+        }
+        const docLabels = incomeParams.document_labels || {};
+        return docLabels[code] || code;
+    }
+
+    const PERSON_COMPLETENESS_FIELDS = [
+        ["identity_number", "Αρ. Δελτίου Ταυτότητας"],
+        ["first_name", "Όνομα"],
+        ["last_name", "Επίθετο"],
+        ["date_of_birth", "Ημερομηνία Γέννησης"],
+        ["birth_place", "Τόπος Γέννησης"],
+        ["birth_country", "Χώρα Γέννησης"],
+        ["parents_birth_place", "Τόπος γέννησης γονέων"],
+        ["parents_birth_country", "Χώρα Γέννησης Γονέων"],
+    ];
+
+    function collectMissingCompletenessFields() {
+        const missing = [];
+        const add = (name, label) => missing.push({ name, label });
+
+        const annField = announcementFieldName();
+        if (!(fieldValue(annField) || "").trim()) {
+            add(annField, annField === "main-announcement" ? "Γνωστοποίηση" : "Κοινότητα");
+        }
+        if (!(fieldValue("main-submitted_on") || "").trim()) {
+            add("main-submitted_on", "Ημερομηνία υποβολής");
+        }
+
+        PERSON_COMPLETENESS_FIELDS.forEach(([attr, label]) => {
+            if (!(fieldValue(`applicant-${attr}`) || "").trim()) {
+                add(`applicant-${attr}`, `Αιτητής/τρια: ${label}`);
+            }
+        });
+
+        const applicantCit = (fieldValue("applicant_party-citizenship") || "").trim();
+        if (!applicantCit) {
+            add("applicant_party-citizenship", "Αιτητής/τρια: Υπηκοότητα / Ιδιότητα");
+        } else if (
+            applicantCit === "other" &&
+            !(fieldValue("applicant_party-citizenship_other") || "").trim()
+        ) {
+            add("applicant_party-citizenship_other", "Αιτητής/τρια: Άλλο (περιγραφή υπηκοότητας)");
+        }
+        if (!(fieldValue("applicant_party-mobile_phone") || "").trim()) {
+            add("applicant_party-mobile_phone", "Αιτητής/τρια: Τηλέφωνο Κινητό");
+        }
+        if (!(fieldValue("main-email") || "").trim()) {
+            add("main-email", "Ηλεκτρονική Διεύθυνση");
+        }
+
+        const residenceCategory = (fieldValue("main-residence_category") || "").trim();
+        if (!residenceCategory) {
+            add("main-residence_category", "Τόπος διαμονής: Κατηγορία");
+        } else if (residenceCategory === "neighbouring") {
+            if (!(fieldValue("main-neighbouring_community") || "").trim()) {
+                add("main-neighbouring_community", "Τόπος διαμονής: Γειτονική Κοινότητα");
+            }
+        } else if (!(fieldValue("main-residence_community") || "").trim()) {
+            add("main-residence_community", "Τόπος διαμονής: Κοινότητα / Δ.Δ. διαμονής");
+        }
+
+        const familyStatus = (fieldValue("main-family_status") || "").trim();
+        const isCouple =
+            familyStatus === "couple_with_children" || familyStatus === "couple_without_children";
+        if (!familyStatus) {
+            add("main-family_status", "Οικογενειακή κατάσταση");
+        } else if (familyStatus === "single_parent") {
+            const singleStatus = (fieldValue("main-single_parent_status") || "").trim();
+            if (!singleStatus) {
+                add("main-single_parent_status", "Μονογονιός (περίπτωση)");
+            } else if (
+                singleStatus === "other" &&
+                !(fieldValue("main-single_parent_other") || "").trim()
+            ) {
+                add("main-single_parent_other", "Μονογονιός: Άλλο (περιγραφή)");
+            }
+        }
+
+        if (isCouple) {
+            PERSON_COMPLETENESS_FIELDS.forEach(([attr, label]) => {
+                if (!(fieldValue(`spouse-${attr}`) || "").trim()) {
+                    add(`spouse-${attr}`, `Σύζυγος/Συμβίος: ${label}`);
+                }
+            });
+            const spouseCit = (fieldValue("spouse_party-citizenship") || "").trim();
+            if (!spouseCit) {
+                add("spouse_party-citizenship", "Σύζυγος/Συμβίος: Υπηκοότητα / Ιδιότητα");
+            } else if (
+                spouseCit === "other" &&
+                !(fieldValue("spouse_party-citizenship_other") || "").trim()
+            ) {
+                add("spouse_party-citizenship_other", "Σύζυγος/Συμβίος: Άλλο (περιγραφή υπηκοότητας)");
+            }
+            if (!(fieldValue("spouse_party-mobile_phone") || "").trim()) {
+                add("spouse_party-mobile_phone", "Σύζυγος/Συμβίος: Τηλέφωνο Κινητό");
+            }
+        }
+
+        const hasAnswer = (name) => {
+            const val = (fieldValue(name) || "").trim();
+            return val === "True" || val === "False";
+        };
+        if (!hasAnswer("main-has_dwelling")) {
+            add("main-has_dwelling", "Εγγεγραμμένη κατοικία (Ναι/Όχι)");
+        }
+        if (!hasAnswer("main-has_residential_land")) {
+            add("main-has_residential_land", "Οικόπεδο/τεμάχιο σε Οικιστική Ζώνη (Ναι/Όχι)");
+        }
+        if (!hasAnswer("main-has_alienated_property")) {
+            add("main-has_alienated_property", "Αποξένωση εντός 3 ετών (Ναι/Όχι)");
+        }
+        if (!hasAnswer("main-previous_housing_aid")) {
+            add("main-previous_housing_aid", "Προηγούμενη κρατική στεγαστική ενίσχυση (Ναι/Όχι)");
+        }
+
+        if (!checkboxChecked("main-applicant_signed")) {
+            add("main-applicant_signed", "Υπογραφή Αιτητή/Αιτήτριας");
+        }
+        if (isCouple && !checkboxChecked("main-spouse_signed")) {
+            add("main-spouse_signed", "Υπογραφή Συζύγου/Συμβίου");
+        }
+
+        return missing;
+    }
+
+    function collectDocumentState() {
         const applicable = computeApplicableDocumentCodes();
         const checkedCodes = new Set();
+        form.querySelectorAll("[data-document-code]").forEach((label) => {
+            const code = label.dataset.documentCode;
+            const input = label.querySelector('input[type="checkbox"]');
+            if (input && applicable.has(code) && input.checked) {
+                checkedCodes.add(code);
+            }
+        });
+        const requiredGroups = computeRequiredDocumentGroups();
+        const missingDocs = [];
+        requiredGroups.forEach((codes) => {
+            if (!codes.some((code) => checkedCodes.has(code))) {
+                const primaryCode = codes[0];
+                missingDocs.push({
+                    code: primaryCode,
+                    label: documentLabelForCode(primaryCode),
+                });
+            }
+        });
+        const requiredCount = requiredGroups.length;
+        const missingCount = missingDocs.length;
+        const satisfiedCount = Math.max(0, requiredCount - missingCount);
+        const overrideChecked = checkboxChecked("main-documents_complete_override");
+        const isComplete = missingCount === 0 || overrideChecked;
+        return {
+            applicable,
+            checkedCodes,
+            requiredCount,
+            satisfiedCount,
+            missingCount,
+            missingDocs,
+            overrideChecked,
+            isComplete,
+        };
+    }
+
+    function refreshDocumentChecklist() {
+        if (!isSubsectionEditable("documents")) return;
+        const applicable = computeApplicableDocumentCodes();
         form.querySelectorAll("[data-document-code]").forEach((label) => {
             const code = label.dataset.documentCode;
             const isApplicable = applicable.has(code);
@@ -693,23 +868,18 @@
             const input = label.querySelector('input[type="checkbox"]');
             if (input) {
                 input.disabled = !isApplicable;
-                if (isApplicable && input.checked) {
-                    checkedCodes.add(code);
-                }
             }
         });
         form.querySelectorAll("[data-document-group]").forEach((group) => {
             group.hidden = false;
         });
 
-        const requiredGroups = computeRequiredDocumentGroups();
-        const requiredCount = requiredGroups.length;
-        const satisfiedCount = requiredGroups.filter((codes) =>
-            codes.some((code) => checkedCodes.has(code))
-        ).length;
-        const missingCount = Math.max(0, requiredCount - satisfiedCount);
-        const overrideChecked = checkboxChecked("main-documents_complete_override");
-        const isComplete = missingCount === 0 || overrideChecked;
+        const {
+            requiredCount,
+            satisfiedCount,
+            missingCount,
+            isComplete,
+        } = collectDocumentState();
 
         const badgeEl = form.querySelector("[data-documents-completeness-badge]");
         if (badgeEl) {
@@ -725,6 +895,114 @@
         if (btnBadgeEl) {
             btnBadgeEl.className = `badge ${isComplete ? "badge--pass" : "badge--fail"}`;
             btnBadgeEl.textContent = isComplete ? "Ολοκληρωμένη" : "Ελλιπής";
+        }
+    }
+
+    function refreshCompletenessPanel() {
+        const panel = form.querySelector("[data-completeness-panel]");
+        if (!panel) return;
+
+        const missingFields = collectMissingCompletenessFields();
+        const hasEditableDocs = isSubsectionEditable("documents") && Boolean(form.querySelector("[data-document-code]"));
+        let missingDocs = [];
+        let overrideChecked = checkboxChecked("main-documents_complete_override");
+        let docsComplete = false;
+
+        if (hasEditableDocs) {
+            const docState = collectDocumentState();
+            missingDocs = docState.missingDocs;
+            overrideChecked = docState.overrideChecked;
+            docsComplete = docState.isComplete;
+        } else {
+            const existingDocItems = panel.querySelectorAll("[data-missing-documents-list] [data-missing-document]");
+            existingDocItems.forEach((li) => {
+                const code = li.dataset.missingDocument || "";
+                const label = (li.textContent || "").trim();
+                if (code || label) missingDocs.push({ code, label });
+            });
+            docsComplete = missingDocs.length === 0 || overrideChecked;
+        }
+
+        const effectiveMissingDocs = overrideChecked ? [] : missingDocs;
+        const isComplete = missingFields.length === 0 && docsComplete;
+
+        panel.classList.toggle("is-complete", isComplete);
+        panel.classList.toggle("is-incomplete", !isComplete);
+        panel.dataset.completenessState = isComplete ? "complete" : "incomplete";
+
+        const panelBadge = panel.querySelector("[data-completeness-panel-badge]");
+        if (panelBadge) {
+            panelBadge.className = `badge ${isComplete ? "badge--pass" : "badge--fail"}`;
+            panelBadge.textContent = isComplete ? "ΠΛΗΡΗΣ" : "ΕΛΛΙΠΗΣ";
+        }
+
+        const summaryEl = panel.querySelector("[data-completeness-panel-summary]");
+        if (summaryEl) {
+            summaryEl.textContent = isComplete
+                ? "Η αίτηση είναι συμπληρωμένη. Όλα τα υποχρεωτικά πεδία και τα απαιτούμενα δικαιολογητικά έχουν συμπληρωθεί."
+                : "Η αίτηση είναι ελλιπής. Συμπληρώστε τα πεδία και τα δικαιολογητικά που λείπουν.";
+        }
+
+        const fieldsCountEl = panel.querySelector("[data-missing-fields-count]");
+        if (fieldsCountEl) {
+            fieldsCountEl.textContent = String(missingFields.length);
+            fieldsCountEl.className = `badge ${missingFields.length === 0 ? "badge--pass" : "badge--fail"}`;
+        }
+
+        const fieldsListEl = panel.querySelector("[data-missing-fields-list]");
+        if (fieldsListEl) {
+            fieldsListEl.innerHTML = "";
+            missingFields.forEach(({ name, label }) => {
+                const li = document.createElement("li");
+                li.className = "completeness-panel__item";
+                li.dataset.missingField = name;
+                const btn = document.createElement("button");
+                btn.type = "button";
+                btn.className = "completeness-panel__jump";
+                btn.dataset.focusField = name;
+                btn.textContent = label;
+                li.appendChild(btn);
+                fieldsListEl.appendChild(li);
+            });
+            fieldsListEl.hidden = missingFields.length === 0;
+        }
+
+        const fieldsEmptyEl = panel.querySelector("[data-missing-fields-empty]");
+        if (fieldsEmptyEl) {
+            fieldsEmptyEl.hidden = missingFields.length > 0;
+        }
+
+        const docsCountEl = panel.querySelector("[data-missing-documents-count]");
+        if (docsCountEl) {
+            docsCountEl.textContent = String(effectiveMissingDocs.length);
+            docsCountEl.className = `badge ${docsComplete ? "badge--pass" : "badge--fail"}`;
+        }
+
+        const docsListEl = panel.querySelector("[data-missing-documents-list]");
+        if (docsListEl && hasEditableDocs) {
+            docsListEl.innerHTML = "";
+            effectiveMissingDocs.forEach(({ code, label }) => {
+                const li = document.createElement("li");
+                li.className = "completeness-panel__item";
+                li.dataset.missingDocument = code;
+                const btn = document.createElement("button");
+                btn.type = "button";
+                btn.className = "completeness-panel__jump";
+                btn.dataset.focusDocument = code;
+                btn.textContent = label;
+                li.appendChild(btn);
+                docsListEl.appendChild(li);
+            });
+            docsListEl.hidden = docsComplete || effectiveMissingDocs.length === 0;
+        }
+
+        const docsEmptyEl = panel.querySelector("[data-missing-documents-empty]");
+        if (docsEmptyEl) {
+            docsEmptyEl.hidden = !docsComplete;
+            docsEmptyEl.textContent =
+                overrideChecked && missingDocs.length > 0
+                    ? "Ορίστηκε ότι τα δικαιολογητικά είναι εντάξει (παρά τις ελλείψεις)."
+                    : "Όλα τα απαιτούμενα δικαιολογητικά έχουν επισυναφθεί.";
         }
     }
 
@@ -877,8 +1155,13 @@
         const errors = [];
 
         if (isSubsectionEditable("basic")) {
-            if (!(fieldValue("main-community") || "").trim()) {
-                errors.push("Κοινότητα στην οποία ζητείται η παραχώρηση οικοπέδου: Υποχρεωτικό πεδίο.");
+            const annField = announcementFieldName();
+            if (!(fieldValue(annField) || "").trim()) {
+                errors.push(
+                    annField === "main-announcement"
+                        ? "Γνωστοποίηση υποβολής αιτήσεων: Υποχρεωτικό πεδίο."
+                        : "Κοινότητα στην οποία ζητείται η παραχώρηση οικοπέδου: Υποχρεωτικό πεδίο."
+                );
             }
         }
 
@@ -1151,6 +1434,7 @@
         syncAllFormsetDisplays();
         refreshIncomeTotals();
         refreshDocumentChecklist();
+        refreshCompletenessPanel();
         refreshSaveButtonState();
     }
 
@@ -1459,6 +1743,7 @@
     });
 
     const documentsDialog = form.querySelector("[data-documents-modal]");
+    const readonlyDocumentsDialog = document.getElementById("plot-application-documents-readonly-dialog");
     form.querySelectorAll("[data-documents-modal-open]").forEach((btn) => {
         btn.addEventListener("click", () => {
             refreshDocumentChecklist();
@@ -1479,6 +1764,50 @@
         });
     }
 
+    const completenessPanel = form.querySelector("[data-completeness-panel]");
+    if (completenessPanel) {
+        completenessPanel.addEventListener("click", (event) => {
+            const fieldBtn = event.target.closest("[data-focus-field]");
+            if (fieldBtn) {
+                const fieldName = fieldBtn.dataset.focusField;
+                const control = form.querySelector(`[name="${fieldName}"]`);
+                if (control) {
+                    const container = control.closest(".form-field") || control;
+                    if (typeof container.scrollIntoView === "function") {
+                        container.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }
+                    if (!control.disabled && typeof control.focus === "function") {
+                        control.focus({ preventScroll: true });
+                    }
+                }
+                return;
+            }
+
+            const docBtn = event.target.closest("[data-focus-document]");
+            const openDocsBtn = event.target.closest("[data-completeness-open-documents]");
+            if (docBtn || openDocsBtn) {
+                refreshDocumentChecklist();
+                const targetDialog = documentsDialog || readonlyDocumentsDialog;
+                if (targetDialog && typeof targetDialog.showModal === "function") {
+                    if (!targetDialog.open) {
+                        targetDialog.showModal();
+                    }
+                    if (docBtn) {
+                        const docCode = docBtn.dataset.focusDocument;
+                        const row = targetDialog.querySelector(`[data-document-row="${docCode}"]`);
+                        if (row && typeof row.scrollIntoView === "function") {
+                            row.scrollIntoView({ behavior: "smooth", block: "center" });
+                        }
+                        const checkbox = row ? row.querySelector('input[type="checkbox"]') : null;
+                        if (checkbox && !checkbox.disabled && typeof checkbox.focus === "function") {
+                            checkbox.focus({ preventScroll: true });
+                        }
+                    }
+                }
+            }
+        });
+    }
+
     form.addEventListener("submit", () => {
         saveScrollPosition();
     });
@@ -1489,12 +1818,16 @@
         syncIncomeMembers();
         refreshIncomeTotals();
         refreshDocumentChecklist();
+        refreshCompletenessPanel();
         refreshSaveButtonState();
     });
     form.addEventListener("input", () => {
+        syncResidenceCommunity();
+        refreshVisibility();
         syncIncomeMembers();
         refreshIncomeTotals();
         refreshDocumentChecklist();
+        refreshCompletenessPanel();
         refreshSaveButtonState();
     });
     syncResidenceCommunity();
@@ -1503,6 +1836,7 @@
     syncAllFormsetDisplays();
     refreshIncomeTotals();
     refreshDocumentChecklist();
+    refreshCompletenessPanel();
     refreshSaveButtonState();
     restoreScrollPosition();
 })();

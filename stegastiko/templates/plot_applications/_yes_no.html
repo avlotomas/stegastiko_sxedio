@@ -1,1 +1,1 @@
-<div><dt>{{ label }}</dt><dd>{% if value is None %}<span class="text-muted">Δεν απαντήθηκε</span>{% elif value %}Ναι{% else %}Όχι{% endif %}{% if details %}<br><span class="text-muted">{{ details|linebreaksbr }}</span>{% endif %}</dd></div>
+<div><dt>{{ label }}</dt><dd>{% if value is None %}<span class="text-muted" data-ui-text>Δεν απαντήθηκε</span>{% elif value %}<span data-ui-text>Ναι</span>{% else %}<span data-ui-text>Όχι</span>{% endif %}{% if details %}<br><span class="text-muted">{{ details|linebreaksbr }}</span>{% endif %}</dd></div>

@@ -12,7 +12,7 @@ Re-rendered after every modal add/edit/delete. A published announcement shows it
             <th>Τρόπος δημοσίευσης</th>
             <th>Ημερομηνία δημοσίευσης</th>
             <th>Σχόλια</th>
-            {% if editable and not cycle.is_published %}<th><span class="visually-hidden">Ενέργειες</span></th>{% endif %}
+            {% if editable and not publication_readonly %}<th><span class="visually-hidden">Ενέργειες</span></th>{% endif %}
         </tr>
         </thead>
         <tbody>
@@ -20,7 +20,7 @@ Re-rendered after every modal add/edit/delete. A published announcement shows it
             <tr data-publication-row>
                 <td><label for="publication-date-{{ row.method.value }}">{{ row.label }}</label></td>
                 <td>
-                    {% if editable and not cycle.is_published %}
+                    {% if editable and not publication_readonly %}
                     <input type="date"
                            id="publication-date-{{ row.method.value }}"
                            value="{{ row.publication.published_on|date:'Y-m-d' }}"
@@ -32,7 +32,7 @@ Re-rendered after every modal add/edit/delete. A published announcement shows it
                     {% endif %}
                 </td>
                 <td>—</td>
-                {% if editable and not cycle.is_published %}<td></td>{% endif %}
+                {% if editable and not publication_readonly %}<td></td>{% endif %}
             </tr>
         {% endfor %}
         {% for publication in other_rows %}
@@ -40,7 +40,7 @@ Re-rendered after every modal add/edit/delete. A published announcement shows it
                 <td>{{ publication.get_method_display }}</td>
                 <td>{{ publication.published_on }}</td>
                 <td>{{ publication.notes|default:"—" }}</td>
-                {% if editable and not cycle.is_published %}
+                {% if editable and not publication_readonly %}
                 <td class="data-table__actions">
                     <button type="button" class="btn btn-secondary btn-sm"
                             data-publication-open="{% url 'announcements:publication_edit' cycle.pk publication.pk %}">
@@ -58,7 +58,7 @@ Re-rendered after every modal add/edit/delete. A published announcement shows it
         </tbody>
     </table>
 </div>
-{% if editable and not cycle.is_published %}
+{% if editable and not publication_readonly %}
 <div class="form-actions form-span-all">
     <button type="button"
             class="btn btn-secondary"

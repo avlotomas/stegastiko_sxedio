@@ -191,7 +191,7 @@ def test_case_create_shows_a_form_error_instead_of_500_when_numbers_keep_collidi
     assert "ταυτόχρονης καταχώρισης" in response.content.decode()
 
 
-# --- 2. Published announcements are locked ----------------------------------------------------
+# --- 2. Announcement details (Στάδιο 1) stay editable after publishing -------------------------
 
 
 def _cycle(community, published=False):
@@ -258,10 +258,11 @@ def test_fixed_method_date_is_set_inline_once_and_is_optional(community, staff_c
 
 
 @pytest.mark.django_db
-def test_fixed_method_dates_are_refused_once_published(community, staff_client):
+def test_fixed_method_dates_stay_editable_once_published(community, staff_client):
     cycle = _cycle(community, published=True)
-    assert _set_date(staff_client, cycle, "community", "2027-06-02").status_code == 409
-    assert cycle.publications.count() == 0
+    response = _set_date(staff_client, cycle, "community", "2027-06-02")
+    assert response.status_code == 200 and response.json()["ok"]
+    assert cycle.publications.count() == 1
 
 
 @pytest.mark.django_db
@@ -304,36 +305,38 @@ def test_the_database_keeps_each_fixed_method_once(community):
 
 
 @pytest.mark.django_db
-def test_announcement_publications_are_locked_once_published(community, staff_client):
+def test_announcement_publications_stay_editable_once_published(community, staff_client):
     cycle = _cycle(community, published=True)
     create_url = reverse("announcements:publication_create", args=[cycle.pk])
-    detail = staff_client.get(reverse("announcements:detail", args=[cycle.pk])).content.decode()
-    assert create_url not in detail
-    response = staff_client.post(create_url, PUBLICATION, **JSON)
-    assert response.status_code == 409
-    assert cycle.publications.count() == 0
+    detail = staff_client.get(
+        reverse("announcements:detail", args=[cycle.pk]), {"stage": "details"}
+    ).content.decode()
+    assert create_url in detail
+    response = staff_client.post(create_url, {**PUBLICATION, "notes": "Εφημερίδα"}, **JSON)
+    assert response.status_code == 200 and response.json()["ok"]
+    assert cycle.publications.count() == 1
 
 
 @pytest.mark.django_db
-def test_announcement_detail_post_is_refused_once_published(community, staff_client):
+def test_announcement_detail_post_saves_a_published_announcement(community, staff_client):
     cycle = _cycle(community, published=True)
     url = reverse("announcements:detail", args=[cycle.pk])
     response = staff_client.post(url, _announcement_post("5"))
-    assert response.status_code == 409
-    html = response.content.decode()
-    assert "έχει οριστικοποιηθεί" in html
-    assert 'name="cycle-submission_months"' in html and "disabled" in html
-    assert 'name="cycle-submission_end_date"' not in html
+    assert response.status_code == 302 and response["Location"].endswith("?stage=details")
     cycle.refresh_from_db()
-    assert cycle.submission_months == 2 and cycle.submission_end_date == date(2027, 8, 1)
+    assert cycle.submission_months == 5 and cycle.submission_end_date == date(2027, 11, 1)
+    assert cycle.is_published
 
 
 @pytest.mark.django_db
-def test_announcement_detail_get_of_published_announcement_is_read_only(community, staff_client):
+def test_announcement_details_tab_of_published_announcement_is_editable(community, staff_client):
     cycle = _cycle(community, published=True)
-    html = staff_client.get(reverse("announcements:detail", args=[cycle.pk])).content.decode()
-    assert "μόνο για ανάγνωση" in html
-    assert ">Αποθήκευση<" not in html
+    html = staff_client.get(
+        reverse("announcements:detail", args=[cycle.pk]), {"stage": "details"}
+    ).content.decode()
+    assert "data-published-editable-notice" in html
+    assert "data-save-announcement-details" in html
+    assert "μόνο για ανάγνωση" not in html
 
 
 # --- 4. Deficiency email: record first, mark sent / failed, refuse double submits -------------------

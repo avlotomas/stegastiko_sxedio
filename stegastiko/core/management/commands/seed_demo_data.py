@@ -89,7 +89,6 @@ def wipe() -> list[tuple[str, int]]:
         ("Κατανομές οικοπέδων", Allocation.objects.all()),
         ("Κληρώσεις", Lottery.objects.all()),
         ("Κατάλογοι κατάταξης", RankingList.objects.all()),
-        ("Γνωστοποιήσεις", SubmissionCycle.objects.all()),
         (
             "Email αιτήσεων / οικοπέδων",
             Communication.objects.filter(
@@ -103,6 +102,7 @@ def wipe() -> list[tuple[str, int]]:
             ),
         ),
         ("Αιτήσεις παραχώρησης οικοπέδου", PlotApplication.objects.all()),
+        ("Γνωστοποιήσεις", SubmissionCycle.objects.all()),
         ("Οικόπεδα", Plot.objects.all()),
         ("Αιτήσεις διαχωρισμού", Case.objects.all()),
         ("Άτομα", Person.objects.all()),
@@ -628,25 +628,31 @@ def manual_plots(community_name, sheet_plan, specs, rate, comments=""):
 
 
 def announcement(community_names, announced_on, months, published_on=None, comments=""):
-    communities = [community(name) for name in community_names]
-    cycle = SubmissionCycle(announcement_date=d(announced_on), submission_months=months, comments=comments)
-    cycle.save()
-    cycle.communities.set(communities)
-    cycle.plots.set(Plot.objects.available().filter(community__in=communities))
-    if published_on:
-        for method in SubmissionCyclePublication.FIXED_METHODS:
-            SubmissionCyclePublication.objects.create(
-                submission_cycle=cycle, method=method, published_on=d(announced_on)
-            )
-        SubmissionCyclePublication.objects.create(
-            submission_cycle=cycle,
-            method=SubmissionCyclePublication.PublicationMethod.OTHER,
-            published_on=d(announced_on),
-            notes="Σελίδα της Κοινότητας στο Facebook",
+    if isinstance(community_names, str):
+        community_names = [community_names]
+    cycles = []
+    for name in community_names:
+        comm = community(name)
+        cycle = SubmissionCycle(
+            announcement_date=d(announced_on), submission_months=months, comments=comments
         )
-        cycle.published_at = moment(published_on, 9)
         cycle.save()
-    return cycle
+        cycle.plots.set(Plot.objects.available().filter(community=comm))
+        if published_on:
+            for method in SubmissionCyclePublication.FIXED_METHODS:
+                SubmissionCyclePublication.objects.create(
+                    submission_cycle=cycle, method=method, published_on=d(announced_on)
+                )
+            SubmissionCyclePublication.objects.create(
+                submission_cycle=cycle,
+                method=SubmissionCyclePublication.PublicationMethod.OTHER,
+                published_on=d(announced_on),
+                notes="Σελίδα της Κοινότητας στο Facebook",
+            )
+            cycle.published_at = moment(published_on, 9)
+            cycle.save()
+        cycles.append(cycle)
+    return cycles[0] if len(cycles) == 1 else cycles
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1225,7 +1231,7 @@ class Command(BaseCommand):
         for application, spec in zip(applications, APPLICATIONS):
             self.stdout.write(
                 f"{application.protocol_number:<13} {application.get_completeness_result_display():<9} "
-                f"{application.get_eligibility_result_display():<18} {application.priority_label:<60} "
+                f"{application.get_eligibility_result_display():<18} {application.get_residence_category_display():<45} "
                 f"| {spec['scenario']}"
             )
         self.stdout.write(self.style.SUCCESS("Τα δεδομένα δοκιμών δημιουργήθηκαν."))

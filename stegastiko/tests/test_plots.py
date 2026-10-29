@@ -344,19 +344,18 @@ def test_main_menu_links_to_plots_and_announcements(staff_client):
 # --- Γνωστοποιήσεις --------------------------------------------------------------------------
 
 
-def _step2(client, *communities):
-    """The wizard's second screen, after choosing `communities` on the first."""
+def _step2(client, *plots):
+    """The wizard's second screen, after choosing `plots` on the first."""
     response = client.get(
         reverse("announcements:create"),
-        {"communities": [community.pk for community in communities], "next": "1"},
+        {"plots": [plot.pk for plot in plots], "next": "1"},
     )
     assert response.status_code == 200
     return response
 
 
-def _announcement_post(communities, plots, **extra):
+def _announcement_post(plots, **extra):
     data = {
-        "communities": [community.pk for community in communities],
         "plots": [plot.pk for plot in plots],
         "announcement_date": "2027-06-01",
         "submission_months": "1",
@@ -366,14 +365,46 @@ def _announcement_post(communities, plots, **extra):
 
 
 @pytest.mark.django_db
-def test_announcement_wizard_step_one_lists_communities_to_choose(community, other_community, staff_client):
-    _manual_plot(community)
+def test_announcement_wizard_step_one_lists_plots_to_choose(community, other_community, staff_client):
+    plot = _manual_plot(community)
     html = staff_client.get(reverse("announcements:create")).content.decode()
     assert response_step(html) == 1
-    assert f'name="communities" value="{community.pk}"' in html
-    assert f'name="communities" value="{other_community.pk}"' in html
-    assert 'name="plots"' not in html
+    assert f'name="plots" value="{plot.pk}"' in html
     assert "1 διαθέσιμα οικόπεδα" in html
+    # Community without available plots (`other_community`) is not shown at all
+    assert f'data-community-group="{community.pk}"' in html
+    assert f'data-community-group="{other_community.pk}"' not in html
+    assert other_community.name not in html
+
+
+@pytest.mark.django_db
+def test_plot_in_active_announcement_is_not_available_until_closed(community, other_community, staff_client):
+    plot1 = _manual_plot(community, number="A-1")
+    plot2 = _manual_plot(community, number="A-2")
+    cycle = make_cycle(community, plots=[plot1], announcement_date=date(2027, 6, 1))
+
+    # Across all active stages (1 through 7), plot1 is in an active announcement and not available
+    for stage in SubmissionCycle.ACTIVE_STAGES:
+        cycle.stage = stage
+        cycle.save(update_fields=["stage"])
+        assert cycle.is_active is True
+        assert list(Plot.objects.available()) == [plot2]
+
+    # Step 1 of creating a new announcement shows only plot2 (not plot1)
+    html = staff_client.get(reverse("announcements:create")).content.decode()
+    assert f'name="plots" value="{plot2.pk}"' in html
+    assert f'name="plots" value="{plot1.pk}"' not in html
+
+    # Adding plot1 to another active announcement is rejected
+    with pytest.raises(ValidationError), transaction.atomic():
+        make_cycle(community, plots=[plot1], announcement_date=date(2027, 7, 1))
+
+    # If plot2 is also placed in an active announcement, `community` has 0 available plots and is hidden
+    cycle.plots.add(plot2)
+    assert not Plot.objects.available().exists()
+    html_empty = staff_client.get(reverse("announcements:create")).content.decode()
+    assert f'data-community-group="{community.pk}"' not in html_empty
+    assert "Δεν υπάρχουν διαθέσιμα οικόπεδα." in html_empty
 
 
 def response_step(html):
@@ -381,47 +412,40 @@ def response_step(html):
 
 
 @pytest.mark.django_db
-def test_announcement_step_one_needs_a_community(staff_client):
+def test_announcement_step_one_needs_a_plot(staff_client):
     response = staff_client.get(reverse("announcements:create"), {"next": "1"})
     assert response.status_code == 200
     assert response_step(response.content.decode()) == 1
-    assert "Επιλέξτε τουλάχιστον μία Κοινότητα." in response.content.decode()
+    assert "Επιλέξτε τουλάχιστον ένα διαθέσιμο οικόπεδο." in response.content.decode()
 
 
 @pytest.mark.django_db
-def test_announcement_offers_available_plots_of_its_communities(community, other_community, staff_client):
+def test_announcement_offers_available_plots_of_its_community(community, other_community, staff_client):
     case = _ready_case(community)
     complete_case(case)
     manual = _manual_plot(community)
     unvalued = _manual_plot(community, number="M-2", valuation_amount=None)
     other_plot = _manual_plot(other_community, number="X-1")
-    third = Community.objects.create(
-        district="ΛΕΥΚΩΣΙΑΣ", name="ΣΤΥ", contact_email="ks.sty@example.org", community_folder_code="003"
-    )
-    foreign = _manual_plot(third, number="Z-1")
 
-    # Only the plots of the chosen communities are offered, grouped by community.
-    html = _step2(staff_client, community, other_community).content.decode()
+    offered = list(Plot.objects.filter(source_case=case)) + [manual]
+    html = _step2(staff_client, *offered).content.decode()
     assert response_step(html) == 2
     for plot in Plot.objects.filter(source_case=case):
         assert f'name="plots" value="{plot.pk}"' in html
     assert f'name="plots" value="{manual.pk}"' in html
-    assert f'name="plots" value="{other_plot.pk}"' in html
+    assert f'name="plots" value="{other_plot.pk}"' not in html
     assert f'name="plots" value="{unvalued.pk}"' not in html
-    assert f'name="plots" value="{foreign.pk}"' not in html
-    # Every available plot is preselected.
-    assert html.count(" checked") >= 4
+    assert html.count(" checked") >= 3
 
-    offered = list(Plot.objects.filter(source_case=case)) + [manual, other_plot]
     response = staff_client.post(
-        reverse("announcements:create"), _announcement_post([community, other_community], offered)
+        reverse("announcements:create"), _announcement_post(offered)
     )
     assert response.status_code == 302
     cycle = SubmissionCycle.objects.get()
-    assert set(cycle.communities.all()) == {community, other_community}
+    assert cycle.community == community
     assert set(cycle.plots.all()) == set(offered)
     assert cycle.submission_months == 1
-    assert cycle.submission_end_date == date(2027, 7, 1)  # computed from the months
+    assert cycle.submission_end_date == date(2027, 7, 1)
 
 
 @pytest.mark.django_db
@@ -429,49 +453,37 @@ def test_announcement_step_two_does_not_offer_allocated_plots(community, other_c
     held = _manual_plot(community, number="H-1")
     free = _manual_plot(community, number="H-2")
     _allocate(held, community)
-    html = _step2(staff_client, community).content.decode()
+    html = _step2(staff_client, free).content.decode()
     assert f'name="plots" value="{free.pk}"' in html
     assert f'name="plots" value="{held.pk}"' not in html
 
 
 @pytest.mark.django_db
-def test_announcement_refuses_a_plot_of_a_community_not_chosen(community, other_community, staff_client):
-    foreign = _manual_plot(other_community)
-    response = staff_client.post(
-        reverse("announcements:create"), _announcement_post([community], [foreign])
-    )
-    assert response.status_code == 200
-    assert not SubmissionCycle.objects.exists()
-
-
-@pytest.mark.django_db
-def test_announcement_communities_must_share_a_district(community, staff_client):
-    elsewhere = Community.objects.create(
-        district="ΛΕΜΕΣΟΥ", name="ΛΕΜ", contact_email="ks.lem@example.org", community_folder_code="009"
-    )
+def test_announcement_refuses_plots_from_multiple_communities(community, other_community, staff_client):
+    first = _manual_plot(community, number="A-1")
+    foreign = _manual_plot(other_community, number="B-1")
     response = staff_client.get(
-        reverse("announcements:create"), {"communities": [community.pk, elsewhere.pk], "next": "1"}
+        reverse("announcements:create"), {"plots": [first.pk, foreign.pk], "next": "1"}
     )
     assert response_step(response.content.decode()) == 1
-    assert "Επαρχίας (Ενότ. 4)" in response.content.decode()
+    assert "ίδια Κοινότητα" in response.content.decode()
 
     post = staff_client.post(
-        reverse("announcements:create"), _announcement_post([community, elsewhere], [])
+        reverse("announcements:create"), _announcement_post([first, foreign])
     )
     assert post.status_code == 200
     assert not SubmissionCycle.objects.exists()
 
 
 @pytest.mark.django_db
-def test_announcement_list_filters_by_any_of_its_communities(community, other_community, staff_client):
-    both = make_cycle(
-        community,
-        other_community,
-        announcement_date=date(2027, 6, 1),
-    )
+def test_announcement_list_filters_by_community_of_its_plots(community, other_community, staff_client):
+    p1 = _manual_plot(community, number="C-1")
+    p2 = _manual_plot(other_community, number="C-2")
+    make_cycle(community, plots=[p1], announcement_date=date(2027, 6, 1))
+    second = make_cycle(other_community, plots=[p2], announcement_date=date(2027, 6, 1))
     html = staff_client.get(reverse("announcements:list"), {"community_id": other_community.pk}).content.decode()
-    assert reverse("announcements:detail", args=[both.pk]) in html
-    assert "ΑΒΓ, ΔΕΖ" in html
+    assert reverse("announcements:detail", args=[second.pk]) in html
+    assert "ΔΕΖ" in html
 
 
 @pytest.mark.django_db
@@ -508,3 +520,64 @@ def test_plot_in_published_announcement_cannot_be_deleted(community, staff_clien
     cycle.plots.add(plot)
     staff_client.post(reverse("plots:delete", args=[plot.pk]))
     assert Plot.objects.filter(pk=plot.pk).exists()
+
+
+@pytest.mark.django_db
+def test_plot_list_shows_and_filters_by_announcement_availability(community, staff_client):
+    available_plot = _manual_plot(community, number="AV-1")
+    in_cycle_plot = _manual_plot(community, number="CY-1")
+    allocated_plot = _manual_plot(community, number="AL-1")
+    unvalued_plot = _manual_plot(community, number="UV-1", valuation_amount=None)
+
+    active_cycle = make_cycle(
+        community,
+        plots=[in_cycle_plot],
+        announcement_date=date(2027, 6, 1),
+    )
+    _allocate(allocated_plot, community)
+
+    assert available_plot.is_available_for_announcement is True
+    assert available_plot.announcement_unavailability_reason == ""
+    assert in_cycle_plot.is_available_for_announcement is False
+    assert in_cycle_plot.active_announcement == active_cycle
+    assert in_cycle_plot.announcement_unavailability_reason == "Σε ενεργή γνωστοποίηση"
+    assert allocated_plot.is_available_for_announcement is False
+    assert allocated_plot.announcement_unavailability_reason == "Έχει κατανομή"
+    assert unvalued_plot.is_available_for_announcement is False
+    assert unvalued_plot.announcement_unavailability_reason == "Εκκρεμεί αξία/τιμή διάθεσης"
+
+    # Full list shows availability column and reasons
+    html = staff_client.get(reverse("plots:list")).content.decode()
+    assert "Διαθέσιμο για γνωστοποίηση" in html
+    assert f'data-plot-availability="{available_plot.pk}"' in html
+    assert "Σε ενεργή γνωστοποίηση (01/06/2027)" in html
+    assert "Έχει κατανομή" in html
+    assert "Εκκρεμεί αξία/τιμή διάθεσης" in html
+
+    # Filter by available only
+    html_avail = staff_client.get(
+        reverse("plots:list"), {"availability": "available"}
+    ).content.decode()
+    assert f'data-plot-row="{available_plot.pk}"' in html_avail
+    assert f'data-plot-row="{in_cycle_plot.pk}"' not in html_avail
+    assert f'data-plot-row="{allocated_plot.pk}"' not in html_avail
+    assert f'data-plot-row="{unvalued_plot.pk}"' not in html_avail
+
+    # Filter by unavailable only
+    html_unavail = staff_client.get(
+        reverse("plots:list"), {"availability": "unavailable"}
+    ).content.decode()
+    assert f'data-plot-row="{available_plot.pk}"' not in html_unavail
+    assert f'data-plot-row="{in_cycle_plot.pk}"' in html_unavail
+    assert f'data-plot-row="{allocated_plot.pk}"' in html_unavail
+    assert f'data-plot-row="{unvalued_plot.pk}"' in html_unavail
+
+    # Once `active_cycle` is completed (`CLOSED`), `in_cycle_plot` becomes available again
+    active_cycle.stage = SubmissionCycle.Stage.CLOSED
+    active_cycle.save(update_fields=["stage"])
+    html_avail_after = staff_client.get(
+        reverse("plots:list"), {"availability": "available"}
+    ).content.decode()
+    assert f'data-plot-row="{available_plot.pk}"' in html_avail_after
+    assert f'data-plot-row="{in_cycle_plot.pk}"' in html_avail_after
+

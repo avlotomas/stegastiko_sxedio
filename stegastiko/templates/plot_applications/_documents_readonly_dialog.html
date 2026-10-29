@@ -1,0 +1,82 @@
+{% comment %}
+Προβολή (read-only) του Καταλόγου απαιτούμενων δικαιολογητικών εγγράφων της αίτησης
+όταν ο χρήστης βρίσκεται σε οθόνη προβολής (Display / Κατάσταση) ή έχει μόνο δικαίωμα προβολής δικαιολογητικών.
+{% endcomment %}
+<dialog id="plot-application-documents-dialog"
+        class="modal modal--wide modal--documents"
+        aria-labelledby="plot-application-documents-dialog-title"
+        data-plot-subsection="documents"
+        data-documents-modal
+        data-documents-readonly>
+    <div class="approved-design-plots-workspace__header">
+        <div>
+            <h2 class="card__title" id="plot-application-documents-dialog-title">
+                <span data-ui-text>Κατάλογος απαιτούμενων δικαιολογητικών εγγράφων</span> ({{ attached_count }} <span data-ui-text>επισυναπτόμενα</span>)
+            </h2>
+            <p class="helptext">Προβολή των απαιτούμενων και επισυναπτόμενων δικαιολογητικών της αίτησης (Ενότ. 5, 20.2).</p>
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" data-dialog-close>Κλείσιμο</button>
+    </div>
+    <dl class="detail-grid" data-documents-completeness-summary>
+        <div>
+            <dt>Κατάσταση δικαιολογητικών</dt>
+            <dd>
+                <span class="badge {% if documents_is_complete %}badge--pass{% else %}badge--fail{% endif %}"
+                      data-documents-completeness-badge>
+                    {% if documents_is_complete %}ΟΛΟΚΛΗΡΩΜΕΝΗ{% else %}ΕΛΛΙΠΗΣ{% endif %}
+                </span>
+            </dd>
+        </div>
+        <div>
+            <dt>Απαιτούμενα / Επισυναπτόμενα</dt>
+            <dd data-documents-completeness-counts>
+                {{ satisfied_required_count }} <span data-ui-text>από</span> {{ required_documents_count }} <span data-ui-text>απαιτούμενα</span>
+                ({% if missing_documents_count %}{{ missing_documents_count }} <span data-ui-text>ελλείποντα</span>{% else %}<span data-ui-text>χωρίς ελλείψεις</span>{% endif %})
+            </dd>
+        </div>
+        {% if application.documents_complete_override %}
+        <div>
+            <dt>Λόγος ολοκλήρωσης παρά τις ελλείψεις</dt>
+            <dd>{{ application.documents_complete_reason|linebreaksbr|default:"—" }}</dd>
+        </div>
+        {% endif %}
+    </dl>
+    {% for title, items in readonly_document_groups %}
+    <h3 class="form-section-subtitle">{{ title }}</h3>
+    <ul class="document-status-list">
+        {% for code, label, attached, note in items %}
+        <li class="document-checklist__row {% if attached %}is-attached{% else %}text-muted{% endif %}" data-document-row="{{ code }}">
+            <div class="document-checklist__item">
+                <span data-document-code="{{ code }}" data-document-missing="{% if not attached %}1{% else %}0{% endif %}">{% if attached %}☑{% else %}☐{% endif %} <span data-document-label data-ui-text>{{ label }}</span></span>
+                {% if note %}
+                <span class="badge badge--pending" data-document-note-text="{{ code }}" data-ui-skip>{{ note }}</span>
+                {% endif %}
+                <button type="button"
+                        class="document-note-btn{% if note %} has-note{% endif %}"
+                        data-document-note-toggle="{{ code }}"
+                        data-ui-skip
+                        aria-label="Σημείωση για το πιστοποιητικό"
+                        aria-expanded="false"
+                        title="{% if note %}Σημείωση: {{ note }}{% else %}Χωρίς σημείωση{% endif %}"
+                        {% if not note %}hidden{% endif %}>
+                    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+                        <path fill="currentColor" d="M2.5 1A1.5 1.5 0 0 0 1 2.5v8A1.5 1.5 0 0 0 2.5 12H5v2.5a.5.5 0 0 0 .85.35L8.7 12h4.8A1.5 1.5 0 0 0 15 10.5v-8A1.5 1.5 0 0 0 13.5 1h-11zm0 1h11a.5.5 0 0 1 .5.5v8a.5.5 0 0 1-.5.5H8.5a.5.5 0 0 0-.35.15L6 13.29V11.5a.5.5 0 0 0-.5-.5h-3a.5.5 0 0 1-.5-.5v-8a.5.5 0 0 1 .5-.5zm2 2a.5.5 0 0 0 0 1h7a.5.5 0 0 0 0-1h-7zm0 2.5a.5.5 0 0 0 0 1h7a.5.5 0 0 0 0-1h-7zm0 2.5a.5.5 0 0 0 0 1h4a.5.5 0 0 0 0-1h-4z"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="document-checklist__note" data-document-note-wrap="{{ code }}" hidden>
+                <input type="text"
+                       value="{{ note }}"
+                       class="input document-note-input"
+                       data-document-note-input="{{ code }}"
+                       readonly>
+            </div>
+        </li>
+        {% endfor %}
+    </ul>
+    {% endfor %}
+    {% if application.other_documents %}<p><strong><span data-ui-text>Άλλα πιστοποιητικά:</span></strong> {{ application.other_documents|linebreaksbr }}</p>{% endif %}
+    <div class="form-actions">
+        <button type="button" class="btn btn-primary" data-dialog-close>Κλείσιμο</button>
+    </div>
+</dialog>

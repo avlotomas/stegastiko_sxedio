@@ -317,5 +317,127 @@ class TestPrioritizationList:
         for action in (VIEW, EDIT, EXPORT):
             assert has_access(supervisor, "plot_prioritization", action)
         html = staff_client.get(reverse("plot_applications:list")).content.decode()
-        assert reverse("plot_applications:prioritization") in html
-        assert 'data-ui-key="menuLabel.applications_prioritization"' in html
+        assert reverse("plot_applications:prioritization") not in html
+        assert 'data-ui-key="menuLabel.applications_prioritization"' not in html
+
+    def test_prioritization_history_timeline_tracks_reorders_resets_and_application_changes(
+        self, client, make_user, community, cycle, mixed_applications
+    ):
+        user = make_user("officer_prio_hist", "Προϊστάμενος ελέγχου")
+        user.first_name = "Νάντια"
+        user.last_name = "Παπαδοπούλου"
+        user.save()
+        client.force_login(user)
+
+        apps = mixed_applications
+        # Add a 3rd beneficiary at position 2 (second autochthon, before repatriated at position 3)
+        third_beneficiary = _evaluated(cycle)
+        # Initial software order of beneficiaries: autochthon (1), third_beneficiary (2), repatriated (3)
+        initial_listing = build_prioritization_list(community)
+        assert _ids(initial_listing.beneficiaries) == [
+            apps["autochthon"].pk,
+            third_beneficiary.pk,
+            apps["repatriated"].pk,
+        ]
+
+        page_resp = client.get(
+            reverse("plot_applications:prioritization"), {"community_id": community.pk}
+        )
+        assert page_resp.status_code == 200
+        page_html = page_resp.content.decode()
+        prio_hist_url = (
+            f"{reverse('plot_applications:prioritization_history')}?community_id={community.pk}"
+        )
+        assert f'data-history-timeline-open="{prio_hist_url}"' in page_html
+        assert 'id="history-timeline-dialog"' in page_html
+        for app in (apps["autochthon"], third_beneficiary, apps["repatriated"], apps["not_beneficiary"]):
+            app_hist_url = reverse("plot_applications:history", args=[app.pk])
+            assert f'data-history-timeline-open="{app_hist_url}"' in page_html
+
+        # 1. Swap positions 1 and 2 (third_beneficiary -> 1, autochthon -> 2), leaving repatriated at 3
+        reorder_resp = client.post(
+            reverse("plot_applications:prioritization_reorder"),
+            json.dumps(
+                {
+                    "community_id": community.pk,
+                    "group": BENEFICIARIES,
+                    "order": [
+                        third_beneficiary.pk,
+                        apps["autochthon"].pk,
+                        apps["repatriated"].pk,
+                    ],
+                }
+            ),
+            content_type="application/json",
+        )
+        assert reorder_resp.status_code == 200
+        assert reorder_resp.json()["has_manual_order"] is True
+
+        # Unmoved 3rd beneficiary did not get a spurious priority_rank ActionHistory entry
+        assert not ActionHistory.objects.filter(
+            entity_type="PlotApplication",
+            entity_id=str(apps["repatriated"].pk),
+            field_name="priority_rank",
+        ).exists()
+
+        # 2. Reset back to software order immediately (within 5 seconds)
+        reset_resp = client.post(
+            reverse("plot_applications:prioritization_reset"), {"community_id": community.pk}
+        )
+        assert reset_resp.status_code == 302
+
+        # 3. Override eligibility of non-beneficiary to PASS
+        override_resp = client.post(
+            reverse("plot_applications:eligibility_override_save", args=[apps["not_beneficiary"].pk]),
+            {
+                "eligibility_override": EligibilityOverride.PASS,
+                "eligibility_override_reason": "Απόφαση Επιτροπής Εξέτασης.",
+            },
+        )
+        assert override_resp.status_code == 302
+
+        hist_resp = client.get(
+            reverse("plot_applications:prioritization_history"),
+            {"community_id": community.pk},
+            HTTP_ACCEPT="application/json",
+        )
+        assert hist_resp.status_code == 200
+        timeline_html = hist_resp.json()["timeline_html"]
+        assert "Νάντια Παπαδοπούλου (officer_prio_hist)" in timeline_html
+        assert f"Αίτηση {third_beneficiary.protocol_number}" in timeline_html
+        assert f"Αίτηση {apps['autochthon'].protocol_number}" in timeline_html
+        assert (
+            "Θέση στον κατάλογο προτεραιοποίησης — Δικαιούχοι (χειροκίνητη σειρά)"
+            in timeline_html
+        )
+        assert "2 (Σειρά λογισμικού)" in timeline_html
+        assert "1 (Σειρά λογισμικού)" in timeline_html
+        assert f"Αίτηση {apps['not_beneficiary'].protocol_number}" in timeline_html
+        assert "Χειροκίνητη αλλαγή αποτελέσματος επιλεξιμότητας (Ενότ. 6)" in timeline_html
+        assert "Αποτέλεσμα λογισμικού" in timeline_html
+        assert "ΔΙΚΑΙΟΥΧΟΣ" in timeline_html
+        assert "Απόφαση Επιτροπής Εξέτασης." in timeline_html
+
+        # Single application's history also shows its prioritization move and reset
+        single_hist = client.get(
+            reverse("plot_applications:history", args=[third_beneficiary.pk]),
+            HTTP_ACCEPT="application/json",
+        ).json()["timeline_html"]
+        assert "2 (Σειρά λογισμικού)" in single_hist
+
+        # User without plot_prioritization:view gets 403 on prioritization_history
+        no_prio_role = Role.objects.create(
+            name="Χωρίς Προτεραιοποίηση",
+            grants=["plot_applications:view"],
+        )
+        restricted_user = make_user("restricted_prio_hist")
+        no_prio_role.members.add(restricted_user)
+        client.force_login(restricted_user)
+        assert (
+            client.get(
+                reverse("plot_applications:prioritization_history"),
+                {"community_id": community.pk},
+                HTTP_ACCEPT="application/json",
+            ).status_code
+            == 403
+        )

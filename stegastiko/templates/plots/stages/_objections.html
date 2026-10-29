@@ -1,0 +1,214 @@
+{# Στάδιο 4: Ενστάσεις (Ενότ. 7) #}
+<div class="card" data-announcement-stage="objections_committee" data-scroll-anchor="stage-objections-committee">
+    <div class="card__header-row" style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+        <h2 class="card__title" style="margin-bottom: 0;">
+            4. Ενστάσεις (Ενότ. 7){% if stage_done.objections_committee %} <span class="badge badge--pass">Ολοκληρώθηκε</span>{% endif %}
+        </h2>
+        <div class="toolbar" style="margin: 0; margin-left: auto;" data-objections-modals-toolbar>
+            {% if lists.preliminary %}
+            <button type="button" class="btn btn-secondary btn-sm" data-dialog-open="preliminary-list-dialog" data-open-preliminary-list>
+                Κατάλογος Δικαιούχων
+            </button>
+            {% endif %}
+            <button type="button" class="btn btn-secondary btn-sm" data-dialog-open="applications-dialog" data-open-applications-modal data-ui-suffix=" ({{ applications|length }})">
+                Αιτήσεις ({{ applications|length }})
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" data-dialog-open="announcement-details-dialog" data-open-announcement-details-modal>
+                Στοιχεία γνωστοποίησης
+            </button>
+        </div>
+    </div>
+
+    {% if lists.preliminary %}
+    {% include "plots/_preliminary_list_dialog.html" %}
+    {% endif %}
+    {% include "plots/_applications_dialog.html" %}
+    {% include "plots/_announcement_details_dialog.html" %}
+
+    {% if not lists.preliminary.notifications_sent_at %}
+    <p class="text-muted" style="margin-top: 0.75rem;">Το στάδιο ενεργοποιείται με την αποστολή του Προκαταρκτικού Καταλόγου (Στάδιο 3).</p>
+    {% else %}
+    <p class="helptext" style="margin-top: 0.75rem;">
+        Εντός 21 ημερών από τη λήψη της επιστολής οι αιτητές μπορούν να υποβάλουν αιτιολογημένη ένσταση. Η Επιτροπή
+        Εξέτασης Ενστάσεων εξετάζει κάθε ένσταση, μπορεί να ζητήσει επιπλέον στοιχεία (κατάσταση <code>PENDING</code> μέχρι
+        να προσκομιστούν όλα) και αποφασίζει· ο αιτητής ενημερώνεται με email («Ικανοποιήθηκε…» ή «Δεν ικανοποιήθηκε…»).
+        Οι αλλαγές στον κατάλογο γίνονται στο Στάδιο 5 («Τελικός Κατάλογος Δικαιούχων»).
+    </p>
+    <p data-objection-period>
+        <strong>Περίοδος ενστάσεων:</strong> <span data-ui-text>λήξη</span> {{ lists.objection_deadline|date:"d/m/Y" }} ·
+        {% if objection_period_open %}<span class="badge badge--pending">σε εξέλιξη</span>
+        {% elif cycle.objections_closed_early %}<span class="badge badge--fail" data-ui-suffix=" {{ cycle.objections_closed_on|date:'d/m/Y' }}">έκλεισε πρόωρα στις {{ cycle.objections_closed_on|date:"d/m/Y" }}</span>
+        {% else %}<span class="badge badge--pass">έληξε</span>{% endif %}
+    </p>
+
+    {% if cycle.stage == 'objections_committee' and objection_period_open %}
+    <h3 class="form-section-title">Καταχώριση νέας ένστασης (Ενότ. 7)</h3>
+    <form method="post" action="{% url 'announcements:register_objection' cycle.pk %}" class="app-form" data-register-objection-form>
+        {% csrf_token %}
+        <div class="form-grid">
+            <div class="form-field">
+                <label for="obj_application_id">Αίτηση</label>
+                <select name="application_id" id="obj_application_id" class="input" required>
+                    {% for entry in preliminary_entries %}
+                    <option value="{{ entry.application.pk }}">
+                        {{ entry.application.protocol_number }} — {{ entry.application.applicant.first_name }} {{ entry.application.applicant.last_name }} ({{ entry.get_status_display }}{% if entry.proposed_rank %}, θέση {{ entry.proposed_rank }}{% endif %})
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-field">
+                <label for="obj_submitted_on">Ημερομηνία υποβολής</label>
+                <input type="date" name="submitted_on" id="obj_submitted_on" class="input">
+            </div>
+            <div class="form-field">
+                <label for="obj_type">Είδος ένστασης</label>
+                <select name="objection_type" id="obj_type" class="input">
+                    {% for code, label in objection_types %}
+                    <option value="{{ code }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-field form-span-all">
+                <label for="obj_grounds">Αιτιολόγηση ένστασης / Έκθεση Γεγονότων</label>
+                <textarea name="grounds" id="obj_grounds" rows="2" class="input" required></textarea>
+            </div>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary btn-sm">Καταχώριση ένστασης</button>
+        </div>
+    </form>
+    {% endif %}
+
+    <h3 class="form-section-title">Υποβληθείσες Ενστάσεις &amp; Εκκρεμότητες (Pending)</h3>
+    {% for obj in objections %}
+    <div class="card" style="margin-bottom: 1rem;" data-objection-row="{{ obj.pk }}" data-scroll-anchor="objection-{{ obj.pk }}">
+        <p>
+            <strong><span data-ui-text>Αίτηση</span> <a href="{% url 'plot_applications:detail' obj.application.pk %}">{{ obj.application.protocol_number }}</a></strong>
+            ({{ obj.application.applicant.first_name }} {{ obj.application.applicant.last_name }})
+            · <span data-ui-text>{{ obj.get_objection_type_display }}</span> · <span data-ui-text>υποβλήθηκε</span> {{ obj.submitted_on|date:"d/m/Y" }}
+            · <span class="badge {% if obj.status == 'upheld' %}badge--pass{% elif obj.status == 'dismissed' %}badge--fail{% else %}badge--pending{% endif %}">
+                {{ obj.get_status_display }}
+              </span>
+            {% if obj.application.is_pending_extra_info %}
+            · <span class="badge badge--pending" data-objection-pending-badge data-ui-suffix=" ({{ obj.application.open_pending_requirements|length }})">PENDING ({{ obj.application.open_pending_requirements|length }})</span>
+            {% endif %}
+        </p>
+        <p class="helptext"><strong><span data-ui-text>Αιτιολόγηση:</span></strong> {{ obj.grounds }}</p>
+        {% if obj.decision_notes %}<p class="helptext"><strong><span data-ui-text>Σκεπτικό απόφασης:</span></strong> {{ obj.decision_notes }}{% if obj.decided_on %} ({{ obj.decided_on|date:"d/m/Y" }}){% endif %}</p>{% endif %}
+
+        <h4>Επιπλέον στοιχεία που ζητήθηκαν (Checkboxes)</h4>
+        <ul class="document-checklist" data-pending-requirements-list="{{ obj.application.pk }}">
+            {% for req in obj.application.pending_requirements.all %}
+            <li>
+                {% if cycle.stage == 'objections_committee' %}
+                <form method="post" action="{% url 'announcements:toggle_pending_requirement' cycle.pk req.pk %}" style="display: inline-flex; align-items: center; gap: 0.5rem;">
+                    {% csrf_token %}
+                    <input type="hidden" name="is_fulfilled" value="{% if req.is_fulfilled %}0{% else %}1{% endif %}">
+                    <label class="checkbox-label">
+                        <input type="checkbox" {% if req.is_fulfilled %}checked{% endif %} onchange="this.form.requestSubmit()" data-pending-checkbox="{{ req.pk }}">
+                        <span data-ui-skip>{{ req.description }}</span> {% if req.is_fulfilled %}<span class="badge badge--pass">Προσκομίσθηκε</span>{% else %}<span class="badge badge--pending">Εκκρεμεί (Pending)</span>{% endif %}
+                    </label>
+                </form>
+                {% else %}
+                <span>{% if req.is_fulfilled %}☑{% else %}☐{% endif %} {{ req.description }}</span>
+                {% endif %}
+            </li>
+            {% empty %}
+            <li class="text-muted">Δεν έχουν ζητηθεί επιπλέον στοιχεία.</li>
+            {% endfor %}
+        </ul>
+
+        {% if cycle.stage == 'objections_committee' %}
+        <form method="post" action="{% url 'announcements:add_pending_requirement' cycle.pk %}" class="filter-form" style="margin-top: 0.5rem;" data-add-pending-form="{{ obj.application.pk }}">
+            {% csrf_token %}
+            <input type="hidden" name="application_id" value="{{ obj.application.pk }}">
+            <input type="hidden" name="objection_id" value="{{ obj.pk }}">
+            <div style="flex: 1;">
+                <label for="pending_desc_{{ obj.pk }}">Νέο στοιχείο προς προσκόμιση</label>
+                <input type="text" name="description" id="pending_desc_{{ obj.pk }}" class="input" placeholder="Περιγραφή στοιχείου/πιστοποιητικού..." required>
+            </div>
+            <div>
+                <button type="submit" class="btn btn-secondary btn-sm">Προσθήκη εκκρεμότητας (Pending)</button>
+            </div>
+        </form>
+
+        <form method="post" action="{% url 'announcements:decide_objection' cycle.pk obj.pk %}" class="filter-form" style="margin-top: 0.75rem;" data-decide-objection-form="{{ obj.pk }}">
+            {% csrf_token %}
+            <div>
+                <label for="obj_status_{{ obj.pk }}">Απόφαση Επιτροπής Ενστάσεων</label>
+                <select name="status" id="obj_status_{{ obj.pk }}" class="input">
+                    {% for s_code, s_label in objection_statuses %}
+                    <option value="{{ s_code }}" {% if obj.status == s_code %}selected{% endif %}>{{ s_label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div style="flex: 1;">
+                <label for="obj_notes_{{ obj.pk }}">Σκεπτικό απόφασης</label>
+                <input type="text" name="decision_notes" id="obj_notes_{{ obj.pk }}" class="input" value="{{ obj.decision_notes }}">
+            </div>
+            <div>
+                <button type="submit" class="btn btn-primary btn-sm">Καταχώριση απόφασης &amp; Αποστολή Email</button>
+            </div>
+        </form>
+        {% endif %}
+    </div>
+    {% empty %}
+    <p class="text-muted">Δεν έχουν καταχωριστεί ενστάσεις.</p>
+    {% endfor %}
+
+    {% if cycle.stage == 'objections_committee' %}
+    <details class="card" data-receipt-confirmations>
+        <summary><strong>Επιβεβαίωση λήψης επιστολών &amp; προθεσμία ένστασης ανά αιτητή (Ενότ. 6(β), 7(α))</strong></summary>
+        <p class="helptext">Αν ο αιτητής επιβεβαιώσει τη λήψη εντός 5 ημερών, οι 21 ημέρες μετρούν από την επιβεβαίωση· αλλιώς από την αποστολή.</p>
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Αρ. Πρωτ.</th>
+                        <th>Αιτητής/τρια</th>
+                        <th>Ημ. Αποστολής</th>
+                        <th>Επιβεβαίωση Λήψης (≤5 ημ.)</th>
+                        <th>Λήξη 21 ημ. Ένστασης</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in preliminary_entries %}
+                    <tr>
+                        <td><strong>{{ entry.application.protocol_number }}</strong></td>
+                        <td>{{ entry.application.applicant.first_name }} {{ entry.application.applicant.last_name }}</td>
+                        <td>{{ entry.notified_at|date:"d/m/Y"|default:"—" }}</td>
+                        <td>
+                            <form method="post" action="{% url 'announcements:confirm_receipt' cycle.pk entry.pk %}" style="display: inline-flex; gap: 0.4rem; align-items: center;">
+                                {% csrf_token %}
+                                <input type="date" name="receipt_confirmed_on" class="input" value="{{ entry.receipt_confirmed_on|date:'Y-m-d' }}" style="max-width: 150px;">
+                                <button type="submit" class="btn btn-secondary btn-sm">Καταχώριση</button>
+                            </form>
+                        </td>
+                        <td><strong>{{ entry.objection_deadline|date:"d/m/Y"|default:"—" }}</strong></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </details>
+
+    <form method="post" action="{% url 'announcements:start_final_list' cycle.pk %}" class="app-form" style="margin-top: 1rem;" data-start-final-list-form>
+        {% csrf_token %}
+        {% if objection_period_open %}
+        <div class="alert alert--error" data-objection-period-warning>
+            <span data-ui-text>Η περίοδος ενστάσεων των 21 ημερών (Ενότ. 7(α)) λήγει στις</span> {{ lists.objection_deadline|date:"d/m/Y"|default:"—" }}. <span data-ui-text>Αν προχωρήσετε τώρα στον Τελικό Κατάλογο, οι αιτητές που δεν έχουν υποβάλει ακόμη ένσταση δεν θα μπορούν να υποβάλουν, και ο Τελικός Κατάλογος θα καταρτιστεί πριν από την πάροδο της προθεσμίας, σε απόκλιση από την Ενότ. 7(ε). Η αποδοχή καταγράφεται στο ιστορικό.</span>
+        </div>
+        <label class="checkbox-label">
+            <input type="checkbox" name="accept_open_period" value="1" required data-accept-open-period>
+            <span>Αποδέχομαι να προχωρήσω στον Τελικό Κατάλογο πριν από τη λήξη της περιόδου ενστάσεων</span>
+        </label>
+        {% endif %}
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary" data-start-final-list-btn>
+                Μετάβαση στο Στάδιο 5 (Τελικός Κατάλογος Δικαιούχων)
+            </button>
+        </div>
+    </form>
+    {% endif %}
+    {% endif %}
+</div>

@@ -13,45 +13,51 @@
 <div class="page-header">
     <h1>Νέα γνωστοποίηση</h1>
     <p class="page-header__lead">
-        Η γνωστοποίηση καλύπτει μία ή περισσότερες Κοινότητες της ίδιας Επαρχίας και προσφέρει
-        διαθέσιμα οικόπεδα (με αξία και τιμή διάθεσης, χωρίς κατανομή), είτε προέρχονται από
-        αιτήσεις διαχωρισμού είτε έχουν καταχωριστεί χειροκίνητα.
+        Η γνωστοποίηση συνδέεται με τα διαθέσιμα οικόπεδα μίας Κοινότητας (με αξία και τιμή διάθεσης,
+        που δεν περιλαμβάνονται σε ενεργή γνωστοποίηση και δεν έχουν ενεργή κατανομή), είτε προέρχονται
+        από αιτήσεις διαχωρισμού είτε έχουν καταχωριστεί χειροκίνητα.
     </p>
 </div>
 
 <ol class="wizard-steps" aria-label="Βήματα">
-    <li class="wizard-steps__item{% if step == 1 %} is-current{% else %} is-done{% endif %}">1. Κοινότητες</li>
-    <li class="wizard-steps__item{% if step == 2 %} is-current{% endif %}">2. Οικόπεδα και περίοδος υποβολής</li>
+    <li class="wizard-steps__item{% if step == 1 %} is-current{% else %} is-done{% endif %}">1. Επιλογή οικοπέδων</li>
+    <li class="wizard-steps__item{% if step == 2 %} is-current{% endif %}">2. Στοιχεία γνωστοποίησης</li>
 </ol>
 
 {% if step == 1 %}
 <div class="card">
-    <h2 class="card__title">Βήμα 1 — Επιλογή Κοινοτήτων</h2>
-    <form method="get" class="app-form" data-community-picker novalidate>
+    <h2 class="card__title">Βήμα 1 — Επιλογή διαθέσιμων οικοπέδων</h2>
+    <form method="get" class="app-form" data-plot-picker novalidate>
         {% if selection.errors %}
         <div class="alert alert--error">
-            {% for error in selection.communities.errors %}{{ error }}{% endfor %}
+            {% for error in selection.plots.errors %}{{ error }}{% endfor %}
         </div>
         {% endif %}
         <p class="helptext">
-            Επιλέξτε τις Κοινότητες / Δ.Δ. της γνωστοποίησης. Η ανακοίνωση εκδίδεται από τον Έπαρχο,
-            οπότε οι Κοινότητες είναι μίας Επαρχίας (Ενότ. 4). Στο επόμενο βήμα θα εμφανιστούν
-            μόνο τα διαθέσιμα οικόπεδα των επιλεγμένων Κοινοτήτων.
+            Επιλέξτε τα διαθέσιμα οικόπεδα που θα προσφέρει η γνωστοποίηση. Εμφανίζονται μόνο οι Κοινότητες που
+            διαθέτουν ελεύθερα οικόπεδα (εκτός ενεργής γνωστοποίησης και χωρίς ενεργή κατανομή). Όλα τα οικόπεδα
+            μιας γνωστοποίησης πρέπει να ανήκουν στην ίδια Κοινότητα (Ενότ. 4, 6, 7).
         </p>
         {% for district, items in district_groups %}
         <fieldset class="plot-picker__group" data-district="{{ district }}">
-            <legend>{{ district }}</legend>
-            <div class="document-checklist">
-                {% for item in items %}
-                <label class="checkbox-label">
-                    <input type="checkbox" name="communities" value="{{ item.community.pk }}" data-district="{{ district }}"{% if item.community.pk|stringformat:"s" in selected_ids %} checked{% endif %}>
-                    <span>{{ item.community.name }} <span class="text-muted">· {{ item.available }} διαθέσιμα οικόπεδα</span></span>
-                </label>
-                {% endfor %}
+            <legend data-ui-skip>{{ district }}</legend>
+            {% for item in items %}
+            <div class="plot-picker__community" data-community-group="{{ item.community.pk }}">
+                <strong>{{ item.community.name }}</strong>
+                <span class="text-muted" data-ui-prefix="· {{ item.available }} " data-ui-text>· {{ item.available }} διαθέσιμα οικόπεδα</span>
+                <div class="document-checklist">
+                    {% for entry in item.plots %}
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="plots" value="{{ entry.plot.pk }}" data-community="{{ item.community.pk }}" data-district="{{ district }}"{% if entry.plot.pk|stringformat:"s" in selected_ids %} checked{% endif %}>
+                        <span data-ui-skip>{{ entry.label }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
             </div>
+            {% endfor %}
         </fieldset>
         {% empty %}
-        <div class="alert alert--warning">Δεν υπάρχουν ενεργές Κοινότητες.</div>
+        <div class="alert alert--warning">Δεν υπάρχουν διαθέσιμα οικόπεδα.</div>
         {% endfor %}
         <div class="form-actions form-span-all">
             <button type="submit" name="next" value="1" class="btn btn-primary">Συνέχεια</button>
@@ -64,13 +70,12 @@
 <div class="card">
     <h2 class="card__title">Βήμα 2 — Στοιχεία γνωστοποίησης</h2>
     <p class="form-readonly">
-        Επαρχία {{ communities.0.district }} · Κοινότητες:
-        {% for community in communities %}{{ community.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
-        — <a href="{% url 'announcements:create' %}?{% for community in communities %}communities={{ community.pk }}{% if not forloop.last %}&amp;{% endif %}{% endfor %}">αλλαγή Κοινοτήτων</a>
+        <span data-ui-text>Επαρχία</span> {{ communities.0.district }} · <span data-ui-text>Κοινότητα:</span> {{ communities.0.name }}
+        · {{ selected_plots|length }} <span data-ui-text>επιλεγμένα οικόπεδα</span>
+        — <a href="{% url 'announcements:create' %}?{% for plot in selected_plots %}plots={{ plot.pk }}{% if not forloop.last %}&amp;{% endif %}{% endfor %}" data-ui-text>αλλαγή οικοπέδων</a>
     </p>
     <form method="post" class="app-form" novalidate>
         {% csrf_token %}
-        {% for community in communities %}<input type="hidden" name="communities" value="{{ community.pk }}">{% endfor %}
         {% if form.non_field_errors %}
         <div class="alert alert--error form-span-all">
             {% for error in form.non_field_errors %}{{ error }}{% endfor %}
@@ -81,13 +86,13 @@
             {% include "includes/form_field.html" with field=form.submission_months %}
         </div>
 
-        <h3 class="form-section-title">Διαθέσιμα οικόπεδα</h3>
-        <p class="helptext">Προεπιλέγονται όλα τα διαθέσιμα οικόπεδα των επιλεγμένων Κοινοτήτων (όσα δεν έχουν παραχωρηθεί)· αποεπιλέξτε όσα δεν προσφέρονται.</p>
+        <h3 class="form-section-title">Διαθέσιμα οικόπεδα της Κοινότητας</h3>
+        <p class="helptext">Μπορείτε να προσαρμόσετε τα προσφερόμενα οικόπεδα της Κοινότητας πριν από τη δημιουργία της γνωστοποίησης.</p>
         {% include "plots/_plot_picker.html" %}
 
         <div class="form-actions form-span-all">
             <button type="submit" class="btn btn-primary">Δημιουργία γνωστοποίησης</button>
-            <a href="{% url 'announcements:create' %}?{% for community in communities %}communities={{ community.pk }}{% if not forloop.last %}&amp;{% endif %}{% endfor %}" class="btn btn-secondary">Πίσω</a>
+            <a href="{% url 'announcements:create' %}?{% for plot in selected_plots %}plots={{ plot.pk }}{% if not forloop.last %}&amp;{% endif %}{% endfor %}" class="btn btn-secondary">Πίσω</a>
         </div>
     </form>
 </div>

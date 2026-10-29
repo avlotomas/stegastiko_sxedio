@@ -407,7 +407,7 @@ def test_home_and_nav_expose_both_application_kinds(staff_client):
     assert response.status_code == 200
     body = response.content.decode()
     assert reverse("cases:list") in body
-    assert reverse("plot_applications:list") in body
+    assert reverse("announcements:list") in body
 
 
 @pytest.mark.django_db

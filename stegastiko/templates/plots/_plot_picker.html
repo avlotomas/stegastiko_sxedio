@@ -1,12 +1,15 @@
 {# Offerable plots of `form`, one group per community (9.1). #}
 {% for group in form.plot_groups %}
 <fieldset class="plot-picker__group">
-    <legend>{{ group.community.name }} <span class="text-muted">· {{ group.plots|length }} διαθέσιμα οικόπεδα</span></legend>
+    <legend>{{ group.community.name }} <span class="text-muted" data-ui-prefix="· {{ group.plots|length }} " data-ui-text>· {{ group.plots|length }} διαθέσιμα οικόπεδα</span></legend>
     <div class="document-checklist">
         {% for plot in group.plots %}
         <label class="checkbox-label">
-            <input type="checkbox" name="{{ form.plots.html_name }}" value="{{ plot.pk }}"{% if plot.checked %} checked{% endif %}{% if form.fields.plots.disabled %} disabled{% endif %}>
-            <span>{{ plot.label }}</span>
+            <input type="checkbox" name="{{ form.plots.html_name }}" value="{{ plot.pk }}"{% if plot.checked %} checked{% endif %}{% if form.fields.plots.disabled or plot.allocated %} disabled{% endif %}{% if plot.allocated %} data-allocated-plot="{{ plot.pk }}"{% endif %}>
+            {% if plot.allocated and not form.fields.plots.disabled %}
+            <input type="hidden" name="{{ form.plots.html_name }}" value="{{ plot.pk }}">
+            {% endif %}
+            <span data-ui-skip>{{ plot.label }}</span>{% if plot.allocated %} <span class="badge badge--pass">Έχει δοθεί σε αιτητή</span>{% elif plot.released %} <span class="badge badge--pending">Απελευθερώθηκε (διαθέσιμο για νέα γνωστοποίηση)</span>{% endif %}
         </label>
         {% empty %}
         <p class="helptext">Η Κοινότητα δεν έχει διαθέσιμα οικόπεδα.</p>

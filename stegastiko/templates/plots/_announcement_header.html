@@ -1,0 +1,42 @@
+{# Συμπυκνωμένη επικεφαλίδα στοιχείων γνωστοποίησης (2–3 γραμμές με ετικέτες) στα Στάδια 2–7. #}
+<div class="card announcement-summary-header" data-announcement-summary-header>
+    <div class="announcement-summary-header__row">
+        <span><strong>Κοινότητα:</strong> {{ cycle.communities_label }}</span>
+        <span><strong>Ημ. γνωστοποίησης:</strong> {{ cycle.announcement_date|date:"d/m/Y" }}</span>
+        <span><strong>Προθεσμία υποβολής:</strong> {{ cycle.submission_months }} <span data-ui-text>μήνες</span> (<span data-ui-text>έως</span> {{ cycle.submission_end_date|date:"d/m/Y" }})</span>
+        <span><strong>Διαθέσιμα οικόπεδα:</strong> {{ offered_plots|length }} <span class="text-muted">({{ active_allocations|length }} <span data-ui-text>κατανεμημένα</span> · {{ unallocated_plots|length }} <span data-ui-text>αδιάθετα</span>)</span></span>
+    </div>
+    <div class="announcement-summary-header__row">
+        <span>
+            <strong>Κατάσταση:</strong>
+            {% if cycle.is_published %}
+            <span class="badge badge--pass" data-ui-suffix=" {{ cycle.published_at|date:'d/m/Y H:i' }}">Εκδόθηκε {{ cycle.published_at|date:"d/m/Y H:i" }}</span>
+            {% else %}
+            <span class="badge badge--pending">Προσχέδιο</span>
+            {% endif %}
+        </span>
+        <span>
+            <strong>Δημοσιεύσεις (9.2):</strong>
+            {% with pub_count=cycle.publications.count %}
+                {% if pub_count %}{{ pub_count }} <span data-ui-text>καταχωρισμένες</span>{% else %}<span data-ui-text>καμία</span>{% endif %}
+            {% endwith %}
+        </span>
+        <span><strong>Τρέχον στάδιο:</strong> <span class="badge badge--{% if cycle.stage == 'closed' %}pass{% else %}pending{% endif %}" data-announcement-stage-badge>{{ cycle.get_stage_display }}</span></span>
+        <span class="announcement-summary-header__actions" style="display: inline-flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+            {% if can_complete_announcement %}
+            <form method="post" action="{% url 'announcements:complete_agreements' cycle.pk %}" style="display: inline;" data-header-complete-form>
+                {% csrf_token %}
+                <button type="submit" class="btn btn-primary btn-sm" data-header-complete-btn>
+                    Ολοκλήρωση γνωστοποίησης
+                </button>
+            </form>
+            {% endif %}
+            <button type="button" class="btn btn-secondary btn-sm" data-dialog-open="announcement-emails-dialog" data-open-announcement-emails data-ui-suffix=" ({{ announcement_emails|length }})">
+                Απεσταλμένα Email ({{ announcement_emails|length }})
+            </button>
+            <a href="{% url 'announcements:detail' cycle.pk %}?stage=details" class="btn btn-secondary btn-sm" data-edit-announcement-details>
+                Στοιχεία γνωστοποίησης
+            </a>
+        </span>
+    </div>
+</div>

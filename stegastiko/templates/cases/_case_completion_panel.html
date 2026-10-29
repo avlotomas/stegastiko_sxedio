@@ -4,7 +4,7 @@
     <p class="text-muted">
         {% if case.is_completed %}
         <span class="badge badge--pass">Ολοκληρώθηκε</span> {{ case.completed_at|date:"d/m/Y" }} ·
-        {{ plots_count }} οικόπεδα
+        {{ plots_count }} <span data-ui-text>οικόπεδα</span>
         {% else %}
         <span class="badge badge--pending">Σε εξέλιξη</span>
         {% endif %}
@@ -19,7 +19,7 @@
     </form>
     {% if not readiness.ready %}
     <p class="helptext">
-        Ο έλεγχος ετοιμότητας δεν έχει περάσει ({{ missing|join:", " }}). Η ολοκλήρωση επιτρέπεται.
+        <span data-ui-text>Ο έλεγχος ετοιμότητας δεν έχει περάσει</span> ({{ missing|join:", " }}). <span data-ui-text>Η ολοκλήρωση επιτρέπεται.</span>
     </p>
     {% endif %}
     {% endif %}

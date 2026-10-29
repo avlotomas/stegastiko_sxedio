@@ -306,7 +306,13 @@ bindFilePickers(document);
             return;
         }
 
-        if (event.target && event.target.matches && event.target.matches("dialog[data-documents-modal]")) {
+        if (
+            event.target &&
+            event.target.matches &&
+            event.target.matches(
+                "dialog[data-documents-modal], dialog[data-incomplete-reject-dialog], dialog[data-eligibility-override-dialog]"
+            )
+        ) {
             const rect = event.target.getBoundingClientRect();
             const inside =
                 event.clientX >= rect.left &&
@@ -320,6 +326,102 @@ bindFilePickers(document);
 
     });
 
+})();
+
+// Top toolbar actions dropdown menu ([data-actions-dropdown]) and eligibility override reason toggle.
+(function () {
+    function closeAllActionDropdowns(except) {
+        document.querySelectorAll("[data-actions-dropdown].is-open").forEach(function (dropdown) {
+            if (dropdown === except) {
+                return;
+            }
+            dropdown.classList.remove("is-open");
+            const toggle = dropdown.querySelector("[data-actions-dropdown-toggle]");
+            if (toggle) {
+                toggle.setAttribute("aria-expanded", "false");
+            }
+        });
+    }
+
+    document.addEventListener("click", function (event) {
+        if (event.target.closest && event.target.closest("[data-ui-edit-trigger]")) {
+            return;
+        }
+        const toggle = event.target.closest ? event.target.closest("[data-actions-dropdown-toggle]") : null;
+        if (toggle) {
+            event.preventDefault();
+            const dropdown = toggle.closest("[data-actions-dropdown]");
+            if (!dropdown) {
+                return;
+            }
+            const willOpen = !dropdown.classList.contains("is-open");
+            closeAllActionDropdowns(dropdown);
+            dropdown.classList.toggle("is-open", willOpen);
+            toggle.setAttribute("aria-expanded", willOpen ? "true" : "false");
+            return;
+        }
+
+        const item = event.target.closest
+            ? event.target.closest("[data-actions-dropdown-menu] .actions-dropdown__item")
+            : null;
+        if (item) {
+            closeAllActionDropdowns(null);
+            return;
+        }
+
+        if (!event.target.closest || !event.target.closest("[data-actions-dropdown]")) {
+            closeAllActionDropdowns(null);
+        }
+    });
+
+    document.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") {
+            closeAllActionDropdowns(null);
+        }
+    });
+
+    document.querySelectorAll("[data-eligibility-override-form]").forEach(function (formEl) {
+        const select = formEl.querySelector('select[name="eligibility_override"]');
+        const wrap = formEl.querySelector("[data-eligibility-override-reason-wrap]");
+        const textarea = formEl.querySelector('textarea[name="eligibility_override_reason"]');
+        if (!select || !wrap) {
+            return;
+        }
+        const sync = function () {
+            wrap.hidden = !select.value;
+            if (textarea) {
+                textarea.required = Boolean(select.value);
+            }
+        };
+        select.addEventListener("change", sync);
+        sync();
+    });
+
+    document.querySelectorAll("[data-incomplete-reject-form]").forEach(function (formEl) {
+        const textarea = formEl.querySelector('textarea[name="incomplete_rejection_reason"]');
+        const dialog = formEl.closest("dialog");
+        const errorEl = dialog ? dialog.querySelector("[data-incomplete-reject-error]") : null;
+        if (!textarea) {
+            return;
+        }
+        textarea.addEventListener("input", function () {
+            if (errorEl) {
+                errorEl.hidden = true;
+                errorEl.textContent = "";
+            }
+        });
+        formEl.addEventListener("submit", function (event) {
+            if (!textarea.value.trim()) {
+                event.preventDefault();
+                textarea.value = "";
+                if (errorEl) {
+                    errorEl.textContent = "Ο λόγος απόρριψης είναι υποχρεωτικός.";
+                    errorEl.hidden = false;
+                }
+                textarea.focus();
+            }
+        });
+    });
 })();
 
 
@@ -383,6 +485,12 @@ bindFilePickers(document);
             params.append("include", box.value);
 
         });
+
+        if (document.body.hasAttribute("data-embed-mode")) {
+
+            params.set("embed", "1");
+
+        }
 
         window.location.href = baseUrl + "?" + params.toString();
 
@@ -949,9 +1057,17 @@ bindFilePickers(document);
 
                 const body = dialog.querySelector("[data-email-body]");
 
+                const rich = dialog.querySelector("[data-email-rich-body]");
+
                 if (!body) {
 
                     return;
+
+                }
+
+                if (rich) {
+
+                    body.value = serializeEmailRichBody(rich);
 
                 }
 
@@ -980,8 +1096,6 @@ bindFilePickers(document);
                 }
 
                 syncEmailRichBodyFromTextarea(dialog);
-
-                const rich = dialog.querySelector("[data-email-rich-body]");
 
                 if (rich) {
 
@@ -1051,7 +1165,11 @@ bindFilePickers(document);
 
             if (body) {
 
-                body.value = source;
+                const hasInsertMissingBtn = Boolean(
+                    dialog.querySelector("[data-insert-missing-documents]")
+                );
+
+                body.value = hasInsertMissingBtn ? "" : source;
 
             }
 
@@ -1228,6 +1346,12 @@ bindFilePickers(document);
 
             const recipient = dialog.querySelector("[data-communication-view-recipient]");
 
+            const sender = dialog.querySelector("[data-communication-view-sender]");
+
+            const stageWrap = dialog.querySelector("[data-communication-view-stage-wrap]");
+
+            const stage = dialog.querySelector("[data-communication-view-stage]");
+
             const status = dialog.querySelector("[data-communication-view-status]");
 
             const sentAt = dialog.querySelector("[data-communication-view-sent-at]");
@@ -1247,6 +1371,24 @@ bindFilePickers(document);
             }
 
             recipient.textContent = "…";
+
+            if (sender) {
+
+                sender.textContent = "…";
+
+            }
+
+            if (stageWrap) {
+
+                stageWrap.hidden = true;
+
+            }
+
+            if (stage) {
+
+                stage.textContent = "—";
+
+            }
 
             status.textContent = "…";
 
@@ -1290,6 +1432,12 @@ bindFilePickers(document);
 
             const recipient = dialog.querySelector("[data-communication-view-recipient]");
 
+            const sender = dialog.querySelector("[data-communication-view-sender]");
+
+            const stageWrap = dialog.querySelector("[data-communication-view-stage-wrap]");
+
+            const stage = dialog.querySelector("[data-communication-view-stage]");
+
             const status = dialog.querySelector("[data-communication-view-status]");
 
             const sentAt = dialog.querySelector("[data-communication-view-sent-at]");
@@ -1329,6 +1477,30 @@ bindFilePickers(document);
                 .then(function (data) {
 
                     recipient.textContent = data.recipient || "—";
+
+                    if (sender) {
+
+                        sender.textContent = data.sender || "—";
+
+                    }
+
+                    if (stageWrap && stage) {
+
+                        if (data.stage_label) {
+
+                            stage.textContent = data.stage_label;
+
+                            stageWrap.hidden = false;
+
+                        } else {
+
+                            stage.textContent = "—";
+
+                            stageWrap.hidden = true;
+
+                        }
+
+                    }
 
                     status.textContent = data.status_display || "—";
 
@@ -1397,6 +1569,44 @@ bindFilePickers(document);
                 event.preventDefault();
 
                 sortCommunicationGrid(sort);
+
+                return;
+
+            }
+
+            const filterBtn = event.target.closest("[data-announcement-emails-filter]");
+
+            if (filterBtn) {
+
+                event.preventDefault();
+
+                const dialog = filterBtn.closest("[data-announcement-emails-dialog]");
+
+                if (!dialog) {
+
+                    return;
+
+                }
+
+                const targetStage = filterBtn.getAttribute("data-announcement-emails-filter");
+
+                dialog.querySelectorAll("[data-announcement-emails-filter]").forEach(function (btn) {
+
+                    const isSelected = btn === filterBtn;
+
+                    btn.classList.toggle("btn-primary", isSelected);
+
+                    btn.classList.toggle("btn-secondary", !isSelected);
+
+                });
+
+                dialog.querySelectorAll("[data-announcement-emails-stage-group]").forEach(function (group) {
+
+                    const code = group.getAttribute("data-announcement-emails-stage-group");
+
+                    group.hidden = targetStage !== "all" && code !== targetStage;
+
+                });
 
                 return;
 
@@ -1717,6 +1927,14 @@ bindFilePickers(document);
             if (!dialog || !body) {
                 return;
             }
+            const titleEl = dialog.querySelector("[data-history-timeline-title-el]");
+            if (titleEl && open.dataset.historyTimelineTitle) {
+                titleEl.textContent = "Ιστορικό αλλαγών — " + open.dataset.historyTimelineTitle;
+            }
+            const leadEl = dialog.querySelector("[data-history-timeline-lead-el]");
+            if (leadEl && open.dataset.historyTimelineLead) {
+                leadEl.textContent = open.dataset.historyTimelineLead;
+            }
             if (statusEl) {
                 statusEl.innerHTML = "";
             }
@@ -1827,6 +2045,64 @@ bindFilePickers(document);
         deleteConfirm: "Διαγραφή του τρόπου δημοσίευσης ",
         deleteErrorMessage: "Αποτυχία διαγραφής του τρόπου δημοσίευσης.",
         serverDeleteErrors: true,
+    });
+
+    // Plot applications list grid: sticky locked columns offset calculation and column sorting.
+    function syncLockedTableColumns(table) {
+        if (!table) {
+            return;
+        }
+        const lockedCount = parseInt(table.getAttribute("data-locked-columns") || "0", 10);
+        if (!lockedCount || lockedCount <= 0) {
+            return;
+        }
+        const headerCells = Array.from(table.querySelectorAll("thead th[data-locked-col]"));
+        if (!headerCells.length) {
+            return;
+        }
+        let offset = 0;
+        headerCells.forEach(function (th) {
+            const pos = th.getAttribute("data-locked-col");
+            const leftPx = offset + "px";
+            th.style.left = leftPx;
+            table.querySelectorAll('tbody td[data-locked-col="' + pos + '"]').forEach(function (td) {
+                td.style.left = leftPx;
+            });
+            offset += Math.round(th.getBoundingClientRect().width || th.offsetWidth || 0);
+        });
+    }
+
+    document.querySelectorAll("table[data-locked-columns]").forEach(syncLockedTableColumns);
+    window.addEventListener("resize", function () {
+        document.querySelectorAll("table[data-locked-columns]").forEach(syncLockedTableColumns);
+    });
+
+    document.addEventListener("click", function (event) {
+        const button = event.target.closest ? event.target.closest("[data-plot-application-sort]") : null;
+        if (!button) {
+            return;
+        }
+        event.preventDefault();
+        const table = button.closest("[data-plot-application-table]");
+        const tbody = table ? table.querySelector("tbody") : null;
+        if (!tbody) {
+            return;
+        }
+        const key = button.getAttribute("data-plot-application-sort");
+        const nextDir = toggleSortDir(table, key);
+        table.querySelectorAll("th").forEach(function (th) {
+            th.removeAttribute("aria-sort");
+        });
+        const header = button.closest("th");
+        if (header) {
+            header.setAttribute("aria-sort", nextDir === "asc" ? "ascending" : "descending");
+        }
+        let comparator = GREEK_COLLATOR.compare;
+        if (key === "children") {
+            comparator = compareBy(numberValue);
+        }
+        reorderRows(tbody, "tr[data-plot-application-row]", key, nextDir, comparator);
+        syncLockedTableColumns(table);
     });
 
     // The four fixed publication methods are dated inline in the same table: a change is saved
@@ -2020,6 +2296,79 @@ bindFilePickers(document);
     });
 })();
 
+(function () {
+    // Pages marked [data-keep-scroll] post their forms and redirect back to themselves: after the
+    // reload, return to the card that was being worked on ([data-scroll-anchor]) instead of the
+    // top of the page, and float the result message so it stays visible there.
+    if (!document.querySelector("[data-keep-scroll]")) {
+        return;
+    }
+    const STORAGE_KEY = "keepScroll:" + window.location.pathname;
+    const MAX_AGE_MS = 60000;
+
+    function anchorSelector(el) {
+        return '[data-scroll-anchor="' + el.getAttribute("data-scroll-anchor") + '"]';
+    }
+
+    document.addEventListener("submit", function (event) {
+        const form = event.target;
+        if (event.defaultPrevented || !(form instanceof HTMLFormElement)) {
+            return;
+        }
+        if ((form.getAttribute("method") || "").toLowerCase() !== "post" || form.target === "_blank" || form.closest("dialog")) {
+            return;
+        }
+        const anchors = [];
+        for (let el = form.closest("[data-scroll-anchor]"); el; el = el.parentElement && el.parentElement.closest("[data-scroll-anchor]")) {
+            anchors.push({ selector: anchorSelector(el), top: el.getBoundingClientRect().top });
+        }
+        try {
+            sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ at: Date.now(), scrollY: window.scrollY, anchors: anchors }));
+        } catch (_err) {
+            // sessionStorage unavailable
+        }
+    });
+
+    let saved = null;
+    try {
+        saved = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || "null");
+        sessionStorage.removeItem(STORAGE_KEY);
+    } catch (_err) {
+        saved = null;
+    }
+    if (!saved || typeof saved.scrollY !== "number" || Date.now() - saved.at > MAX_AGE_MS) {
+        return;
+    }
+
+    const stack = document.querySelector("main .messages-stack");
+    if (stack) {
+        stack.classList.add("messages-stack--floating");
+        stack.addEventListener("click", function () {
+            stack.remove();
+        });
+        if (!stack.querySelector(".alert--error")) {
+            window.setTimeout(function () {
+                stack.remove();
+            }, 6000);
+        }
+    }
+
+    const applyScroll = function () {
+        let targetY = saved.scrollY;
+        const match = (saved.anchors || []).map(function (anchor) {
+            return { anchor: anchor, el: document.querySelector(anchor.selector) };
+        }).find(function (item) {
+            return item.el;
+        });
+        if (match) {
+            targetY = Math.max(0, Math.round(match.el.getBoundingClientRect().top + window.scrollY - match.anchor.top));
+        }
+        window.scrollTo(0, targetY);
+    };
+    applyScroll();
+    window.requestAnimationFrame(applyScroll);
+})();
+
 // In-place UI Text Edit Mode (§Α.9.1): applies custom text overrides across all screens
 // and, while Edit Mode is active, attaches an inline edit icon next to every editable text
 // that opens the popup modal to edit or reset the text.
@@ -2054,19 +2403,35 @@ bindFilePickers(document);
         { selector: "[data-ui-text]", category: "h1" },
         { selector: ".site-brand__title", category: "brand" },
         { selector: ".page-header h1, .login-card h1", category: "h1" },
-        { selector: ".page-header__lead, .card__lead", category: "lead" },
+        { selector: ".page-header__lead, .card__lead, .login-card__sub", category: "lead" },
         {
-            selector: "h2.card__title, h3.form-section-title, h4.form-section-subtitle, fieldset > legend, .tile__title",
+            selector:
+                ".wizard-steps__link, .wizard-steps__item, .list-tabs__item, .dashboard-stage-pill__label, .case-actions-nav__label, .settings-toc__list a",
+            category: "tab",
+        },
+        {
+            selector:
+                "h2.card__title, h3.card__title, h2.form-section-title, h3.form-section-title, h3.form-section-subtitle, h4.form-section-subtitle, .card > h4, .completeness-panel__title, .completeness-panel__section-title, .case-actions-sidebar__title, .settings-case-labels__group-title, .settings-toc__label, .dashboard-kpi-card__title, fieldset > legend, details > summary, .tile__title",
             category: "heading",
         },
-        { selector: ".tile__desc", category: "desc" },
-        { selector: "button.btn, a.btn, .btn-link:not(.btn-link--table), .btn-logout", category: "btn" },
         {
-            selector: ".form-field > label:not(.checkbox-label), label.checkbox-label > span, .filter-form label, dl.detail-grid dt",
+            selector:
+                ".tile__desc, p.helptext, div.helptext, span.helptext, .case-actions-sidebar__hint, .completeness-panel__summary, .completeness-panel__empty, p.text-muted, li.text-muted, td.text-muted, table.data-table tbody td[colspan], .alert:not([hidden])",
+            category: "desc",
+        },
+        {
+            selector:
+                "button.btn, a.btn, .btn-link:not(.btn-link--table), .btn-logout, .approved-design-plots-fab",
+            category: "btn",
+        },
+        {
+            selector:
+                ".form-field > label:not(.checkbox-label), label.checkbox-label > span, .login-form label, .filter-form label, dl.detail-grid dt, td > label, .announcement-summary-header strong, .dashboard-kpi-card__metrics > span, p[data-objection-period] > strong, .attachment-list__remove",
             category: "label",
         },
         { selector: "table.data-table thead th, button.btn-link--table", category: "th" },
-        { selector: ".breadcrumb a, .case-actions-sidebar__footer a, .settings-nav a", category: "nav" },
+        { selector: ".badge, .history-timeline__badge", category: "badge" },
+        { selector: ".breadcrumb a, .breadcrumb > span, .case-actions-sidebar__footer a, .settings-nav a", category: "nav" },
     ];
 
     const PENCIL_SVG =
@@ -2106,19 +2471,40 @@ bindFilePickers(document);
             el.hasAttribute("data-ui-skip") ||
             el.closest("[data-ui-skip]") ||
             el.closest("[data-ui-text-dialog]") ||
+            el.closest("[data-ui-text-node]") ||
             el.hasAttribute("data-ui-edit-mode-toggle") ||
-            el.hasAttribute("data-file-remove")
+            el.hasAttribute("data-file-remove") ||
+            el.hasAttribute("data-reorder-status") ||
+            el.hasAttribute("data-ui-text-default-hint") ||
+            el.hasAttribute("data-email-check-label") ||
+            el.hasAttribute("data-save-tooltip") ||
+            el.hasAttribute("data-person-status")
         ) {
             return true;
         }
-        if (category === "h1" && !el.hasAttribute("data-ui-text") && !el.hasAttribute("data-ui-key")) {
+        if (!el.hasAttribute("data-ui-text") && !el.hasAttribute("data-ui-key")) {
             if (el.querySelector("[data-ui-text], [data-ui-key]")) {
                 return true;
             }
         }
-        if (category === "lead") {
-            if (el.querySelector("a, .badge, input, select, button")) {
+        if (el.classList.contains("wizard-steps__item") && el.querySelector(".wizard-steps__link")) {
+            return true;
+        }
+        if (category === "lead" || category === "desc") {
+            if (el.closest(".messages-stack")) {
                 return true;
+            }
+            if (!el.hasAttribute("data-ui-text") && !el.hasAttribute("data-ui-key")) {
+                if (el.querySelector("a, .badge, input, select, button, textarea, table, ul, ol")) {
+                    return true;
+                }
+            }
+        }
+        if (category === "badge") {
+            if (!el.hasAttribute("data-ui-text") && !el.hasAttribute("data-ui-key")) {
+                if (el.querySelector("a, input, select, button")) {
+                    return true;
+                }
             }
         }
         if (category === "th" && el.tagName === "TH") {
@@ -2129,10 +2515,67 @@ bindFilePickers(document);
         return false;
     }
 
+    function isInlineFormattingChild(child) {
+        if (!child || child.nodeType !== 1) {
+            return false;
+        }
+        if (
+            child.hasAttribute("data-ui-skip") ||
+            child.hasAttribute("data-ui-text") ||
+            child.hasAttribute("data-ui-key") ||
+            child.hasAttribute("data-ui-edit-trigger") ||
+            child.classList.contains("badge") ||
+            child.classList.contains("visually-hidden") ||
+            child.getAttribute("aria-hidden") === "true"
+        ) {
+            return false;
+        }
+        if (
+            child.querySelector(
+                "[data-ui-skip], [data-ui-text], [data-ui-key], a, button, input, select, textarea, .badge"
+            )
+        ) {
+            return false;
+        }
+        const tag = (child.tagName || "").toUpperCase();
+        if (tag === "CODE" || tag === "EM" || tag === "I" || tag === "B") {
+            return true;
+        }
+        if (tag === "STRONG" || tag === "SPAN") {
+            const txt = normalizeText(child.textContent);
+            if (!txt || /^[\d.,€%\s—-]+$/.test(txt)) {
+                return false;
+            }
+            return true;
+        }
+        return false;
+    }
+
     function ensureTextSpan(el) {
         const existing = el.querySelector(":scope > [data-ui-text-node]");
         if (existing) {
             return existing;
+        }
+        const elementChildren = Array.from(el.children).filter(function (c) {
+            return !c.hasAttribute("data-ui-edit-trigger");
+        });
+        if (
+            elementChildren.length > 0 &&
+            elementChildren.every(isInlineFormattingChild)
+        ) {
+            const fullRaw = normalizeText(el.textContent);
+            if (!fullRaw) {
+                return null;
+            }
+            const span = document.createElement("span");
+            span.className = "ui-editable-text";
+            span.setAttribute("data-ui-text-node", "");
+            while (el.firstChild) {
+                span.appendChild(el.firstChild);
+            }
+            span.setAttribute("data-ui-default-html", span.innerHTML);
+            el.appendChild(span);
+            return span;
         }
         const textNodes = [];
         Array.from(el.childNodes).forEach(function (node) {
@@ -2170,17 +2613,34 @@ bindFilePickers(document);
         return span;
     }
 
+    function matchesKnownLabel(key, valueText) {
+        if (!valueText) {
+            return false;
+        }
+        if (Object.prototype.hasOwnProperty.call(defaultsMap, key) && defaultsMap[key] === valueText) {
+            return true;
+        }
+        if (Object.prototype.hasOwnProperty.call(overridesMap, key) && overridesMap[key] === valueText) {
+            return true;
+        }
+        return false;
+    }
+
     function detectSectionOrSubsection(rawText) {
         for (let i = 0; i < sectionKeys.length; i += 1) {
             const sec = sectionKeys[i];
             const prefix = sec + ". ";
             if (rawText.startsWith(prefix)) {
-                return {
-                    key: "caseSectionLabel." + sec,
-                    prefix: prefix,
-                    suffix: "",
-                    valueText: rawText.slice(prefix.length).trim(),
-                };
+                const valueText = rawText.slice(prefix.length).trim();
+                const candidateKey = "caseSectionLabel." + sec;
+                if (matchesKnownLabel(candidateKey, valueText)) {
+                    return {
+                        key: candidateKey,
+                        prefix: prefix,
+                        suffix: "",
+                        valueText: valueText,
+                    };
+                }
             }
         }
         for (let i = 0; i < subsectionKeys.length; i += 1) {
@@ -2193,12 +2653,15 @@ bindFilePickers(document);
                     suffix = " (3.2)";
                     valueText = valueText.slice(0, -suffix.length).trim();
                 }
-                return {
-                    key: "caseSubsectionLabel." + sub,
-                    prefix: prefix,
-                    suffix: suffix,
-                    valueText: valueText,
-                };
+                const candidateKey = "caseSubsectionLabel." + sub;
+                if (matchesKnownLabel(candidateKey, valueText)) {
+                    return {
+                        key: candidateKey,
+                        prefix: prefix,
+                        suffix: suffix,
+                        valueText: valueText,
+                    };
+                }
             }
         }
         return null;
@@ -2218,7 +2681,12 @@ bindFilePickers(document);
         const activeValue = hasOverride ? overridesMap[key] : initialValue;
         el.setAttribute("data-ui-current", activeValue);
         const trailing = span.getAttribute("data-ui-trailing-space") === "1" ? " " : "";
-        span.textContent = prefix + activeValue + suffix + trailing;
+        const defaultHtml = span.getAttribute("data-ui-default-html");
+        if (!hasOverride && defaultHtml !== null && activeValue === initialValue && !prefix && !suffix) {
+            span.innerHTML = defaultHtml;
+        } else {
+            span.textContent = prefix + activeValue + suffix + trailing;
+        }
     }
 
     function syncEditIconOnElement(el, editModeActive) {
@@ -2265,7 +2733,7 @@ bindFilePickers(document);
         if (!rawText || rawText === "—" || !/[Α-Ωα-ωΆ-Ώά-ώA-Za-z]{2,}/.test(rawText)) {
             return;
         }
-        if (category === "nav" && /^[A-Z0-9._/-]+$/.test(rawText)) {
+        if (category === "nav" && (/^[A-Z0-9._/-]+$/.test(rawText) || /\d{2,}/.test(rawText))) {
             return;
         }
 
@@ -2284,9 +2752,13 @@ bindFilePickers(document);
         let suffix = el.getAttribute("data-ui-suffix") || "";
         let valueText = rawText;
 
-        if (key && prefix && valueText.startsWith(prefix.trim())) {
+        if (prefix && valueText.startsWith(prefix.trim())) {
             valueText = valueText.slice(prefix.trim().length).trim();
-        } else if (!key && category === "heading") {
+        }
+        if (suffix && valueText.endsWith(suffix.trim())) {
+            valueText = valueText.slice(0, valueText.length - suffix.trim().length).trim();
+        }
+        if (!key && !prefix && !suffix && category === "heading") {
             const detected = detectSectionOrSubsection(rawText);
             if (detected) {
                 key = detected.key;
@@ -2508,5 +2980,19 @@ bindFilePickers(document);
 
     resetBtn.addEventListener("click", function () {
         submitTextChange(true);
+    });
+})();
+
+(function () {
+    // ?open=<name> opens the "plot-application-<name>-dialog" action dialog on load.
+    const name = new URLSearchParams(window.location.search).get("open");
+    if (!name || !/^[a-z-]+$/.test(name)) {
+        return;
+    }
+    document.addEventListener("DOMContentLoaded", function () {
+        const opener = document.querySelector('[data-dialog-open="plot-application-' + name + '-dialog"]');
+        if (opener && !opener.disabled) {
+            opener.click();
+        }
     });
 })();

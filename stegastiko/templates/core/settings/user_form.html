@@ -7,16 +7,16 @@
 <span>/</span>
 <a href="{% url 'settings_users' %}">Χρήστες</a>
 <span>/</span>
-<span>{% if target %}{{ target.username }}{% else %}Νέος χρήστης{% endif %}</span>
+<span{% if target %} data-ui-skip{% endif %}>{% if target %}{{ target.username }}{% else %}Νέος χρήστης{% endif %}</span>
 {% endblock %}
 
 {% block settings_main %}
 <div class="page-header">
-    <h1>{% if target %}Χρήστης {{ target.username }}{% else %}Νέος χρήστης{% endif %}</h1>
+    <h1>{% if target %}<span data-ui-text>Χρήστης</span> {{ target.username }}{% else %}Νέος χρήστης{% endif %}</h1>
     {% if target.is_superuser %}
     <p class="page-header__lead">
         <span class="badge badge--pass">Υπερχρήστης</span>
-        Έχει πλήρη πρόσβαση ανεξάρτητα από τους ρόλους.
+        <span data-ui-text>Έχει πλήρη πρόσβαση ανεξάρτητα από τους ρόλους.</span>
     </p>
     {% endif %}
 </div>

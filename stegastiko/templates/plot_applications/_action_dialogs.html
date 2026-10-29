@@ -1,0 +1,98 @@
+{% comment %}
+Κοινά modals και φόρμες ενεργειών της αίτησης παραχώρησης οικοπέδου (Προβολή & Επεξεργασία):
+- Απόρριψη / Ανάκληση απόρριψης
+- Χειροκίνητη αλλαγή αποτελέσματος επιλεξιμότητας (Ενότ. 6)
+- Αποστολή Email
+- Ιστορικό αλλαγών
+- Διαγραφή αίτησης
+{% endcomment %}
+{% if not is_create and application and application.pk %}
+{% if can_reject_incomplete %}
+<dialog id="plot-application-incomplete-reject-dialog"
+        class="modal"
+        aria-labelledby="plot-application-incomplete-reject-dialog-title"
+        data-incomplete-reject-dialog>
+    <div class="approved-design-plots-workspace__header">
+        <div>
+            <h2 class="card__title" id="plot-application-incomplete-reject-dialog-title">Απόρριψη από λειτουργό (Ενότ. 5)</h2>
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" data-dialog-close>Κλείσιμο</button>
+    </div>
+    <p class="helptext">Απόρριψη πριν από τον Προκαταρκτικό Κατάλογο, π.χ. για ελλείψεις σε πεδία ή πιστοποιητικά ή επειδή είναι προφανές ότι δεν πληρούνται τα κριτήρια. Η αίτηση δεν κρίνεται ως δικαιούχος ή μη δικαιούχος. Αναφέρετε τον λόγο απόρριψης· το πεδίο είναι υποχρεωτικό.</p>
+    <div class="alert alert--error" data-incomplete-reject-error hidden></div>
+    <form method="post"
+          action="{% url 'plot_applications:incomplete_reject' application.pk %}"
+          class="app-form"
+          data-incomplete-reject-form>
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.path }}">
+        <div class="form-grid">
+            {% include "plot_applications/_field.html" with field=incomplete_rejection_form.incomplete_rejection_reason wide=True %}
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-danger">Απόρριψη</button>
+            <button type="button" class="btn btn-secondary" data-dialog-close>Ακύρωση</button>
+        </div>
+    </form>
+</dialog>
+{% elif can_revoke_incomplete_rejection %}
+<form id="plot-application-incomplete-revoke-form"
+      method="post"
+      action="{% url 'plot_applications:incomplete_reject_revoke' application.pk %}"
+      data-incomplete-reject-revoke-form
+      data-confirm="Ανάκληση της απόρριψης της αίτησης {{ application.protocol_number }};">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ request.path }}">
+</form>
+{% endif %}
+
+{% if can_override_eligibility %}
+<dialog id="plot-application-eligibility-override-dialog"
+        class="modal"
+        aria-labelledby="plot-application-eligibility-override-dialog-title"
+        data-eligibility-override-dialog>
+    <div class="approved-design-plots-workspace__header">
+        <div>
+            <h2 class="card__title" id="plot-application-eligibility-override-dialog-title">Χειροκίνητη αλλαγή αποτελέσματος (Ενότ. 6)</h2>
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" data-dialog-close>Κλείσιμο</button>
+    </div>
+    <p class="helptext">Ο λειτουργός μπορεί να αλλάξει το αποτέλεσμα του λογισμικού κατά πόσο ο αιτητής είναι δικαιούχος, με υποχρεωτική αιτιολογία. Η αλλαγή καταγράφεται στο ιστορικό αλλαγών.</p>
+    <form method="post"
+          action="{% url 'plot_applications:eligibility_override_save' application.pk %}"
+          class="app-form"
+          data-eligibility-override-form>
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.path }}">
+        <div class="form-grid">
+            {% include "plot_applications/_field.html" with field=eligibility_override_form.eligibility_override wide=True %}
+            <div class="form-span-all"
+                 data-eligibility-override-reason-wrap
+                 {% if not application.eligibility_override %}hidden{% endif %}>
+                {% include "plot_applications/_field.html" with field=eligibility_override_form.eligibility_override_reason wide=True %}
+            </div>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Αποθήκευση αποτελέσματος επιλεξιμότητας</button>
+            <button type="button" class="btn btn-secondary" data-dialog-close>Ακύρωση</button>
+        </div>
+    </form>
+</dialog>
+{% endif %}
+
+{% if access.plot_applications.delete %}
+<form id="plot-application-delete-form"
+      method="post"
+      action="{% url 'plot_applications:delete' application.pk %}"
+      data-confirm="Διαγραφή της αίτησης {{ application.protocol_number }};">
+    {% csrf_token %}
+</form>
+{% endif %}
+
+{% if can_send_email %}
+{% include "plot_applications/_email_dialog.html" %}
+{% endif %}
+{% if sub_view.change_history %}
+{% include "core/_history_timeline_dialog.html" with timeline_subject=application.protocol_number %}
+{% endif %}
+{% endif %}

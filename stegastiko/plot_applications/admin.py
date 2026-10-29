@@ -27,7 +27,7 @@ class IncomeInline(admin.TabularInline):
 class PlotApplicationAdmin(admin.ModelAdmin):
     list_display = (
         "protocol_number",
-        "community",
+        "announcement",
         "applicant",
         "spouse",
         "submitted_on",

@@ -117,6 +117,8 @@ def send_plot_application_email(
     subject: str,
     body: str,
     recipient: str | None = None,
+    *,
+    user=None,
 ) -> Communication:
     """Αποστολή email προς το άτομο/αιτητή της αίτησης και καταγραφή στο ιστορικό (Communication)."""
     target_email = (recipient if recipient is not None else (application.email or "")).strip()
@@ -129,6 +131,17 @@ def send_plot_application_email(
     if not body:
         raise ValidationError("Το κείμενο του email είναι κενό.")
     require_smtp_configured()
+
+    section_ref = REF_PLOT_APPLICATION_EMAIL
+    if application.announcement_id and getattr(application.announcement, "stage", None):
+        from cases.models import SubmissionCycle
+
+        ann_stage = application.announcement.stage
+        if ann_stage == SubmissionCycle.Stage.DETAILS:
+            ann_stage = SubmissionCycle.Stage.SUBMISSION
+        elif ann_stage == SubmissionCycle.Stage.CLOSED:
+            ann_stage = SubmissionCycle.Stage.AGREEMENTS
+        section_ref = f"announcement_stage:{ann_stage}"
 
     owner_type = ContentType.objects.get_for_model(PlotApplication)
     with transaction.atomic():
@@ -154,11 +167,12 @@ def send_plot_application_email(
             subject=subject,
             body=body,
             status=CommunicationStatus.SENDING,
+            created_by_id=user.pk if (user is not None and getattr(user, "pk", None)) else None,
         )
-        communication._section_ref = REF_PLOT_APPLICATION_EMAIL
+        communication._section_ref = section_ref
         communication.save()
 
-    communication._section_ref = REF_PLOT_APPLICATION_EMAIL
+    communication._section_ref = section_ref
     try:
         send_email(target_email, subject, body)
     except Exception:

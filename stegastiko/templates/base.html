@@ -5,13 +5,15 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}{{ app_title }}{% endblock %}</title>
-    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=26">
+    <link rel="stylesheet" href="{% static 'css/app.css' %}?v=37">
     <script src="{% static 'vendor/htmx.min.js' %}" defer></script>
-    <script src="{% static 'js/app.js' %}?v=18" defer></script>
+    <script src="{% static 'js/app.js' %}?v=24" defer></script>
+    <script src="{% static 'js/embed_modal.js' %}?v=1" defer></script>
     {% block extra_head %}{% endblock %}
 </head>
-<body class="{% block body_class %}{% endblock %}{% if ui_edit_mode %} ui-edit-mode{% endif %}">
-{% if user.is_authenticated %}
+<body class="{% block body_class %}{% endblock %}{% if ui_edit_mode %} ui-edit-mode{% endif %}{% if is_embed %} is-embed{% endif %}"{% if is_embed %} data-embed-mode{% endif %}>
+{% if is_embed %}
+{% elif user.is_authenticated %}
 <header class="site-header">
     <div class="site-header__inner">
         <a href="{% url 'home' %}" class="site-brand">
@@ -24,25 +26,8 @@
         <nav class="site-nav" data-site-nav aria-label="Κύρια πλοήγηση">
             {% with namespace=request.resolver_match.namespace %}
             <a href="{% url 'home' %}" class="site-nav__link{% if request.resolver_match.url_name == 'home' %} is-active{% endif %}" data-ui-key="menuLabel.home">{{ menu.home }}</a>
-            {% if access.cases.view or access.plot_applications.any or access.plot_prioritization.view %}
-            {% with is_prioritization=request.resolver_match.url_name|slice:":14" %}
-            <div class="site-nav__group" data-nav-group>
-                <button type="button" class="site-nav__link site-nav__group-toggle{% if namespace == 'cases' or namespace == 'plot_applications' %} is-active{% endif %}" aria-haspopup="true" aria-expanded="false" data-nav-group-toggle data-ui-key="menuLabel.applications">
-                    {{ menu.applications }}<span class="site-nav__caret" aria-hidden="true">▾</span>
-                </button>
-                <div class="site-nav__submenu">
-                    {% if access.cases.view %}
-                    <a href="{% url 'cases:list' %}" class="site-nav__sublink{% if namespace == 'cases' %} is-active{% endif %}" data-ui-key="menuLabel.applications_division">{{ menu.applications_division }}</a>
-                    {% endif %}
-                    {% if access.plot_applications.any %}
-                    <a href="{% url 'plot_applications:list' %}" class="site-nav__sublink{% if namespace == 'plot_applications' and is_prioritization != 'prioritization' %} is-active{% endif %}" data-ui-key="menuLabel.applications_plot">{{ menu.applications_plot }}</a>
-                    {% endif %}
-                    {% if access.plot_prioritization.view %}
-                    <a href="{% url 'plot_applications:prioritization' %}" class="site-nav__sublink{% if namespace == 'plot_applications' and is_prioritization == 'prioritization' %} is-active{% endif %}" data-ui-key="menuLabel.applications_prioritization">{{ menu.applications_prioritization }}</a>
-                    {% endif %}
-                </div>
-            </div>
-            {% endwith %}
+            {% if access.cases.view %}
+            <a href="{% url 'cases:list' %}" class="site-nav__link{% if namespace == 'cases' %} is-active{% endif %}" data-ui-key="menuLabel.applications_division">{{ menu.applications_division }}</a>
             {% endif %}
             {% if access.persons.view %}
             <a href="{% url 'persons:list' %}" class="site-nav__link{% if namespace == 'persons' %} is-active{% endif %}" data-ui-key="menuLabel.persons">{{ menu.persons }}</a>
@@ -116,6 +101,15 @@
 
     {% block content %}{% endblock %}
 </main>
+{% if user.is_authenticated and not is_embed %}
+<dialog class="modal modal--embed" aria-labelledby="embed-modal-title" data-embed-dialog>
+    <div class="modal--embed__header">
+        <h2 class="card__title" id="embed-modal-title" data-embed-title></h2>
+        <button type="button" class="btn btn-ghost btn-sm" data-embed-close aria-label="Κλείσιμο">✕ Κλείσιμο</button>
+    </div>
+    <iframe class="modal--embed__frame" title="Περιεχόμενο παραθύρου" data-embed-frame></iframe>
+</dialog>
+{% endif %}
 {% if user.is_authenticated %}
 {% include "cases/_communication_email_view_dialog.html" %}
 {% endif %}
@@ -132,7 +126,7 @@
         <div class="form-grid">
             <div class="form-field form-field--wide">
                 <label for="ui-text-edit-input">Κείμενο εμφάνισης</label>
-                <textarea id="ui-text-edit-input" name="value" rows="2" class="input" maxlength="512" data-ui-text-input required></textarea>
+                <textarea id="ui-text-edit-input" name="value" rows="2" class="input" maxlength="2000" data-ui-text-input required></textarea>
                 <p class="helptext" data-ui-text-default-hint></p>
             </div>
         </div>

@@ -14,6 +14,8 @@ from pathlib import Path
 
 from docx import Document
 
+from core.docx_merge import replace_in_paragraph
+
 TEMPLATE_PATH = Path(__file__).with_name("docx_templates") / "notice_template.docx"
 
 # The values of the sample notice, replaced as they stand in the template.
@@ -80,9 +82,13 @@ def notice_filename(cycle) -> str:
 
 
 def _district_of(cycle) -> str:
-    districts = sorted({community.district for community in cycle.communities.all()})
+    plots = list(cycle.plots.select_related("community").all())
+    districts = sorted({plot.community.district for plot in plots})
     if not districts:
-        raise NoticeExportError("Η γνωστοποίηση δεν έχει Κοινότητες.")
+        fallback = getattr(cycle, "_fallback_community", None)
+        if fallback is not None:
+            return fallback.district
+        raise NoticeExportError("Η γνωστοποίηση δεν προσφέρει κανένα οικόπεδο (9.1).")
     if len(districts) > 1:
         raise NoticeExportError(
             "Η γνωστοποίηση εκδίδεται από τον Έπαρχο μίας Επαρχίας (Ενότ. 4)· "
@@ -92,44 +98,17 @@ def _district_of(cycle) -> str:
 
 
 def _plots_per_community(cycle) -> list[tuple[str, int]]:
-    """(community, number of offered plots), by name; communities without plots are left out."""
-    counts = Counter(cycle.plots.values_list("community_id", flat=True))
+    """(community, number of offered plots), by name; derived from offered plots."""
+    plots = list(cycle.plots.select_related("community").all())
+    counts = Counter(plot.community_id for plot in plots)
+    communities = {plot.community_id: plot.community for plot in plots}
     rows = [
-        (community.name, counts[community.pk])
-        for community in cycle.communities.all()
-        if counts[community.pk]
+        (community.name, counts[community_id])
+        for community_id, community in communities.items()
+        if counts[community_id]
     ]
     rows.sort(key=lambda row: _strip_accents(row[0]).casefold())
     return rows
-
-
-def replace_in_paragraph(paragraph, old: str, new: str) -> int:
-    """Replace `old` by `new` in a paragraph even where Word split it over several runs.
-
-    The replacement takes the formatting of the run where `old` starts. Returns the number
-    of replacements.
-    """
-    replaced = 0
-    search_from = 0
-    while True:
-        runs = paragraph.runs
-        texts = [run.text for run in runs]
-        start = "".join(texts).find(old, search_from)
-        if start < 0:
-            return replaced
-        end = start + len(old)
-        position = 0
-        first = True
-        for run, text in zip(runs, texts):
-            run_start, position = position, position + len(text)
-            if position <= start or run_start >= end:
-                continue
-            low = max(start, run_start) - run_start
-            high = min(end, position) - run_start
-            run.text = text[:low] + (new if first else "") + text[high:]
-            first = False
-        replaced += 1
-        search_from = start + len(new)
 
 
 def _replace_everywhere(document, old: str, new: str) -> int:

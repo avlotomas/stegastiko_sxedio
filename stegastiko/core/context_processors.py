@@ -17,6 +17,7 @@ def ui_flags(request):
         "ui_text_defaults": get_ui_text_defaults(),
         "can_edit_ui_texts": False,
         "ui_edit_mode": False,
+        "is_embed": bool(getattr(request, "is_embed", False)),
     }
     if request.user.is_authenticated:
         context["access"] = AccessProxy(request.user)

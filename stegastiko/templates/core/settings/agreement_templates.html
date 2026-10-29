@@ -1,0 +1,124 @@
+{% extends "core/settings/_layout.html" %}
+
+{% block title %}{{ page_title }} — Ρυθμίσεις{% endblock %}
+
+{% block settings_breadcrumb %}
+<a href="{% url 'system_configuration' %}">Ρυθμίσεις συστήματος</a>
+<span>/</span>
+<span>{{ page_title }}</span>
+{% endblock %}
+
+{% block settings_main %}
+<div class="page-header">
+    <h1>{{ page_title }}</h1>
+    {% if page_lead %}
+    <p class="page-header__lead">{{ page_lead }}</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2 class="card__title">Παράμετροι Συμφωνίας Παραχώρησης (Παράρτημα 4)</h2>
+    <form method="post" class="app-form" novalidate data-agreement-settings-form>
+        {% csrf_token %}
+        <input type="hidden" name="save_agreement_settings" value="1">
+        <div class="form-grid">
+            <div class="form-field form-span-all">
+                <label for="id_setting_agreementDistrictOfficer">Έπαρχος στη Συμφωνία Παραχώρησης (Παράρτημα 4, Ενότ. 12)</label>
+                <input type="text"
+                       id="id_setting_agreementDistrictOfficer"
+                       name="setting_agreementDistrictOfficer"
+                       class="input"
+                       value="{{ district_officer }}"
+                       {% if not can_edit %}disabled{% endif %}>
+                <p class="helptext">Κείμενο που αντικαθιστά τα πεδία «του Επάρχου» και «ΕΠΕΙΔΗ ο/η Έπαρχος» στη Συμφωνία Παραχώρησης Οικοπέδου (Παράρτημα 4).</p>
+            </div>
+        </div>
+        <div class="form-actions form-span-all">
+            {% if can_edit %}
+            <button type="submit" class="btn btn-primary">Αποθήκευση παραμέτρων</button>
+            {% endif %}
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2 class="card__title">Μεταφόρτωση νέου προτύπου (.docx)</h2>
+    <form method="post" enctype="multipart/form-data" class="app-form" novalidate>
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+        <div class="alert alert--error form-span-all">
+            {% for error in form.non_field_errors %}{{ error }}{% endfor %}
+        </div>
+        {% endif %}
+        <div class="form-grid">
+            {% for field in form %}
+                {% include "includes/form_field.html" with field=field wide=True %}
+            {% endfor %}
+        </div>
+        <div class="form-actions form-span-all">
+            {% if can_edit %}
+            <button type="submit" class="btn btn-primary">Μεταφόρτωση προτύπου</button>
+            {% endif %}
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h2 class="card__title">Καταχωρισμένα πρότυπα</h2>
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Ονομασία</th>
+                    <th>Έκδοση</th>
+                    <th>Αρχείο</th>
+                    <th>Κατάσταση</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for tpl in templates %}
+                <tr>
+                    <td>{{ tpl.name }}</td>
+                    <td>{{ tpl.version|default:"—" }}</td>
+                    <td>{{ tpl.template_file.name }}</td>
+                    <td>
+                        {% if tpl.is_active %}
+                        <span class="badge badge--pass">Ενεργό</span>
+                        {% else %}
+                        <span class="badge badge--pending">Ανενεργό</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="4">Δεν έχει μεταφορτωθεί προσαρμοσμένο πρότυπο· χρησιμοποιείται το ενσωματωμένο πρότυπο Παραρτήματος 4.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card">
+    <h2 class="card__title">Υποστηριζόμενα πεδία αυτόματης συμπλήρωσης (placeholders)</h2>
+    <p class="helptext">Χρησιμοποιήστε τα παρακάτω πεδία εντός διπλών αγκυλών στο αρχείο Word (.docx):</p>
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Πεδίο</th>
+                    <th>Περιγραφή</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for key, desc in placeholders %}
+                <tr>
+                    <td><code>{% templatetag openvariable %}{{ key }}{% templatetag closevariable %}</code></td>
+                    <td>{{ desc }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

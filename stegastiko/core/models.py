@@ -158,6 +158,64 @@ class Communication(AuditedModel):
             application_id = self.object_id
         return case_id, application_id, getattr(self, "_section_ref", "")
 
+    @property
+    def sender_label(self) -> str:
+        """Ο χρήστης που έστειλε το email (ονοματεπώνυμο και username, ή «Σύστημα»)."""
+        if hasattr(self, "_sender_label"):
+            return self._sender_label
+        from django.contrib.auth import get_user_model
+
+        uid = self.created_by_id
+        if uid is None and self.pk:
+            uid = (
+                ActionHistory.objects.filter(
+                    entity_type="Communication",
+                    entity_id=str(self.pk),
+                    user_id__isnull=False,
+                )
+                .values_list("user_id", flat=True)
+                .first()
+            )
+        if uid:
+            User = get_user_model()
+            user = User.objects.filter(pk=uid).first()
+            if user is not None:
+                full_name = user.get_full_name().strip()
+                self._sender_label = (
+                    f"{full_name} ({user.username})" if full_name else user.username
+                )
+                return self._sender_label
+            self._sender_label = f"Χρήστης #{uid}"
+            return self._sender_label
+        self._sender_label = "Σύστημα"
+        return self._sender_label
+
+    @property
+    def stage_label(self) -> str:
+        """Στάδιο γνωστοποίησης κατά το οποίο στάλθηκε το email."""
+        if hasattr(self, "_stage_label"):
+            return self._stage_label
+        model_ref = (self.content_type.app_label, self.content_type.model)
+        if model_ref == ("plot_applications", "plotapplication"):
+            from plot_applications.beneficiary_lists import (
+                community_lists,
+                communication_stage_info,
+            )
+
+            preliminary = final = None
+            owner = self.content_object
+            if owner is not None and getattr(owner, "announcement_id", None):
+                state = community_lists(owner.announcement)
+                preliminary = state.preliminary
+                final = state.final
+            _code, label, _kind = communication_stage_info(
+                self, preliminary=preliminary, final=final
+            )
+            self._stage_label = label
+            return self._stage_label
+        self._stage_label = ""
+        return self._stage_label
+
 
 class Community(AuditedModel):
     district = models.CharField(max_length=128)

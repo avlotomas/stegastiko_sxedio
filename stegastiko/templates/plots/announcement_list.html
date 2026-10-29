@@ -54,7 +54,7 @@
             <tr>
                 <td>{{ cycle.communities_label }}</td>
                 <td>{{ cycle.announcement_date }}</td>
-                <td>{{ cycle.submission_months }} μήνες · έως {{ cycle.submission_end_date }}</td>
+                <td>{{ cycle.submission_months }} <span data-ui-text>μήνες</span> · <span data-ui-text>έως</span> {{ cycle.submission_end_date }}</td>
                 <td>{{ cycle.plots.all|length }}</td>
                 <td>
                     {% if cycle.is_published %}
@@ -62,6 +62,9 @@
                     {% else %}
                     <span class="badge badge--pending">Προσχέδιο</span>
                     {% endif %}
+                    <span class="badge badge--{% if cycle.stage == 'closed' %}pass{% else %}pending{% endif %}">
+                        {{ cycle.get_stage_display }}
+                    </span>
                 </td>
                 <td>
                     <a href="{% url 'announcements:detail' cycle.pk %}" class="btn btn-ghost btn-sm">Άνοιγμα</a>

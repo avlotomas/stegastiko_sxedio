@@ -118,6 +118,8 @@ def _communication_detail_payload(communication: Communication) -> dict:
         )
     return {
         "recipient": communication.recipient,
+        "sender": communication.sender_label,
+        "stage_label": communication.stage_label,
         "subject": communication.subject,
         "body": communication.body,
         "check_label": getattr(communication.content_object, "row_label", ""),

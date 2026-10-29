@@ -8,15 +8,29 @@
     <p class="page-header__lead">Αιτήσεις πολιτών κατά το έντυπο Παραρτήματος 3, ανά Κοινότητα.</p>
 </div>
 
-{% if access.plot_applications.create %}
+{% if access.plot_applications.create or access.settings_plot_application_labels.view %}
 <div class="toolbar">
+    {% if access.plot_applications.create %}
     <a href="{% url 'plot_applications:create' %}" class="btn btn-primary">Νέα αίτηση</a>
+    {% endif %}
+    {% if access.settings_plot_application_labels.view %}
+    <a href="{% url 'system_settings_plot_application_grid' %}" class="btn btn-secondary">Ρυθμίσεις πίνακα</a>
+    {% endif %}
 </div>
 {% endif %}
 
 <div class="card">
     <h2 class="card__title">Αναζήτηση</h2>
     <form method="get" class="filter-form">
+        <div>
+            <label for="announcement_id">Γνωστοποίηση</label>
+            <select name="announcement_id" id="announcement_id">
+                <option value="">Όλες</option>
+                {% for ann in announcements %}
+                <option value="{{ ann.id }}" {% if announcement_id == ann.id|stringformat:"s" %}selected{% endif %}>{{ ann.communities_label }} — {{ ann.announcement_date|date:"d/m/Y" }}</option>
+                {% endfor %}
+            </select>
+        </div>
         <div>
             <label for="community_id">Κοινότητα</label>
             <select name="community_id" id="community_id">
@@ -81,13 +95,6 @@
             </select>
         </div>
         <div>
-            <label for="order">Ταξινόμηση</label>
-            <select name="order" id="order">
-                <option value="">Ημερομηνία υποβολής</option>
-                <option value="priority" {% if order == 'priority' %}selected{% endif %}>Σειρά προτεραιότητας (Ενότ. 11)</option>
-            </select>
-        </div>
-        <div>
             <label for="q">Αρ. Πρωτοκόλλου / ΑΔΤ / Επίθετο</label>
             <input type="text" name="q" id="q" value="{{ q }}">
         </div>
@@ -95,84 +102,113 @@
     </form>
 </div>
 
-<div class="table-wrap">
-    <table class="data-table">
+<div class="table-wrap" data-plot-application-grid-wrap>
+    <table class="data-table{% if locked_columns_count > 0 %} data-table--has-locked-cols{% endif %}"
+           data-plot-application-table
+           data-locked-columns="{{ locked_columns_count }}"
+           {% if sort_col %}data-sort-key="{{ sort_col }}" data-sort-dir="{{ sort_dir }}"{% endif %}>
         <thead>
         <tr>
-            <th>Αρ. Πρωτοκόλλου</th>
-            <th>Ημ. υποβολής</th>
-            <th>Κοινότητα</th>
-            <th>Αιτητής/τρια</th>
-            <th>Σύζυγος/Συμβίος</th>
-            <th>Οικογ. κατάσταση</th>
-            <th>Τέκνα</th>
-            <th>Προτεραιότητα</th>
-            <th>Στάδιο αίτησης</th>
-            <th>Πληρότητα αίτησης</th>
-            <th>Δικαιολογητικά</th>
-            <th>Επιλεξιμότητα</th>
-            <th>Δικαιούχος</th>
-            <th>Παραχώρηση οικοπέδου</th>
-            <th>Ενέργειες</th>
+            {% for col in grid_columns %}
+            <th data-grid-col="{{ col.key }}"
+                {% if col.is_locked %}class="data-table__col--locked{% if col.is_locked_last %} data-table__col--locked-last{% endif %}" data-locked-col="{{ col.position }}"{% endif %}
+                {% if sort_col == col.key %}aria-sort="{% if sort_dir == 'desc' %}descending{% else %}ascending{% endif %}"{% endif %}>
+                <button type="button" class="btn-link btn-link--table data-table__sort-btn" data-plot-application-sort="{{ col.key }}">
+                    {{ col.label }}
+                </button>
+            </th>
+            {% endfor %}
+            <th data-grid-col="actions">Ενέργειες</th>
         </tr>
         </thead>
         <tbody>
         {% for a in applications %}
-        <tr>
-            <td>
-                {% if access.plot_applications.view %}
-                <a href="{% url 'plot_applications:detail' a.pk %}"><strong>{{ a.protocol_number }}</strong></a>
-                {% elif access.plot_applications.edit %}
-                <a href="{% url 'plot_applications:edit' a.pk %}"><strong>{{ a.protocol_number }}</strong></a>
-                {% else %}
-                <strong>{{ a.protocol_number }}</strong>
+        <tr data-plot-application-row>
+            {% for col in grid_columns %}
+            <td data-grid-col="{{ col.key }}"
+                {% if col.is_locked %}class="data-table__col--locked{% if col.is_locked_last %} data-table__col--locked-last{% endif %}" data-locked-col="{{ col.position }}"{% endif %}
+                {% if col.key == 'protocol_number' %}data-sort-protocol_number="{{ a.protocol_number }}"
+                {% elif col.key == 'submitted_on' %}data-sort-submitted_on="{{ a.submitted_on|date:'Y-m-d'|default:'' }}"
+                {% elif col.key == 'community' %}data-sort-community="{{ a.community.name }}"
+                {% elif col.key == 'applicant' %}data-sort-applicant="{{ a.applicant.last_name }} {{ a.applicant.first_name }} {{ a.applicant.identity_number }}"
+                {% elif col.key == 'spouse' %}data-sort-spouse="{% if a.spouse %}{{ a.spouse.last_name }} {{ a.spouse.first_name }} {{ a.spouse.identity_number }}{% endif %}"
+                {% elif col.key == 'family_status' %}data-sort-family_status="{{ a.get_family_status_display }}"
+                {% elif col.key == 'children' %}data-sort-children="{{ a.recognized_children_count }}"
+                {% elif col.key == 'stage' %}data-sort-stage="{{ a.application_stage_label }}"
+                {% elif col.key == 'completeness' %}data-sort-completeness="{{ a.get_completeness_result_display }}"
+                {% elif col.key == 'documents_completeness' %}data-sort-documents_completeness="{{ a.get_documents_completeness_display }}"
+                {% elif col.key == 'eligibility' %}data-sort-eligibility="{{ a.eligibility_label }}"
+                {% elif col.key == 'beneficiary' %}data-sort-beneficiary="{{ a.beneficiary_label }}"
+                {% elif col.key == 'plot_allocation' %}data-sort-plot_allocation="{{ a.plot_allocation_label }}"
+                {% endif %}>
+                {% if col.key == 'protocol_number' %}
+                    {% if access.plot_applications.view %}
+                    <a href="{% url 'plot_applications:detail' a.pk %}"><strong>{{ a.protocol_number }}</strong></a>
+                    {% elif access.plot_applications.edit %}
+                    <a href="{% url 'plot_applications:edit' a.pk %}"><strong>{{ a.protocol_number }}</strong></a>
+                    {% else %}
+                    <strong>{{ a.protocol_number }}</strong>
+                    {% endif %}
+                {% elif col.key == 'submitted_on' %}
+                    {{ a.submitted_on|date:"d/m/Y" }}
+                {% elif col.key == 'community' %}
+                    {{ a.community.name }}
+                {% elif col.key == 'applicant' %}
+                    {{ a.applicant.first_name }} {{ a.applicant.last_name }}<br><span class="text-muted">{{ a.applicant.identity_number }}</span>
+                {% elif col.key == 'spouse' %}
+                    {% if a.spouse %}{{ a.spouse.first_name }} {{ a.spouse.last_name }}<br><span class="text-muted">{{ a.spouse.identity_number }}</span>{% else %}—{% endif %}
+                {% elif col.key == 'family_status' %}
+                    {{ a.get_family_status_display }}
+                {% elif col.key == 'children' %}
+                    {{ a.recognized_children_count }}
+                {% elif col.key == 'stage' %}
+                    <span class="badge badge--{{ a.stage_badge }}" data-application-stage-badge>
+                        {{ a.application_stage_label }}
+                    </span>
+                    {% if a.is_pending_extra_info %}
+                    <span class="badge badge--pending" data-application-pending-badge data-ui-suffix=" ({{ a.open_pending_requirements|length }})" title="{% for req in a.open_pending_requirements %}{{ req.description }}{% if not forloop.last %}, {% endif %}{% endfor %}">
+                        PENDING ({{ a.open_pending_requirements|length }})
+                    </span>
+                    {% endif %}
+                {% elif col.key == 'completeness' %}
+                    <span class="badge {% if a.completeness_result == 'complete' %}badge--pass{% else %}badge--fail{% endif %}">
+                        {{ a.get_completeness_result_display }}
+                    </span>
+                {% elif col.key == 'documents_completeness' %}
+                    <span class="badge {% if a.documents_completeness == 'complete' %}badge--pass{% else %}badge--fail{% endif %}"
+                          {% if a.documents_complete_override and a.documents_complete_reason %}title="{{ a.documents_complete_reason }}"{% endif %}>
+                        {{ a.get_documents_completeness_display }}
+                    </span>
+                {% elif col.key == 'eligibility' %}
+                    {% if a.eligibility_label %}
+                    <span class="badge badge--{{ a.eligibility_result }}" data-application-eligibility-badge>{{ a.eligibility_label }}</span>
+                    {% else %}—{% endif %}
+                {% elif col.key == 'beneficiary' %}
+                    {% if a.beneficiary_label %}
+                    <span class="badge badge--{{ a.beneficiary_status }}" data-application-beneficiary-badge>
+                        {{ a.beneficiary_label }}
+                    </span>
+                    {% else %}—{% endif %}
+                {% elif col.key == 'plot_allocation' %}
+                    {% if a.plot_allocation_label %}
+                    <span class="badge badge--{{ a.plot_allocation_badge }}" data-application-plot-allocation-badge>
+                        {{ a.plot_allocation_label }}
+                    </span>
+                    {% else %}—{% endif %}
                 {% endif %}
             </td>
-            <td>{{ a.submitted_on|date:"d/m/Y" }}</td>
-            <td>{{ a.community.name }}</td>
-            <td>{{ a.applicant.first_name }} {{ a.applicant.last_name }}<br><span class="text-muted">{{ a.applicant.identity_number }}</span></td>
-            <td>{% if a.spouse %}{{ a.spouse.first_name }} {{ a.spouse.last_name }}<br><span class="text-muted">{{ a.spouse.identity_number }}</span>{% else %}—{% endif %}</td>
-            <td>{{ a.get_family_status_display }}</td>
-            <td>{{ a.recognized_children_count }}</td>
-            <td>{{ a.priority_label|default:"—" }}</td>
-            <td>
-                <span class="badge badge--{{ a.stage_badge }}" data-application-stage-badge>
-                    {{ a.application_stage_label }}
-                </span>
-            </td>
-            <td>
-                <span class="badge {% if a.completeness_result == 'complete' %}badge--pass{% else %}badge--fail{% endif %}">
-                    {{ a.get_completeness_result_display }}
-                </span>
-            </td>
-            <td>
-                <span class="badge {% if a.documents_completeness == 'complete' %}badge--pass{% else %}badge--fail{% endif %}"
-                      {% if a.documents_complete_override and a.documents_complete_reason %}title="{{ a.documents_complete_reason }}"{% endif %}>
-                    {{ a.get_documents_completeness_display }}
-                </span>
-            </td>
-            <td><span class="badge badge--{{ a.eligibility_result }}">{{ a.get_eligibility_result_display }}</span></td>
-            <td>
-                <span class="badge badge--{{ a.beneficiary_status }}" data-application-beneficiary-badge>
-                    {{ a.beneficiary_label }}
-                </span>
-            </td>
-            <td>
-                <span class="badge badge--{{ a.plot_allocation_badge }}" data-application-plot-allocation-badge>
-                    {{ a.get_plot_allocation_status_display }}
-                </span>
-            </td>
-            <td class="data-table__actions">
+            {% endfor %}
+            <td class="data-table__actions" data-grid-col="actions">
                 {% if access.plot_applications.view %}
                 <a href="{% url 'plot_applications:detail' a.pk %}" class="btn btn-secondary btn-sm" data-grid-status-link>Κατάσταση</a>
                 {% endif %}
-                {% if access.plot_applications.edit %}
+                {% if access.plot_applications.edit and not a.submission_locked %}
                 <a href="{% url 'plot_applications:edit' a.pk %}" class="btn btn-primary btn-sm" data-grid-edit-link>Επεξεργασία</a>
                 {% endif %}
             </td>
         </tr>
         {% empty %}
-        <tr><td colspan="15" class="text-muted">Δεν βρέθηκαν αιτήσεις.</td></tr>
+        <tr><td colspan="{{ grid_colspan }}" class="text-muted">Δεν βρέθηκαν αιτήσεις.</td></tr>
         {% endfor %}
         </tbody>
     </table>

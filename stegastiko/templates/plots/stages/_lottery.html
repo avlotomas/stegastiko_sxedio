@@ -1,0 +1,86 @@
+{# Στάδιο 6: Κλήρωση Οικοπέδων (Ενότ. 9) #}
+<div class="card" data-announcement-stage="lottery" data-scroll-anchor="stage-lottery">
+    <h2 class="card__title">6. Στάδιο Κλήρωσης Οικοπέδων (Ενότ. 9){% if stage_done.lottery %} <span class="badge badge--pass">Ολοκληρώθηκε</span>{% endif %}</h2>
+    <p class="helptext">
+        Τα διαθέσιμα οικόπεδα της γνωστοποίησης κληρώνονται στην παρουσία των δικαιούχων.
+        Ο λειτουργός καταχωρεί το οικόπεδο που κληρώθηκε σε κάθε δικαιούχο του Τελικού Καταλόγου.
+    </p>
+    {% if lists.final %}
+    <form method="post" action="{% url 'announcements:schedule_lottery' cycle.pk %}" class="filter-form">
+        {% csrf_token %}
+        <div>
+            <label for="lottery_date">Ημερομηνία &amp; ώρα κλήρωσης</label>
+            <input type="datetime-local" name="lottery_date" id="lottery_date" class="input" value="{{ lottery.lottery_date|date:'Y-m-d\TH:i' }}">
+        </div>
+        <div style="flex: 1;">
+            <label for="lottery_location">Τόπος διεξαγωγής</label>
+            <input type="text" name="location" id="lottery_location" class="input" value="{{ lottery.location|default:'Επαρχιακή Διοίκηση' }}" required>
+        </div>
+        <div>
+            <button type="submit" class="btn btn-secondary btn-sm">Προγραμματισμός &amp; Αποστολή Πρόσκλησης</button>
+        </div>
+    </form>
+
+    <form method="post" action="{% url 'announcements:record_lottery' cycle.pk %}" class="app-form" style="margin-top: 1rem;" data-record-lottery-form>
+        {% csrf_token %}
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Θέση</th>
+                        <th>Αρ. Πρωτ.</th>
+                        <th>Δικαιούχος</th>
+                        <th>Κληρωθέν Οικόπεδο</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in lottery_rows %}
+                    <tr>
+                        <td>{{ item.entry.finalized_rank }}</td>
+                        <td><a href="{% url 'plot_applications:detail' item.application.pk %}"><strong>{{ item.application.protocol_number }}</strong></a></td>
+                        <td>{{ item.application.applicant.first_name }} {{ item.application.applicant.last_name }}</td>
+                        <td>
+                            <select name="plot_for_{{ item.application.pk }}" class="input">
+                                <option value="">— Επιλέξτε οικόπεδο —</option>
+                                {% for plot in offered_plots %}
+                                <option value="{{ plot.pk }}" {% if item.allocation and item.allocation.parcel_id == plot.pk %}selected{% endif %}>
+                                    {{ plot.row_label }} (€ {{ plot.disposal_price }})
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="4">Δεν υπάρχουν δικαιούχοι οικοπέδου στον Τελικό Κατάλογο.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary btn-sm">Αποθήκευση αποτελέσματος κλήρωσης</button>
+        </div>
+    </form>
+
+    {% if cycle.stage == 'lottery' and active_allocations %}
+    <form method="post" action="{% url 'announcements:complete_lottery' cycle.pk %}" style="margin-top: 1rem;">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-primary" data-complete-lottery-btn>
+            Ολοκλήρωση Κλήρωσης &amp; Μετάβαση στο Στάδιο 7 (Συμφωνίες &amp; Πληρωμή)
+        </button>
+    </form>
+    {% elif can_complete_without_beneficiaries %}
+    <form method="post" action="{% url 'announcements:complete_agreements' cycle.pk %}" style="margin-top: 1rem;" data-complete-agreements-form>
+        {% csrf_token %}
+        <p class="helptext">
+            <span data-ui-text>Δεν υπάρχουν δικαιούχοι οικοπέδου στον Τελικό Κατάλογο. Μπορείτε να ολοκληρώσετε τη γνωστοποίηση ώστε
+            τα</span> {{ offered_plots|length }} <span data-ui-text>αδιάθετα οικόπεδά της να απελευθερωθούν και να είναι ξανά διαθέσιμα για νέα γνωστοποίηση (Ενότ. 8).</span>
+        </p>
+        <button type="submit" class="btn btn-primary" data-complete-agreements-btn>
+            Ολοκλήρωση Γνωστοποίησης &amp; Απελευθέρωση Αδιάθετων Οικοπέδων
+        </button>
+    </form>
+    {% endif %}
+    {% else %}
+    <p class="text-muted">Το στάδιο κλήρωσης ενεργοποιείται μετά την έκδοση του Τελικού Καταλόγου Δικαιούχων (Στάδιο 5).</p>
+    {% endif %}
+</div>

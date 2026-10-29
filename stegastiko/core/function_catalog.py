@@ -172,6 +172,34 @@ FUNCTIONS = (
         description="9.1 νέα γνωστοποίηση, επεξεργασία, οριστικοποίηση και έκδοση ανακοίνωσης.",
     ),
     AppFunction(
+        "announcement_committee",
+        "2. Επιτροπή Εξέτασης Αιτήσεων",
+        (VIEW, EDIT, SEND),
+        parent="announcements",
+        description="Συνεδρία Επιτροπής Εξέτασης Αιτήσεων, Προκαταρκτικός Κατάλογος και αποστολή email (Ενότ. 6).",
+    ),
+    AppFunction(
+        "announcement_objections",
+        "3. Επιτροπή Εξέτασης Ενστάσεων",
+        (VIEW, EDIT, SEND),
+        parent="announcements",
+        description="Καταχώριση/εξέταση ενστάσεων, εκκρεμότητες (pending), Τελικός Κατάλογος και αποστολή email (Ενότ. 7, 8).",
+    ),
+    AppFunction(
+        "announcement_lottery",
+        "4. Κλήρωση οικοπέδων",
+        (VIEW, EDIT, SEND),
+        parent="announcements",
+        description="Προγραμματισμός φυσικής κλήρωσης, καταχώριση αποτελέσματος και ολοκλήρωση κλήρωσης (Ενότ. 9).",
+    ),
+    AppFunction(
+        "announcement_agreements",
+        "5. Συμφωνίες και πληρωμές",
+        (VIEW, EDIT, EXPORT, SEND),
+        parent="announcements",
+        description="Πρόσκληση υπογραφής, εκτύπωση Συμφωνίας (.docx), καταχώριση υπογραφής/πληρωμής, έκπτωση και επιλαχόντες (Ενότ. 8, 9, 12, 15).",
+    ),
+    AppFunction(
         "plot_applications",
         "Αίτηση παραχώρησης οικοπέδου",
         (CREATE, DELETE, VIEW, EDIT, SEND),
@@ -229,6 +257,13 @@ FUNCTIONS = (
         description="Τίτλοι εμφάνισης των σταδίων της αίτησης παραχώρησης οικοπέδου (§Α.9.1).",
     ),
     AppFunction("settings_email", "Αποστολή email (SMTP)", (VIEW, EDIT), parent="settings"),
+    AppFunction(
+        "settings_agreement_templates",
+        "Πρότυπο Συμφωνίας Παραχώρησης (Παράρτημα 4)",
+        (VIEW, EDIT, IMPORT),
+        parent="settings",
+        description="Μεταφόρτωση προτύπου Συμφωνίας Παραχώρησης (.docx) με πεδία {{placeholders}} (Ενότ. 12).",
+    ),
     AppFunction(
         "settings_users",
         "Χρήστες",

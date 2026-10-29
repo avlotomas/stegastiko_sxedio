@@ -59,7 +59,7 @@
                     <td>
                         {% if row.instance.pk %}
                             {% if row.instance.is_in_use %}
-                            <span class="text-muted">Σε χρήση</span>
+                            <span class="text-muted" data-ui-text>Σε χρήση</span>
                             {% else %}
                             {{ row.DELETE }}
                             {% endif %}

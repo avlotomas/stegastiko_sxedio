@@ -11,10 +11,12 @@ from core.access_views import (
 )
 from core.settings_views import (
     system_configuration,
+    system_settings_agreement_templates,
     system_settings_branding,
     system_settings_case_labels,
     system_settings_email,
     system_settings_menu_labels,
+    system_settings_plot_application_grid,
     system_settings_plot_application_labels,
     system_settings_section_labels,
     system_settings_subsection_labels,
@@ -69,7 +71,17 @@ urlpatterns = [
         system_settings_plot_application_labels,
         name="system_settings_plot_application_labels",
     ),
+    path(
+        "settings/plot-application-grid/",
+        system_settings_plot_application_grid,
+        name="system_settings_plot_application_grid",
+    ),
     path("settings/email/", system_settings_email, name="system_settings_email"),
+    path(
+        "settings/agreement-templates/",
+        system_settings_agreement_templates,
+        name="system_settings_agreement_templates",
+    ),
     path(
         "settings/ui-texts/toggle/",
         ui_edit_mode_toggle,

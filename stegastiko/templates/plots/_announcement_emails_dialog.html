@@ -1,0 +1,84 @@
+{% comment %}
+Modal συγκεντρωτικής προβολής όλων των απεσταλμένων email της γνωστοποίησης ανά στάδιο (Στάδια 1–7).
+{% endcomment %}
+<dialog id="announcement-emails-dialog"
+        class="modal modal--list"
+        aria-labelledby="announcement-emails-dialog-title"
+        data-announcement-emails-dialog>
+    <div class="modal__header" style="display: flex; justify-content: space-between; align-items: center; gap: 1rem;">
+        <div>
+            <h2 id="announcement-emails-dialog-title" class="card__title" style="margin: 0;" data-ui-suffix=" ({{ announcement_emails|length }})">
+                Απεσταλμένα email ανά στάδιο γνωστοποίησης ({{ announcement_emails|length }})
+            </h2>
+            <p class="helptext" style="margin: 0.25rem 0 0;">
+                <span data-ui-text>Κοινότητα</span> <strong>{{ cycle.communities_label }}</strong> · <span data-ui-text>γνωστοποίηση</span> {{ cycle.announcement_date|date:"d/m/Y" }}
+                · <span data-ui-text>πλήρες ιστορικό απεσταλμένων email ανά στάδιο (αποστολέας, παραλήπτης, θέμα και κείμενο).</span>
+            </p>
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" data-dialog-close>Κλείσιμο</button>
+    </div>
+
+    <div class="toolbar" style="margin: 0.75rem 0; flex-wrap: wrap;" data-announcement-emails-filter-bar>
+        <button type="button" class="btn btn-primary btn-sm" data-announcement-emails-filter="all" data-ui-suffix=" ({{ announcement_emails|length }})">
+            Όλα τα στάδια ({{ announcement_emails|length }})
+        </button>
+        {% for group in stage_email_groups %}
+        <button type="button" class="btn btn-secondary btn-sm" data-announcement-emails-filter="{{ group.code }}" data-ui-suffix=" ({{ group.count }})">
+            {{ group.label }} ({{ group.count }})
+        </button>
+        {% endfor %}
+    </div>
+
+    {% for group in stage_email_groups %}
+    <div class="card" style="margin-bottom: 1rem;" data-announcement-emails-stage-group="{{ group.code }}">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+            <h3 class="form-section-title" style="margin: 0;">{{ group.label }}</h3>
+            <span class="badge {% if group.count %}badge--pass{% else %}badge--pending{% endif %}" data-ui-prefix="{{ group.count }} ">
+                {{ group.count }} email
+            </span>
+        </div>
+        {% if group.emails %}
+        <div class="table-wrap" style="margin-top: 0.5rem;">
+            <table class="data-table" data-announcement-emails-stage-table="{{ group.code }}">
+                <thead>
+                    <tr>
+                        <th>Αίτηση / Αιτητής</th>
+                        <th>Παραλήπτης (Email)</th>
+                        <th>Αποστολέας (Χρήστης)</th>
+                        <th>Είδος</th>
+                        <th>Θέμα &amp; Κείμενο Email</th>
+                        <th>Κατάσταση</th>
+                        <th>Ημ/νία αποστολής</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in group.emails %}
+                    <tr data-announcement-email-row="{{ item.communication.pk }}">
+                        <td>
+                            <a href="{% url 'plot_applications:detail' item.application.pk %}"><strong>{{ item.application.protocol_number }}</strong></a>
+                            <div class="text-muted">{{ item.applicant_name }}</div>
+                        </td>
+                        <td>{{ item.recipient }}</td>
+                        <td data-email-sender>{{ item.sender_label }}</td>
+                        <td><span class="badge badge--pending">{{ item.email_kind_label }}</span></td>
+                        <td data-email-content>
+                            <div><strong>{{ item.subject }}</strong></div>
+                            <div class="communication-email-inline-body" data-email-body>{{ item.body|linebreaksbr }}</div>
+                        </td>
+                        <td><span class="badge badge--{{ item.status_badge }}">{{ item.status_label }}</span></td>
+                        <td>{{ item.sent_at|date:"d/m/Y H:i"|default:"—" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted" style="margin: 0.5rem 0 0;">Δεν έχουν σταλεί email σε αυτό το στάδιο.</p>
+        {% endif %}
+    </div>
+    {% endfor %}
+
+    <div class="form-actions">
+        <button type="button" class="btn btn-primary" data-dialog-close>Κλείσιμο</button>
+    </div>
+</dialog>

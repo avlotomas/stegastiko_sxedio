@@ -31,19 +31,20 @@ def community(db):
 
 
 @pytest.fixture
-def cycle(community):
-    return make_cycle(
-        community,
-        announcement_date=date(2026, 9, 18),
-        submission_months=1,
-        published_at=timezone.now(),
+def available_plot(community):
+    return Plot.objects.create(
+        community=community, valuation_amount=Decimal("40000"), disposal_price=Decimal("10000")
     )
 
 
 @pytest.fixture
-def available_plot(community):
-    return Plot.objects.create(
-        community=community, valuation_amount=Decimal("40000"), disposal_price=Decimal("10000")
+def cycle(community, available_plot):
+    return make_cycle(
+        community,
+        plots=[available_plot],
+        announcement_date=date(2026, 9, 18),
+        submission_months=12,
+        published_at=timezone.now(),
     )
 
 
@@ -64,7 +65,7 @@ def _person(identity, born=date(1990, 1, 1), **extra):
 
 def _application(cycle, *, couple=True, income=Decimal("30000"), **extra):
     values = dict(
-        community=cycle.communities.get(),
+        announcement=cycle,
         protocol_number=f"T-{PlotApplication.objects.count() + 1}",
         submitted_on=SUBMITTED,
         applicant=_person(f"A{PlotApplication.objects.count()}"),
@@ -120,7 +121,9 @@ class TestRules:
         application = _application(cycle)
         outcome = evaluate(application)
         assert outcome["overall"] == "pass", [(c.code, c.note) for c in outcome["criteria"]]
-        assert outcome["priority_primary"] == 1 and outcome["priority_secondary"] == 4
+        assert "priority_primary" not in outcome
+        assert "priority_secondary" not in outcome
+        assert "priority_label" not in outcome
 
     def test_couple_signed_by_one_only_is_rejected(self, cycle):
         application = _application(cycle, spouse_signed=False)
@@ -140,7 +143,6 @@ class TestRules:
         outcome = evaluate(application)
         assert outcome["overall"] == "pass"
         assert outcome["family_members_count"] == 2
-        assert outcome["priority_secondary"] == 3
 
     def test_student_age_limit_depends_on_sex(self, cycle):
         application = _application(cycle)
@@ -179,14 +181,12 @@ class TestRules:
             cycle, residence_category=ResidenceCategory.NEIGHBOURING, residence_community="Γειτονικό Χωριό",
         )
         assert _results(application)["residence"] == "pass"
-        assert evaluate(application)["priority_primary"] == 5
         application.residence_community = " "
         assert _results(application)["residence"] == "pending"
 
     def test_repatriated_passes_without_period_dates(self, cycle):
         application = _application(cycle, residence_category=ResidenceCategory.REPATRIATED)
         assert _results(application)["residence"] == "pass"
-        assert evaluate(application)["priority_primary"] == 4
 
     def test_internal_emigrant_passes_without_residence_period_dates(self, cycle):
         application = _application(
@@ -295,22 +295,26 @@ class TestRules:
         assert "deadline" not in _results(application)
 
     def test_large_family_priority(self, cycle):
+        from plot_applications.prioritization import build_prioritization_list, secondary_priority_rank
+
         application = _application(cycle)
         for index in range(4):
             ApplicationChild.objects.create(
                 application=application, first_name=str(index), last_name="Τ",
                 date_of_birth=date(2012 + index, 1, 1), status=ApplicationChild.Status.MINOR,
             )
-        outcome = apply_evaluation(application)
-        assert outcome["priority_secondary"] == 1
+        attach_required_documents(application)
+        apply_evaluation(application)
         application.refresh_from_db()
         assert application.family_members_count == 6
-        assert "Πολύτεκνη" in application.priority_label
+        assert secondary_priority_rank(application) == 1
+        rows = build_prioritization_list(application.community).beneficiaries
+        assert rows[0].secondary_label == "Πολύτεκνη οικογένεια"
 
 
 def _post_data(cycle, **overrides):
     data = {
-        "main-community": cycle.communities.get().pk,
+        "main-announcement": cycle.pk,
         "main-submitted_on": "2026-10-01",
         "main-email": "couple@example.org",
         "main-residence_category": "autochthon",
@@ -388,13 +392,15 @@ class TestViews:
         assert detail.status_code == 200
         assert "Π3-007-001" in detail.content.decode()
 
-    def test_couple_requires_spouse(self, staff_client, cycle):
+    def test_couple_requires_spouse(self, staff_client, cycle, available_plot):
         data = _post_data(cycle)
         for key in [k for k in data if k.startswith("spouse-")]:
             data[key] = ""
         response = staff_client.post(reverse("plot_applications:create"), data)
-        assert response.status_code == 200
-        assert not PlotApplication.objects.exists()
+        assert response.status_code == 302
+        application = PlotApplication.objects.get()
+        assert application.spouse is None
+        assert application.completeness_result == "incomplete"
 
     def test_single_parent_ignores_spouse_and_reuses_person(self, staff_client, cycle, available_plot):
         existing = _person("900001", born=date(1992, 3, 4))
@@ -425,6 +431,54 @@ class TestViews:
             ("divorced", "Διαζευγμένος/η"),
             ("other", "Άλλο"),
         ]
+
+    def test_yes_no_fields_include_unset_option_and_can_reset_to_none(
+        self, staff_client, cycle, available_plot
+    ):
+        response = staff_client.get(reverse("plot_applications:create"))
+        main = response.context["forms"].main
+        expected_choices = [
+            ("True", "Ναι"),
+            ("False", "Όχι"),
+            ("", "Μη ορισμένο"),
+        ]
+        for field_name in (
+            "has_dwelling",
+            "has_residential_land",
+            "has_alienated_property",
+            "previous_housing_aid",
+        ):
+            assert list(main.fields[field_name].choices) == expected_choices
+
+        # Save an application with all Yes/No answers set to False
+        assert staff_client.post(reverse("plot_applications:create"), _post_data(cycle)).status_code == 302
+        application = PlotApplication.objects.get()
+        assert application.has_dwelling is False
+        assert application.has_residential_land is False
+        assert application.has_alienated_property is False
+        assert application.previous_housing_aid is False
+
+        # Reset has_dwelling and has_residential_land back to unset ("") via the edit form
+        reset_data = _post_data(
+            cycle,
+            **{
+                "main-has_dwelling": "",
+                "main-has_residential_land": "",
+                "children-INITIAL_FORMS": "1",
+                "children-0-id": application.children.get().pk,
+            },
+        )
+        edit_resp = staff_client.post(
+            reverse("plot_applications:edit", args=[application.pk]), reset_data
+        )
+        assert edit_resp.status_code == 302
+        application.refresh_from_db()
+        assert application.has_dwelling is None
+        assert application.has_residential_land is None
+        assert application.has_alienated_property is False
+        assert application.previous_housing_aid is False
+        assert application.completeness_result == "incomplete"
+        assert application.eligibility_result == "pending"
 
     @pytest.mark.parametrize("category", ["autochthon", "displaced", "repatriated"])
     def test_residence_community_locked_to_application_community(
@@ -492,7 +546,7 @@ class TestViews:
         assert "citizenship_other" in spouse_resp.context["forms"].spouse_party.errors
 
         min_other = {
-            "main-community": cycle.communities.get().pk,
+            "main-announcement": cycle.pk,
             "applicant-identity_number": "900001",
             "applicant-first_name": "Ανδρέας",
             "applicant-last_name": "Ανδρέου",
@@ -520,7 +574,7 @@ class TestViews:
     @pytest.mark.parametrize(
         ("field", "error_form"),
         [
-            ("main-community", "main"),
+            ("main-announcement", "main"),
             ("applicant-identity_number", "applicant"),
             ("applicant-first_name", "applicant"),
             ("applicant-last_name", "applicant"),
@@ -565,14 +619,20 @@ class TestViews:
         empty = Community.objects.create(
             district="ΛΕΥΚΩΣΙΑΣ", name="ΔΕΖ", contact_email="dez@example.org", community_folder_code="008"
         )
-        for _ in range(2):
+        plots = [
             Plot.objects.create(
                 community=community, valuation_amount=Decimal("40000"), disposal_price=Decimal("10000")
             )
-        Plot.objects.create(community=empty, valuation_amount=None, disposal_price=None)
+            for _ in range(2)
+        ]
+        make_cycle(community, plots=plots, announcement_date=date(2026, 9, 18), submission_months=1)
+        unvalued = Plot.objects.create(community=empty, valuation_amount=None, disposal_price=None)
+        make_cycle(empty, plots=[unvalued], announcement_date=date(2026, 9, 18), submission_months=1)
         response = staff_client.get(reverse("plot_applications:create"))
-        field = response.context["forms"].main.fields["community"]
-        assert [field.label_from_instance(c) for c in field.queryset] == ["ΑΒΓ (2)"]
+        field = response.context["forms"].main.fields["announcement"]
+        assert [field.label_from_instance(c) for c in field.queryset] == [
+            "ΑΒΓ (2) — γνωστοποίηση 18/09/2026"
+        ]
 
     def test_application_does_not_depend_on_announcement(self, staff_client, cycle, available_plot):
         cycle.published_at = None
@@ -598,7 +658,6 @@ class TestViews:
     def test_list_and_form_render(self, staff_client, cycle):
         _application(cycle)
         assert staff_client.get(reverse("plot_applications:list")).status_code == 200
-        assert staff_client.get(reverse("plot_applications:list"), {"order": "priority"}).status_code == 200
         assert staff_client.get(reverse("plot_applications:create")).status_code == 200
 
     def test_person_in_plot_application_is_not_deleted(self, client, make_user, cycle):
@@ -617,7 +676,7 @@ class TestViews:
         assert "data-save-button" in html
 
         min_data = {
-            "main-community": cycle.communities.get().pk,
+            "main-announcement": cycle.pk,
             "applicant-identity_number": "900001",
             "applicant-first_name": "Ανδρέας",
             "applicant-last_name": "Ανδρέου",
@@ -652,7 +711,7 @@ class TestViews:
     @pytest.mark.parametrize(
         ("missing_field", "error_form"),
         [
-            ("main-community", "main"),
+            ("main-announcement", "main"),
             ("applicant-identity_number", "applicant"),
             ("applicant-first_name", "applicant"),
             ("applicant-last_name", "applicant"),
@@ -663,7 +722,7 @@ class TestViews:
         self, staff_client, cycle, available_plot, missing_field, error_form
     ):
         min_data = {
-            "main-community": cycle.communities.get().pk,
+            "main-announcement": cycle.pk,
             "applicant-identity_number": "900001",
             "applicant-first_name": "Ανδρέας",
             "applicant-last_name": "Ανδρέου",
@@ -679,14 +738,13 @@ class TestViews:
     def test_same_person_can_submit_multiple_applications_for_same_community(
         self, staff_client, cycle, available_plot
     ):
-        community = cycle.communities.get()
         for expected_protocol in ("Π3-007-001", "Π3-007-002"):
             response = staff_client.post(reverse("plot_applications:create"), _post_data(cycle))
             assert response.status_code == 302
             assert PlotApplication.objects.order_by("-id").first().protocol_number == expected_protocol
 
         min_data = {
-            "main-community": community.pk,
+            "main-announcement": cycle.pk,
             "applicant-identity_number": "900001",
             "applicant-first_name": "Ανδρέας",
             "applicant-last_name": "Ανδρέου",
@@ -694,7 +752,7 @@ class TestViews:
         }
         response = staff_client.post(reverse("plot_applications:create"), min_data)
         assert response.status_code == 302
-        assert PlotApplication.objects.filter(community=community, applicant__identity_number="900001").count() == 3
+        assert PlotApplication.objects.filter(announcement=cycle, applicant__identity_number="900001").count() == 3
         assert PlotApplication.objects.order_by("-id").first().protocol_number == "Π3-007-003"
 
     def test_children_formset_renders_as_table(self, staff_client):
@@ -1058,7 +1116,7 @@ class TestViews:
         assert "data-save-tooltip" in create_html
 
         min_data = {
-            "main-community": cycle.communities.get().pk,
+            "main-announcement": cycle.pk,
             "applicant-identity_number": "900001",
             "applicant-first_name": "Ανδρέας",
             "applicant-last_name": "Ανδρέου",
@@ -1109,16 +1167,22 @@ class TestViews:
         assert "Αντίγραφο πιστοποιητικού γάμου" not in missing_text
         assert "Διακανονισμός φύλαξης τέκνων" not in missing_text
 
-        # Detail and Edit pages render the email button, modal, prefilled missing checkboxes, insert button, and sticky bars
+        # Detail and Edit pages render the email button, modal (with initially empty body), insert button, and sticky bars
         detail_html = staff_client.get(reverse("plot_applications:detail", args=[application.pk])).content.decode()
         assert 'id="plot-application-email-dialog"' in detail_html
         assert "data-insert-missing-documents" in detail_html
         assert "Λογαριασμός ΑΗΚ στο όνομα αιτητή" in detail_html
+        email_dialog_start = detail_html.index('id="plot-application-email-dialog"')
+        email_dialog_html = detail_html[email_dialog_start : detail_html.index("</dialog>", email_dialog_start)]
+        assert "Λογαριασμός ΑΗΚ στο όνομα αιτητή" not in email_dialog_html
         assert "data-sticky-toolbar" in detail_html
         assert "toolbar--sticky" in detail_html
 
         edit_html = staff_client.get(reverse("plot_applications:edit", args=[application.pk])).content.decode()
         assert 'id="plot-application-email-dialog"' in edit_html
+        edit_dialog_start = edit_html.index('id="plot-application-email-dialog"')
+        edit_dialog_html = edit_html[edit_dialog_start : edit_html.index("</dialog>", edit_dialog_start)]
+        assert "Λογαριασμός ΑΗΚ στο όνομα αιτητή" not in edit_dialog_html
         assert 'data-collect-live-missing="1"' in edit_html
         assert "data-sticky-form-actions" in edit_html
         assert "form-actions--sticky" in edit_html
@@ -1513,9 +1577,6 @@ class TestViews:
             "eligibility_details",
             "application_stage",
             "plot_allocation_status",
-            "priority_primary",
-            "priority_secondary",
-            "priority_label",
         ):
             assert hidden_field not in timeline_html
 
@@ -1634,7 +1695,8 @@ class TestViews:
 
         list_html = staff_client.get(reverse("plot_applications:list")).content.decode()
         list_tbody = list_html.split("<tbody>", 1)[1].split("</tbody>", 1)[0]
-        assert "<th>Δικαιούχος</th>" in list_html
+        assert 'data-plot-application-sort="beneficiary"' in list_html
+        assert "Δικαιούχος" in list_html
         assert "ΕΚΚΡΕΜΕΙ" in list_tbody
         assert "badge--pending" in list_tbody
 
@@ -1828,6 +1890,8 @@ class TestViews:
         assert application.application_stage == ApplicationStage.EXAMINATION
         assert application.get_application_stage_display() == "Εξέταση επιλεξιμότητας"
         assert application.plot_allocation_status == PlotAllocationStatus.PENDING
+        assert application.beneficiary_label == ""
+        assert application.plot_allocation_label == ""
 
         list_exam = staff_client.get(
             reverse("plot_applications:list"), {"stage": ApplicationStage.EXAMINATION}
@@ -1865,7 +1929,7 @@ class TestViews:
         assert "Επιλογή και προτεραιοποίηση" in detail_html
         assert 'data-stage-step="prioritization"' in detail_html
 
-        # 5. Stage 4 after prioritization completes without plot (final RankingList as ALTERNATE)
+        # 5. Stage 4 after the Final list: beneficiary beyond the number of plots -> Επιλαχών (Ενότ. 8)
         ranking_list = RankingList.objects.create(
             community=application.community,
             submission_cycle=cycle,
@@ -1880,14 +1944,15 @@ class TestViews:
         )
         application.refresh_from_db()
         assert application.application_stage == ApplicationStage.COMPLETED
-        assert application.plot_allocation_status == PlotAllocationStatus.NOT_ALLOCATED
-        assert application.get_plot_allocation_status_display() == "Δεν πήρε οικόπεδο"
+        assert application.plot_allocation_status == PlotAllocationStatus.RUNNER_UP
+        assert application.get_plot_allocation_status_display() == "Επιλαχών"
+        assert application.beneficiary_label == "ΔΙΚΑΙΟΥΧΟΣ"
 
-        list_not_alloc = staff_client.get(
+        list_runner_up = staff_client.get(
             reverse("plot_applications:list"),
-            {"stage": ApplicationStage.COMPLETED, "plot_allocation": PlotAllocationStatus.NOT_ALLOCATED},
+            {"stage": ApplicationStage.COMPLETED, "plot_allocation": PlotAllocationStatus.RUNNER_UP},
         )
-        assert application in list_not_alloc.context["applications"]
+        assert application in list_runner_up.context["applications"]
 
         # 6. Stage 4 after receiving a plot (active Allocation -> Πήρε οικόπεδο)
         entry.status = RankingEntry.Status.ELIGIBLE
@@ -1904,8 +1969,8 @@ class TestViews:
         )
         assert application in list_alloc.context["applications"]
         list_html = list_alloc.content.decode()
-        assert "<th>Στάδιο αίτησης</th>" in list_html
-        assert "<th>Παραχώρηση οικοπέδου</th>" in list_html
+        assert 'data-plot-application-sort="stage"' in list_html
+        assert 'data-plot-application-sort="plot_allocation"' in list_html
         assert "Πήρε οικόπεδο" in list_html
 
         person_html = staff_client.get(
@@ -1914,6 +1979,300 @@ class TestViews:
         assert "<th>Στάδιο αίτησης</th>" in person_html
         assert "<th>Παραχώρηση οικοπέδου</th>" in person_html
         assert "Πήρε οικόπεδο" in person_html
+
+    def test_no_priority_on_single_application_or_grid_and_column_sorting(
+        self, staff_client, cycle, available_plot
+    ):
+        from django.template.loader import render_to_string
+        from plot_applications.eligibility_report_pdf import eligibility_report_context
+        from plot_applications.grid_settings import PLOT_APPLICATION_GRID_COLUMN_CODES
+
+        assert "priority" not in PLOT_APPLICATION_GRID_COLUMN_CODES
+
+        data_a = _post_data(
+            cycle,
+            **{
+                "main-submitted_on": "2026-04-01",
+                "main-residence_category": "autochthon",
+                "applicant-identity_number": "100001",
+                "applicant-first_name": "Ανδρέας",
+                "applicant-last_name": "Ζαχαρίου",
+                "spouse-identity_number": "100002",
+            },
+        )
+        data_b = _post_data(
+            cycle,
+            **{
+                "main-submitted_on": "2026-04-10",
+                "main-residence_category": "internal_emigrant",
+                "main-origin_parent_description": "Πατέρας από ΑΒΓ",
+                "main-resides_in_controlled_areas": "on",
+                "main-attached_documents": [
+                    "A1", "B1", "B11", "C1", "C6", "D1", "D2", "D3", "D4", "D5", "E1", "E4", "E6"
+                ],
+                "applicant-identity_number": "200001",
+                "applicant-first_name": "Βασίλης",
+                "applicant-last_name": "Αλεξίου",
+                "spouse-identity_number": "200002",
+            },
+        )
+        assert staff_client.post(reverse("plot_applications:create"), data_a).status_code == 302
+        assert staff_client.post(reverse("plot_applications:create"), data_b).status_code == 302
+
+        app_a = PlotApplication.objects.get(applicant__identity_number="100001")
+        app_b = PlotApplication.objects.get(applicant__identity_number="200001")
+
+        # Priority does not exist as a concept on a single PlotApplication
+        for attr in (
+            "priority_primary",
+            "priority_secondary",
+            "priority_label",
+            "priority_letter",
+            "priority_reason",
+            "priority_sort_key",
+        ):
+            assert not hasattr(app_a, attr)
+
+        list_url = reverse("plot_applications:list")
+        list_html = staff_client.get(list_url).content.decode()
+        assert 'data-grid-col="priority"' not in list_html
+        assert 'data-plot-application-sort="priority"' not in list_html
+        assert "data-priority-cell" not in list_html
+        assert "Σειρά προτεραιότητας (Ενότ. 11)" not in list_html
+
+        detail_html = staff_client.get(
+            reverse("plot_applications:detail", args=[app_a.pk])
+        ).content.decode()
+        assert "Κατηγορία προτεραιότητας" not in detail_html
+        assert "Κατάλογος προτεραιοποίησης" not in detail_html
+        assert "Σειρά προτεραιότητας αίτησης" not in detail_html
+
+        report_html = render_to_string(
+            "plot_applications/pdf/eligibility_report.html",
+            eligibility_report_context(app_a),
+        )
+        assert "Κατηγορία προτεραιότητας" not in report_html
+
+        # Sortable column headers and data-sort-* attributes exist
+        for col_key in (
+            "protocol_number",
+            "submitted_on",
+            "community",
+            "applicant",
+            "stage",
+            "beneficiary",
+        ):
+            assert f'data-plot-application-sort="{col_key}"' in list_html
+            assert f"data-sort-{col_key}=" in list_html
+
+        # Server-side sorting by applicant ascending vs descending
+        asc_resp = staff_client.get(list_url, {"sort": "applicant", "dir": "asc"})
+        assert [a.pk for a in asc_resp.context["applications"]] == [app_b.pk, app_a.pk]
+        assert 'aria-sort="ascending"' in asc_resp.content.decode()
+
+        desc_resp = staff_client.get(list_url, {"sort": "applicant", "dir": "desc"})
+        assert [a.pk for a in desc_resp.context["applications"]] == [app_a.pk, app_b.pk]
+        assert 'aria-sort="descending"' in desc_resp.content.decode()
+
+    def test_grid_columns_and_locked_columns_from_settings(
+        self, client, staff_client, make_user, cycle, available_plot
+    ):
+        from plot_applications.grid_settings import (
+            get_plot_application_grid_columns,
+            get_plot_application_grid_locked_columns,
+        )
+
+        assert staff_client.post(reverse("plot_applications:create"), _post_data(cycle)).status_code == 302
+
+        # Officer cannot edit grid settings
+        settings_url = reverse("system_settings_plot_application_grid")
+        assert staff_client.get(settings_url).status_code == 403
+
+        # System admin configures visible columns and locked columns count
+        admin = make_user("admin_grid_cfg", "Διαχειριστής συστήματος")
+        client.force_login(admin)
+        get_resp = client.get(settings_url)
+        assert get_resp.status_code == 200
+        assert "Ορατές στήλες πίνακα" in get_resp.content.decode()
+        assert "Κλειδωμένες στήλες από την αρχή" in get_resp.content.decode()
+        assert 'value="priority"' not in get_resp.content.decode()
+
+        # Validation: at least one column required
+        invalid_resp = client.post(settings_url, {"grid_columns": [], "locked_columns": "1"})
+        assert invalid_resp.status_code == 200
+        assert "Επιλέξτε τουλάχιστον μία στήλη" in invalid_resp.content.decode()
+
+        selected_cols = ["protocol_number", "community", "applicant", "stage", "beneficiary"]
+        post_resp = client.post(
+            settings_url,
+            {"grid_columns": selected_cols, "locked_columns": "2"},
+        )
+        assert post_resp.status_code == 302
+        assert get_plot_application_grid_columns() == selected_cols
+        assert get_plot_application_grid_locked_columns() == 2
+
+        # Verify grid renders only the selected columns and locks the first 2 columns
+        list_resp = staff_client.get(reverse("plot_applications:list"))
+        assert list_resp.status_code == 200
+        assert list_resp.context["visible_columns"] == selected_cols
+        assert list_resp.context["locked_columns_count"] == 2
+        html = list_resp.content.decode()
+        assert 'data-locked-columns="2"' in html
+        assert 'data-locked-col="1"' in html
+        assert 'data-locked-col="2"' in html
+        assert 'data-locked-col="3"' not in html
+        assert "data-table__col--locked-last" in html
+        for col_key in selected_cols:
+            assert f'data-grid-col="{col_key}"' in html
+        for hidden_col in ("submitted_on", "spouse", "family_status", "children"):
+            assert f'data-grid-col="{hidden_col}"' not in html
+
+    def test_unified_top_toolbar_and_dropdown_actions_in_edit_and_display(
+        self, staff_client, cycle, available_plot
+    ):
+        from plot_applications.models import ApplicationStage, EligibilityOverride
+
+        # 1. Incomplete application (missing C1): both detail and edit have the top sticky toolbar
+        #    and the actions dropdown with identical actions including 'Απόρριψη λόγω ελλείψεων'
+        incomplete_data = _post_data(
+            cycle,
+            **{
+                "main-attached_documents": [
+                    "A1", "B1", "B11", "D1", "D2", "D3", "D4", "D5", "E1", "E4", "E6"
+                ],
+            },
+        )
+        assert staff_client.post(reverse("plot_applications:create"), incomplete_data).status_code == 302
+        application = PlotApplication.objects.get()
+        detail_url = reverse("plot_applications:detail", args=[application.pk])
+        edit_url = reverse("plot_applications:edit", args=[application.pk])
+        pdf_url = reverse("plot_applications:eligibility_report_pdf", args=[application.pk])
+        history_url = reverse("plot_applications:history", args=[application.pk])
+
+        detail_html = staff_client.get(detail_url).content.decode()
+        edit_html = staff_client.get(edit_url).content.decode()
+
+        # In Edit mode, the toolbar appears at the top before the first form section
+        assert edit_html.index("data-sticky-toolbar") < edit_html.index('data-plot-subsection="basic"')
+
+        for html in (detail_html, edit_html):
+            assert "plot-app-toolbar" in html
+            assert "data-actions-dropdown" in html
+            assert "data-actions-dropdown-toggle" in html
+            assert "data-actions-dropdown-menu" in html
+            assert "data-documents-modal-open" in html
+            assert f'href="{pdf_url}"' in html
+            assert "Εξαγωγή PDF ελέγχου κριτηρίων" in html
+            assert 'data-dialog-open="plot-application-email-dialog"' in html
+            assert "data-incomplete-reject-open" in html
+            assert 'id="plot-application-incomplete-reject-dialog"' in html
+            assert "data-incomplete-reject-form" in html
+            assert f'data-history-timeline-open="{history_url}"' in html
+            assert 'form="plot-application-delete-form"' in html
+
+        # In Display mode, required documents modal is read-only (no save/edit form)
+        assert "data-documents-readonly" in detail_html
+        assert "data-documents-completeness-form" not in detail_html
+        assert 'type="checkbox" name="main-attached_documents"' not in detail_html
+
+        # 2. Rejecting due to deficiencies from Edit mode redirects back to Edit mode
+        #    and both Edit and Display now expose 'Ανάκληση απόρριψης' in the dropdown
+        reject_resp = staff_client.post(
+            reverse("plot_applications:incomplete_reject", args=[application.pk]),
+            {
+                "incomplete_rejection_reason": "Λείπει ο λογαριασμός ΑΗΚ.",
+                "next": edit_url,
+            },
+        )
+        assert reject_resp.status_code == 302
+        assert reject_resp.url == edit_url
+        application.refresh_from_db()
+        assert application.incomplete_rejected is True
+        assert application.application_stage == ApplicationStage.REJECTED
+
+        detail_rejected = staff_client.get(detail_url).content.decode()
+        edit_rejected = staff_client.get(edit_url).content.decode()
+        for html in (detail_rejected, edit_rejected):
+            assert "data-incomplete-reject-revoke-btn" in html
+            assert "data-incomplete-reject-revoke-form" in html
+            assert "data-incomplete-reject-open" not in html
+
+        # Revoking from Edit mode redirects back to Edit mode
+        revoke_resp = staff_client.post(
+            reverse("plot_applications:incomplete_reject_revoke", args=[application.pk]),
+            {"next": edit_url},
+        )
+        assert revoke_resp.status_code == 302
+        assert revoke_resp.url == edit_url
+        application.refresh_from_db()
+        assert application.incomplete_rejected is False
+
+        # 3. Once complete (stage 3), both Edit and Display expose 'Χειροκίνητη αλλαγή επιλεξιμότητας'
+        assert staff_client.post(edit_url, _post_data(cycle)).status_code == 302
+        application.refresh_from_db()
+        assert application.application_stage == ApplicationStage.PRIORITIZATION
+
+        detail_complete = staff_client.get(detail_url).content.decode()
+        edit_complete = staff_client.get(edit_url).content.decode()
+        for html in (detail_complete, edit_complete):
+            assert "data-eligibility-override-open" in html
+            assert 'id="plot-application-eligibility-override-dialog"' in html
+            assert "data-eligibility-override-form" in html
+
+        override_resp = staff_client.post(
+            reverse("plot_applications:eligibility_override_save", args=[application.pk]),
+            {
+                "eligibility_override": EligibilityOverride.FAIL,
+                "eligibility_override_reason": "Απόφαση Επιτροπής από την οθόνη επεξεργασίας.",
+                "next": edit_url,
+            },
+        )
+        assert override_resp.status_code == 302
+        assert override_resp.url == edit_url
+        application.refresh_from_db()
+        assert application.eligibility_override == EligibilityOverride.FAIL
+        assert application.beneficiary_status == "fail"
+
+    def test_edit_screen_left_completeness_panel_tracks_missing_fields_and_documents(
+        self, staff_client, cycle, available_plot
+    ):
+        # 1. Incomplete application: missing submitted_on, email, applicant_signed, and document C1
+        incomplete_data = _post_data(
+            cycle,
+            **{
+                "main-submitted_on": "",
+                "main-email": "",
+                "main-applicant_signed": "",
+                "main-attached_documents": [
+                    "A1", "B1", "B11", "D1", "D2", "D3", "D4", "D5", "E1", "E4", "E6"
+                ],
+            },
+        )
+        assert staff_client.post(reverse("plot_applications:create"), incomplete_data).status_code == 302
+        application = PlotApplication.objects.get()
+        edit_url = reverse("plot_applications:edit", args=[application.pk])
+
+        edit_incomplete = staff_client.get(edit_url).content.decode()
+        assert "data-completeness-panel" in edit_incomplete
+        assert 'data-completeness-state="incomplete"' in edit_incomplete
+        assert "completeness-panel is-incomplete" in edit_incomplete
+        assert edit_incomplete.index("plot-app-edit-layout__aside") < edit_incomplete.index(
+            "plot-app-edit-layout__main"
+        )
+        assert 'data-missing-field="main-submitted_on"' in edit_incomplete
+        assert 'data-missing-field="main-email"' in edit_incomplete
+        assert 'data-missing-field="main-applicant_signed"' in edit_incomplete
+        assert 'data-missing-document="C1"' in edit_incomplete
+
+        # 2. Complete application: all required fields, signatures, and documents present -> is-complete (green panel)
+        assert staff_client.post(edit_url, _post_data(cycle)).status_code == 302
+        edit_complete = staff_client.get(edit_url).content.decode()
+        assert 'data-completeness-state="complete"' in edit_complete
+        assert "completeness-panel is-complete" in edit_complete
+        assert "data-missing-field=" not in edit_complete
+        assert "data-missing-document=" not in edit_complete
+
+
 
 
 

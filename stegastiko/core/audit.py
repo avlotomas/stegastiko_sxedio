@@ -25,6 +25,10 @@ def _trackable_fields(instance):
 def _persist_history(instance, action, field_name="", old_value="", new_value=""):
     user = get_current_user()
     user_id = user.id if user and user.is_authenticated else None
+    if user_id is None:
+        user_id = getattr(instance, "created_by_id", None) or getattr(
+            instance, "uploaded_by_id", None
+        )
     case_id, application_id, section_ref = instance._audit_context()
     ActionHistory.objects.create(
         entity_type=instance.__class__.__name__,
@@ -116,7 +120,10 @@ def audited_post_save(sender, instance, created, **kwargs):
         _persist_history(instance, ActionHistory.ActionType.CREATE)
         return
     previous_values = getattr(instance, "_previous_values", {})
+    skip_fields = getattr(instance, "_audit_skip_fields", ())
     for field in _trackable_fields(instance):
+        if field.name in skip_fields:
+            continue
         old_value = previous_values.get(field.name)
         new_value = getattr(instance, field.attname)
         if old_value != new_value:

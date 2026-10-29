@@ -1,0 +1,95 @@
+{% comment %}
+Κάρτα απεσταλμένων email του επιλεγμένου σταδίου της γνωστοποίησης.
+Εμφανίζει για κάθε email: σε ποιον αιτητή/αίτηση και σε ποιο email πήγε, από ποιον χρήστη στάλθηκε,
+τι κείμενο (θέμα και πλήρες σώμα) απεστάλη, την κατάσταση και την ημερομηνία/ώρα αποστολής.
+{% endcomment %}
+<div class="card" data-stage-emails-card="{{ selected_stage }}" data-scroll-anchor="stage-emails-{{ selected_stage }}" style="margin-top: 1rem;">
+    <div class="card__header-row" style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+        <h2 class="card__title" style="margin-bottom: 0;">
+            <span data-ui-text>Απεσταλμένα email σταδίου</span> — <span data-ui-text>{{ selected_stage_label }}</span> ({{ selected_stage_emails|length }})
+        </h2>
+        <div class="toolbar" style="margin: 0;">
+            <button type="button" class="btn btn-secondary btn-sm" data-dialog-open="announcement-emails-dialog" data-open-announcement-emails-from-stage data-ui-suffix=" ({{ announcement_emails|length }})">
+                Όλα τα email της γνωστοποίησης ({{ announcement_emails|length }})
+            </button>
+        </div>
+    </div>
+    <p class="helptext" style="margin-top: 0.5rem;">
+        <span data-ui-text>Ιστορικό των email που στάλθηκαν στο στάδιο</span> <strong><span data-ui-text>{{ selected_stage_label }}</span></strong><span data-ui-text>, με τον χρήστη αποστολής, τον παραλήπτη και το πλήρες κείμενο.</span>
+    </p>
+    <div class="table-wrap communication-email-log-table">
+        <table class="data-table data-table--clickable-rows" data-communication-table data-stage-emails-table="{{ selected_stage }}">
+            <thead>
+                <tr>
+                    <th>
+                        <button type="button" class="btn-link btn-link--table" data-communication-sort="check">
+                            Αίτηση / Αιτητής
+                        </button>
+                    </th>
+                    <th>
+                        <button type="button" class="btn-link btn-link--table" data-communication-sort="recipient">
+                            Παραλήπτης (Email)
+                        </button>
+                    </th>
+                    <th>
+                        <button type="button" class="btn-link btn-link--table" data-communication-sort="sender">
+                            Αποστολέας (Χρήστης)
+                        </button>
+                    </th>
+                    <th>Είδος</th>
+                    <th>
+                        <button type="button" class="btn-link btn-link--table" data-communication-sort="subject">
+                            Θέμα &amp; Κείμενο Email
+                        </button>
+                    </th>
+                    <th>
+                        <button type="button" class="btn-link btn-link--table" data-communication-sort="status">
+                            Κατάσταση
+                        </button>
+                    </th>
+                    <th>
+                        <button type="button" class="btn-link btn-link--table" data-communication-sort="sent-at">
+                            Ημ/νία αποστολής
+                        </button>
+                    </th>
+                    <th><span class="visually-hidden">Ενέργειες</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in selected_stage_emails %}
+                <tr class="communication-email-row" data-communication-row data-stage-email-row="{{ item.communication.pk }}">
+                    <td data-sort-check="{{ item.application.protocol_number|default:''|lower }}">
+                        <a href="{% url 'plot_applications:detail' item.application.pk %}"><strong>{{ item.application.protocol_number }}</strong></a>
+                        <div class="text-muted">{{ item.applicant_name }}</div>
+                    </td>
+                    <td data-sort-recipient="{{ item.recipient|lower }}">{{ item.recipient }}</td>
+                    <td data-sort-sender="{{ item.sender_label|lower }}" data-email-sender>{{ item.sender_label }}</td>
+                    <td><span class="badge badge--pending">{{ item.email_kind_label }}</span></td>
+                    <td data-sort-subject="{{ item.subject|lower }}" data-email-content>
+                        <div><strong>{{ item.subject }}</strong></div>
+                        <div class="communication-email-inline-body" data-email-body>{{ item.body|linebreaksbr }}</div>
+                    </td>
+                    <td data-sort-status="{{ item.status }}">
+                        <span class="badge badge--{{ item.status_badge }}">{{ item.status_label }}</span>
+                    </td>
+                    <td data-sort-sent-at="{{ item.sent_at|date:'Y-m-d H:i:s' }}">
+                        {{ item.sent_at|date:"d/m/Y H:i"|default:"—" }}
+                    </td>
+                    <td>
+                        <button type="button"
+                                class="btn btn-link btn-link--table"
+                                data-communication-view
+                                data-communication-detail-url="{% url 'plot_applications:communication_detail' item.application.pk item.communication.pk %}">
+                            Προβολή
+                        </button>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="8" class="text-muted">Δεν έχουν σταλεί email σε αυτό το στάδιο.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>

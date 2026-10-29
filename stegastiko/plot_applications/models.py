@@ -14,7 +14,7 @@ from core.models import AuditedModel, Community
 
 
 class ResidenceCategory(models.TextChoices):
-    """Ενότητα 2 της Αίτησης / Ενότ. 11 του Σχεδίου (σειρά = πρωτεύουσα προτεραιότητα)."""
+    """Ενότητα 2 της Αίτησης / Ενότ. 11 του Σχεδίου."""
 
     AUTOCHTHON = "autochthon", "(Α) Αυτόχθονας"
     DISPLACED = "displaced", "(Α) Εκτοπισθείς"
@@ -35,11 +35,8 @@ class EligibilityOverride(models.TextChoices):
 
 
 class ApplicationCompleteness(models.TextChoices):
-    """Ενότ. 5(β), 20.2: η ελλιπής αίτηση εκκρεμεί για συμπλήρωση ή απορρίπτεται από τον λειτουργό."""
-
     COMPLETE = "complete", "Πλήρης"
     INCOMPLETE = "incomplete", "Ελλιπής"
-    REJECTED = "rejected", "Απορρίφθηκε λόγω ελλείψεων"
 
 
 class DocumentsCompleteness(models.TextChoices):
@@ -51,12 +48,27 @@ class ApplicationStage(models.TextChoices):
     COLLECTION = "collection", "Συλλογή πληροφοριών και πιστοποιητικών"
     EXAMINATION = "examination", "Εξέταση επιλεξιμότητας"
     PRIORITIZATION = "prioritization", "Επιλογή και προτεραιοποίηση"
+    OBJECTIONS = "objections", "Προκαταρκτικός κατάλογος — Ενστάσεις"
+    OBJECTIONS_COMMITTEE = "objections_committee", "Επιτροπή Εξέτασης Ενστάσεων"
+    LOTTERY = "lottery", "Στάδιο κλήρωσης"
+    AGREEMENT = "agreement", "Υπογραφή συμφωνίας και πληρωμή"
     COMPLETED = "completed", "Ολοκλήρωση"
+    REJECTED = "rejected", "Απόρριψη από λειτουργό"
+    COMMITTEE_REJECTED = "committee_rejected", "Απόρριψη από Επιτροπή"
+    FORFEITED = "forfeited", "Απόρριψη — μη προσέλευση/υπογραφή/πληρωμή"
+
+
+REJECTION_STAGES = (
+    ApplicationStage.REJECTED,
+    ApplicationStage.COMMITTEE_REJECTED,
+    ApplicationStage.FORFEITED,
+)
 
 
 class PlotAllocationStatus(models.TextChoices):
     PENDING = "pending", "Εκκρεμεί"
     ALLOCATED = "allocated", "Πήρε οικόπεδο"
+    RUNNER_UP = "runner_up", "Επιλαχών"
     NOT_ALLOCATED = "not_allocated", "Δεν πήρε οικόπεδο"
 
 
@@ -74,11 +86,11 @@ class PlotApplication(AuditedModel):
 
     COUPLE_STATUSES = (FamilyStatus.COUPLE_WITH_CHILDREN, FamilyStatus.COUPLE_WITHOUT_CHILDREN)
 
-    community = models.ForeignKey(
-        Community,
+    announcement = models.ForeignKey(
+        "cases.SubmissionCycle",
         on_delete=models.PROTECT,
-        related_name="plot_applications",
-        help_text="Κοινότητα στην οποία ζητείται η παραχώρηση οικοπέδου (Παράρτημα 3, Ενότ. 5)",
+        related_name="applications",
+        help_text="Γνωστοποίηση υποβολής αιτήσεων (Ενότ. 4, 5)",
     )
     protocol_number = models.CharField(max_length=32, unique=True)
     submitted_on = models.DateField(null=True, blank=True, help_text="Ημερομηνία υποβολής (Ενότ. 5)")
@@ -189,19 +201,32 @@ class PlotApplication(AuditedModel):
         help_text="Περιγραφή του λόγου για τον οποίο η αίτηση χαρακτηρίζεται ως ολοκληρωμένη ενώ λείπουν δικαιολογητικά (Ενότ. 5, 20.2)",
     )
 
-    # Απόφαση λειτουργού για την ελλιπή αίτηση: εκκρεμεί για συμπλήρωση ή απορρίπτεται (Ενότ. 5(β), 20.2)
+    # Απόρριψη της αίτησης από τον λειτουργό με αιτιολογία (Ενότ. 5(β), 6, 20)
     incomplete_rejected = models.BooleanField(
         default=False,
-        help_text="Απόρριψη της ελλιπούς αίτησης λόγω έλλειψης στοιχείων ή πιστοποιητικών (Ενότ. 5(β), 20.2)",
+        help_text="Απόρριψη της αίτησης από τον λειτουργό (Ενότ. 5(β), 6, 20)",
     )
     incomplete_rejection_reason = models.TextField(
         blank=True,
-        help_text="Αιτιολογία απόρριψης της ελλιπούς αίτησης (Ενότ. 5(β), 20.2)",
+        help_text="Λόγος απόρριψης της αίτησης (Ενότ. 5(β), 6, 20)",
     )
     incomplete_rejected_on = models.DateField(
         null=True,
         blank=True,
-        help_text="Ημερομηνία απόρριψης της ελλιπούς αίτησης (Ενότ. 5(β))",
+        help_text="Ημερομηνία απόρριψης της αίτησης",
+    )
+    forfeited = models.BooleanField(
+        default=False,
+        help_text="Απόρριψη λόγω μη προσέλευσης / μη υπογραφής Συμφωνίας / μη πληρωμής (Ενότ. 8)",
+    )
+    forfeited_reason = models.TextField(
+        blank=True,
+        help_text="Αιτιολογία απόρριψης λόγω μη προσέλευσης / μη υπογραφής / μη πληρωμής (Ενότ. 8)",
+    )
+    forfeited_on = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Ημερομηνία απόρριψης λόγω μη προσέλευσης / μη υπογραφής / μη πληρωμής (Ενότ. 8)",
     )
 
     # Αποτέλεσμα αυτόματου ελέγχου (υπολογίζεται σε κάθε αποθήκευση — rules.evaluate)
@@ -245,17 +270,14 @@ class PlotApplication(AuditedModel):
         max_length=24,
         choices=ApplicationStage.choices,
         default=ApplicationStage.COLLECTION,
-        help_text="Στάδιο εξέτασης της αίτησης (συλλογή πληροφοριών και πιστοποιητικών, εξέταση επιλεξιμότητας, επιλογή και προτεραιοποίηση, ολοκλήρωση)",
+        help_text="Στάδιο αίτησης",
     )
     plot_allocation_status = models.CharField(
         max_length=16,
         choices=PlotAllocationStatus.choices,
         default=PlotAllocationStatus.PENDING,
-        help_text="Κατάσταση παραχώρησης οικοπέδου (Εκκρεμεί, Πήρε οικόπεδο, Δεν πήρε οικόπεδο — Ενότ. 8, 9)",
+        help_text="Κατάσταση παραχώρησης οικοπέδου (Εκκρεμεί, Πήρε οικόπεδο, Επιλαχών, Δεν πήρε οικόπεδο — Ενότ. 8, 9)",
     )
-    priority_primary = models.PositiveSmallIntegerField(null=True, blank=True)
-    priority_secondary = models.PositiveSmallIntegerField(null=True, blank=True)
-    priority_label = models.CharField(max_length=255, blank=True)
 
     _history_hidden_fields = frozenset(
         {
@@ -269,23 +291,100 @@ class PlotApplication(AuditedModel):
             "eligibility_result",
             "eligibility_auto_result",
             "eligibility_details",
-            "application_stage",
             "plot_allocation_status",
-            "priority_primary",
-            "priority_secondary",
-            "priority_label",
         }
     )
 
     class Meta:
         ordering = ("-submitted_on", "-id")
 
+    def __init__(self, *args, **kwargs):
+        community = kwargs.pop("community", None)
+        community_id = kwargs.pop("community_id", None)
+        if community is None and community_id is not None:
+            community = Community.objects.filter(pk=community_id).first()
+        if community is not None and "announcement" not in kwargs and "announcement_id" not in kwargs:
+            from datetime import date
+
+            from cases.models import SubmissionCycle
+
+            cycle = (
+                SubmissionCycle.objects.filter(plots__community=community)
+                .order_by("-published_at", "-announcement_date", "-pk")
+                .first()
+                or SubmissionCycle.objects.order_by("-published_at", "-announcement_date", "-pk").first()
+            )
+            if cycle is None:
+                cycle = SubmissionCycle.objects.create(
+                    announcement_date=kwargs.get("submitted_on") or date(2026, 9, 1),
+                    submission_months=2,
+                )
+            if cycle.community is None:
+                cycle._fallback_community = community
+            kwargs["announcement"] = cycle
+        super().__init__(*args, **kwargs)
+        if community is not None:
+            self._fallback_community = community
+
     def __str__(self):
         return self.protocol_number
 
     @property
+    def community(self):
+        """Η Κοινότητα της γνωστοποίησης στην οποία υποβλήθηκε η αίτηση."""
+        if self.announcement_id:
+            comm = self.announcement.community
+            if comm is not None:
+                return comm
+        return getattr(self, "_fallback_community", None)
+
+    @property
+    def community_id(self):
+        comm = self.community
+        return comm.pk if comm is not None else None
+
+    @property
+    def open_pending_requirements(self):
+        if not self.pk:
+            return []
+        return [req for req in self.pending_requirements.all() if not req.is_fulfilled]
+
+    @property
+    def is_pending_extra_info(self) -> bool:
+        return bool(self.open_pending_requirements)
+
+    @property
+    def has_registered_objection(self) -> bool:
+        if not self.pk:
+            return False
+        return self.objections.exists()
+
+    def _audit_value(self, field_name, value):
+        if field_name == "priority_rank":
+            override = getattr(self, "_priority_rank_audit_values", None)
+            if override and value in override:
+                return override[value]
+            if value is None:
+                return "Σειρά λογισμικού"
+        return super()._audit_value(field_name, value)
+
+    def _audit_context(self):
+        # Each history entry records the stage at which the change was made.
+        case_id, application_id, section_ref = super()._audit_context()
+        if not section_ref:
+            previous = getattr(self, "_previous_values", None) or {}
+            section_ref = f"stage:{previous.get('application_stage') or self.application_stage}"
+        return case_id, application_id, section_ref
+
+    @property
     def is_couple(self) -> bool:
         return self.family_status in self.COUPLE_STATUSES
+
+    @property
+    def submission_locked(self) -> bool:
+        """Ενότ. 4, 5: μετά τη λήξη (ή το πρόωρο κλείσιμο) της προθεσμίας υποβολής η αίτηση δεν αλλάζει."""
+        cycle = self.announcement if self.announcement_id else None
+        return bool(cycle and cycle.is_published and not cycle.submission_open())
 
     @property
     def is_documents_complete(self) -> bool:
@@ -300,11 +399,30 @@ class PlotApplication(AuditedModel):
 
     @property
     def is_rejected_incomplete(self) -> bool:
-        return self.completeness_result == ApplicationCompleteness.REJECTED
+        return bool(self.incomplete_rejected) or self.application_stage == ApplicationStage.REJECTED
+
+    @property
+    def is_eligibility_pending(self) -> bool:
+        return self.eligibility_result == EligibilityResult.PENDING
+
+    @property
+    def has_beneficiary_outcome(self) -> bool:
+        """Χωρίς «Δικαιούχος» / «Παραχώρηση οικοπέδου» όταν απορρίφθηκε από τον λειτουργό ή εκκρεμεί ο έλεγχος."""
+        return not (self.is_rejected_incomplete or self.is_eligibility_pending)
+
+    @property
+    def eligibility_label(self) -> str:
+        if self.is_rejected_incomplete:
+            return ""
+        return self.get_eligibility_result_display()
 
     @property
     def beneficiary_status(self) -> str:
-        if self.eligibility_result == EligibilityResult.FAIL or self.is_rejected_incomplete:
+        if self.is_rejected_incomplete:
+            return ""
+        if self.is_eligibility_pending:
+            return EligibilityResult.PENDING
+        if self.eligibility_result == EligibilityResult.FAIL:
             return EligibilityResult.FAIL
         if (
             self.completeness_result == ApplicationCompleteness.COMPLETE
@@ -320,6 +438,8 @@ class PlotApplication(AuditedModel):
 
     @property
     def beneficiary_label(self) -> str:
+        if not self.has_beneficiary_outcome:
+            return ""
         status = self.beneficiary_status
         if status == EligibilityResult.PASS:
             return "ΔΙΚΑΙΟΥΧΟΣ"
@@ -341,7 +461,15 @@ class PlotApplication(AuditedModel):
     def stage_badge(self) -> str:
         if self.application_stage == ApplicationStage.COMPLETED:
             return "pass"
+        if self.application_stage in REJECTION_STAGES:
+            return "fail"
         return "pending"
+
+    @property
+    def plot_allocation_label(self) -> str:
+        if not self.has_beneficiary_outcome:
+            return ""
+        return self.get_plot_allocation_status_display()
 
     @property
     def plot_allocation_badge(self) -> str:
@@ -478,3 +606,119 @@ class IncomeDeclaration(AuditedModel):
     @property
     def total(self) -> Decimal:
         return self.gross_annual_income or Decimal("0")
+
+
+class Objection(AuditedModel):
+    """Ένσταση αιτητή κατά του Προκαταρκτικού Καταλόγου Δικαιούχων (Ενότ. 7)."""
+
+    class ObjectionType(models.TextChoices):
+        REJECTION = "rejection", "Διαφωνία με την απόρριψη (Ενότ. 7(α))"
+        RANK = "rank", "Διαφωνία με τη σειρά κατάταξης (Ενότ. 7(β))"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Εκκρεμεί εξέταση"
+        UPHELD = "upheld", "Ικανοποιήθηκε"
+        DISMISSED = "dismissed", "Δεν ικανοποιήθηκε"
+
+    application = models.ForeignKey(
+        PlotApplication,
+        on_delete=models.CASCADE,
+        related_name="objections",
+        help_text="Αίτηση για την οποία υποβλήθηκε η ένσταση (Ενότ. 7)",
+    )
+    preliminary_entry = models.ForeignKey(
+        "allocation.RankingEntry",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="objections",
+        help_text="Εγγραφή στον Προκαταρκτικό Κατάλογο κατά την υποβολή της ένστασης (Ενότ. 6, 7)",
+    )
+    submitted_on = models.DateField(
+        help_text="Ημερομηνία υποβολής ένστασης (εντός 21 ημερών από τη λήψη της επιστολής, Ενότ. 7)"
+    )
+    objection_type = models.CharField(
+        max_length=16,
+        choices=ObjectionType.choices,
+        help_text="Είδος ένστασης (Ενότ. 7)",
+    )
+    grounds = models.TextField(
+        help_text="Αιτιολόγηση ένστασης / Έκθεση Γεγονότων (Ενότ. 7)"
+    )
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.PENDING,
+        help_text="Απόφαση Επιτροπής Εξέτασης Ενστάσεων (Ενότ. 7)",
+    )
+    decided_on = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Ημερομηνία απόφασης Επιτροπής Εξέτασης Ενστάσεων (Ενότ. 7)",
+    )
+    decision_notes = models.TextField(
+        blank=True,
+        help_text="Σκεπτικό / απόφαση Επιτροπής Εξέτασης Ενστάσεων (Ενότ. 7)",
+    )
+    outcome_notified_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Ημερομηνία/ώρα αποστολής email απόφασης ένστασης (Ενότ. 7)",
+    )
+
+    class Meta:
+        ordering = ("submitted_on", "id")
+
+    def __str__(self):
+        return f"Ένσταση {self.application.protocol_number} ({self.get_status_display()})"
+
+    def _audit_context(self):
+        case_id, application_id, section_ref = super()._audit_context()
+        return case_id, self.application_id or application_id, section_ref or "stage:objections_committee"
+
+
+class PendingRequirement(AuditedModel):
+    """Επιπλέον στοιχείο / πιστοποιητικό που ζητείται από την Επιτροπή Εξέτασης Ενστάσεων (Ενότ. 7)."""
+
+    application = models.ForeignKey(
+        PlotApplication,
+        on_delete=models.CASCADE,
+        related_name="pending_requirements",
+        help_text="Αίτηση από την οποία ζητούνται επιπλέον στοιχεία (Ενότ. 7)",
+    )
+    objection = models.ForeignKey(
+        Objection,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="pending_requirements",
+        help_text="Σχετική ένσταση στο πλαίσιο της οποίας ζητούνται τα στοιχεία (Ενότ. 7)",
+    )
+    description = models.CharField(
+        max_length=500,
+        help_text="Περιγραφή στοιχείου/πιστοποιητικού που πρέπει να προσκομισθεί",
+    )
+    is_fulfilled = models.BooleanField(
+        default=False,
+        help_text="Έχει προσκομισθεί / ελεγχθεί",
+    )
+    requested_on = models.DateField(
+        auto_now_add=True,
+        help_text="Ημερομηνία που ζητήθηκε",
+    )
+    fulfilled_on = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Ημερομηνία προσκόμισης",
+    )
+
+    class Meta:
+        ordering = ("is_fulfilled", "id")
+
+    def __str__(self):
+        return f"{self.application.protocol_number}: {self.description}"
+
+    def _audit_context(self):
+        case_id, application_id, section_ref = super()._audit_context()
+        return case_id, self.application_id or application_id, section_ref or "stage:objections_committee"
+

@@ -9,6 +9,11 @@ urlpatterns = [
     path("new/", views.plot_application_create, name="create"),
     path("prioritization/", views.plot_application_prioritization, name="prioritization"),
     path(
+        "prioritization/history/",
+        views.plot_application_prioritization_history,
+        name="prioritization_history",
+    ),
+    path(
         "prioritization/reorder/",
         views.plot_application_prioritization_reorder,
         name="prioritization_reorder",
@@ -17,6 +22,26 @@ urlpatterns = [
         "prioritization/reset/",
         views.plot_application_prioritization_reset,
         name="prioritization_reset",
+    ),
+    path(
+        "prioritization/preliminary-list/issue/",
+        views.plot_application_preliminary_list_issue,
+        name="preliminary_list_issue",
+    ),
+    path(
+        "prioritization/preliminary-list/revoke/",
+        views.plot_application_preliminary_list_revoke,
+        name="preliminary_list_revoke",
+    ),
+    path(
+        "prioritization/final-list/issue/",
+        views.plot_application_final_list_issue,
+        name="final_list_issue",
+    ),
+    path(
+        "prioritization/final-list/revoke/",
+        views.plot_application_final_list_revoke,
+        name="final_list_revoke",
     ),
     path(
         "prioritization/report-pdf/",

@@ -4,11 +4,13 @@ from decimal import Decimal
 from django.apps import apps
 from django.conf import settings
 from django.contrib.contenttypes.fields import GenericRelation
-from django.core.exceptions import ObjectDoesNotExist
+from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import IntegrityError, models, transaction
-from django.db.models import Count, OuterRef, Subquery
+from django.db.models import Count, OuterRef, Q, Subquery
 from django.db.models.functions import Coalesce
+from django.db.models.signals import m2m_changed
+from django.utils import timezone
 
 from cases import section_refs as refs
 from core.models import Attachment, AuditedModel, Communication, Community
@@ -1111,25 +1113,46 @@ def add_months(value, months):
 
 
 class SubmissionCycle(AuditedModel):
-    """Ενότητα 9 Γνωστοποίηση / ανακοίνωση έναρξης αιτήσεων, για μία ή περισσότερες Κοινότητες.
+    """Ενότητα 9 Γνωστοποίηση / ανακοίνωση έναρξης αιτήσεων, συνδεδεμένη με τα διαθέσιμα οικόπεδα μίας Κοινότητας.
 
-    A separate flow from the division cases: it offers completed plots (plots.Plot) of its
-    communities, whether they came from an old split, a new one or were entered by hand.
-    The communities are chosen first, then the plots are limited to theirs. An application
-    only records its own community; the announcement that opened it is found through that
-    community and the submission date (see `for_community`).
+    Η γνωστοποίηση είναι ο γονέας (parent) των αιτήσεων παραχώρησης οικοπέδου (Παράρτημα 3)
+    και καθοδηγεί τη διαδικασία μέσα από τα 6 στάδια:
+    1. Υποβολή αιτήσεων
+    Κάθε γνωστοποίηση διέρχεται από επτά στάδια:
+    1. Στοιχεία γνωστοποίησης (επιλογή οικοπέδων, ημερομηνία, τρόποι δημοσίευσης)
+    2. Υποβολή αιτήσεων (έλεγχος πληρότητας αιτήσεων)
+    3. Επιτροπή Εξέτασης Αιτήσεων (έως την αποστολή του Προκαταρκτικού Καταλόγου)
+    4. Ενστάσεις
+    5. Τελικός Κατάλογος Δικαιούχων
+    6. Στάδιο κλήρωσης
+    7. Υπογραφή συμφωνίας και πληρωμή
     """
 
-    communities = models.ManyToManyField(
-        Community,
-        related_name="submission_cycles",
-        help_text="9.1 Κοινότητες / Δ.Δ. που καλύπτει η γνωστοποίηση (της ίδιας Επαρχίας, Ενότ. 4)",
+    class Stage(models.TextChoices):
+        DETAILS = "details", "1. Στοιχεία γνωστοποίησης"
+        SUBMISSION = "submission", "2. Υποβολή αιτήσεων"
+        APPLICATIONS_COMMITTEE = "applications_committee", "3. Επιτροπή Εξέτασης Αιτήσεων"
+        OBJECTIONS_COMMITTEE = "objections_committee", "4. Ενστάσεις"
+        FINAL_LIST = "final_list", "5. Τελικός Κατάλογος Δικαιούχων"
+        LOTTERY = "lottery", "6. Στάδιο κλήρωσης"
+        AGREEMENTS = "agreements", "7. Υπογραφή συμφωνίας και πληρωμή"
+        CLOSED = "closed", "Ολοκλήρωση γνωστοποίησης"
+
+    ACTIVE_STAGES = (
+        Stage.DETAILS,
+        Stage.SUBMISSION,
+        Stage.APPLICATIONS_COMMITTEE,
+        Stage.OBJECTIONS_COMMITTEE,
+        Stage.FINAL_LIST,
+        Stage.LOTTERY,
+        Stage.AGREEMENTS,
     )
+
     plots = models.ManyToManyField(
         "plots.Plot",
         blank=True,
         related_name="submission_cycles",
-        help_text="9.1 Διαθέσιμα οικόπεδα των Κοινοτήτων που προσφέρει η γνωστοποίηση",
+        help_text="9.1 Διαθέσιμα οικόπεδα μίας Κοινότητας που προσφέρει η γνωστοποίηση",
     )
     announcement_date = models.DateField(help_text="9.1 Ημερομηνία γνωστοποίησης")
     submission_months = models.PositiveSmallIntegerField(
@@ -1140,6 +1163,50 @@ class SubmissionCycle(AuditedModel):
     submission_end_date = models.DateField(
         editable=False,
         help_text="9.1 Τελευταία ημέρα υποβολής αιτήσεων (υπολογίζεται από την ημερομηνία γνωστοποίησης και τους μήνες)",
+    )
+    stage = models.CharField(
+        max_length=32,
+        choices=Stage.choices,
+        default=Stage.DETAILS,
+        help_text="Στάδιο διαδικασίας γνωστοποίησης (1–7)",
+    )
+    submission_closed_early = models.BooleanField(
+        default=False,
+        help_text="Η περίοδος υποβολής αιτήσεων έκλεισε πριν από τη λήξη της προθεσμίας (Ενότ. 4, 5) κατόπιν αποδοχής προειδοποίησης",
+    )
+    objections_closed_on = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Κλείσιμο περιόδου ενστάσεων (Ενότ. 7(α)): λήξη των 21 ημερών ή μετάβαση στο Στάδιο 5 με αποδοχή προειδοποίησης",
+    )
+    objections_closed_early = models.BooleanField(
+        default=False,
+        help_text="Η περίοδος ενστάσεων έκλεισε πριν από τη λήξη της προθεσμίας (Ενότ. 7(α), 7(ε)) κατόπιν αποδοχής προειδοποίησης",
+    )
+    applications_committee_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Ημερομηνία συνεδρίας Επιτροπής Εξέτασης Αιτήσεων (Ενότ. 6)",
+    )
+    objections_committee_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Ημερομηνία συνεδρίας Επιτροπής Εξέτασης Ενστάσεων (Ενότ. 7)",
+    )
+    agreement_location = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Τόπος προσέλευσης για υπογραφή Συμφωνίας και πληρωμή (Ενότ. 9, 12, 15)",
+    )
+    agreement_appointment_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Προεπιλεγμένη ημερομηνία/ώρα προσέλευσης για υπογραφή Συμφωνίας και πληρωμή (Ενότ. 9, 12, 15)",
+    )
+    agreement_deadline = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Προεπιλεγμένη προθεσμία προσέλευσης για υπογραφή Συμφωνίας και πληρωμή (Ενότ. 8, 9)",
     )
     comments = models.TextField(blank=True, help_text="9.5 Σχόλια / Παρατηρήσεις Ενότητας 9")
     published_at = models.DateTimeField(
@@ -1157,6 +1224,10 @@ class SubmissionCycle(AuditedModel):
         update_fields = kwargs.get("update_fields")
         if update_fields is not None and {"announcement_date", "submission_months"} & set(update_fields):
             kwargs["update_fields"] = {*update_fields, "submission_end_date"}
+        if self.published_at is not None and self.stage == self.Stage.DETAILS:
+            self.stage = self.Stage.SUBMISSION
+            if kwargs.get("update_fields") is not None:
+                kwargs["update_fields"] = {*kwargs["update_fields"], "stage"}
         super().save(*args, **kwargs)
 
     @property
@@ -1164,22 +1235,90 @@ class SubmissionCycle(AuditedModel):
         return self.published_at is not None
 
     @property
+    def is_active(self) -> bool:
+        """Ενεργή γνωστοποίηση: δεν έχει ολοκληρώσει το τελευταίο της βήμα (Στάδιο 7 — Συμφωνίες & Πληρωμές)."""
+        return self.stage != self.Stage.CLOSED
+
+    def submission_open(self, today=None) -> bool:
+        """Η προθεσμία υποβολής αιτήσεων είναι ανοικτή (Ενότ. 4, 5)."""
+        if self.submission_closed_early:
+            return False
+        if self.stage not in (self.Stage.DETAILS, self.Stage.SUBMISSION):
+            return False
+        if not self.submission_end_date:
+            return True
+        check_date = today or timezone.localdate()
+        return check_date <= self.submission_end_date
+
+    def submission_days_remaining(self, today=None) -> int | None:
+        """Ημέρες που απομένουν έως τη λήξη της προθεσμίας υποβολής αιτήσεων (αρνητικός αν έληξε)."""
+        if not self.submission_end_date:
+            return None
+        check_date = today or timezone.localdate()
+        return (self.submission_end_date - check_date).days
+
+    @property
     def available_plots_count(self):
         return self.plots.count()
 
     @property
+    def community(self):
+        """Η μοναδική Κοινότητα των οικοπέδων της γνωστοποίησης (Ενότ. 4, 6, 7)."""
+        if self.pk:
+            plot = self.plots.select_related("community").order_by("pk").first()
+            if plot is not None:
+                return plot.community
+        return getattr(self, "_fallback_community", None)
+
+    @property
     def communities_label(self):
-        """Names of the communities, in the order of the list screens (for display)."""
-        names = [community.name for community in self.communities.all()]
-        return ", ".join(sorted(names)) if names else "—"
+        """Όνομα της Κοινότητας των οικοπέδων της γνωστοποίησης (για εμφάνιση στους πίνακες)."""
+        if self.pk:
+            names = sorted({plot.community.name for plot in self.plots.select_related("community").all()})
+            if names:
+                return ", ".join(names)
+        fallback = getattr(self, "_fallback_community", None)
+        return fallback.name if fallback is not None else "—"
 
     @classmethod
     def for_community(cls, community, on_date=None):
-        """Published announcements that cover `community` (and, with `on_date`, are open then)."""
-        cycles = cls.objects.filter(communities=community, published_at__isnull=False)
+        """Δημοσιευμένες γνωστοποιήσεις με οικόπεδα της `community`."""
+        cycles = cls.objects.filter(plots__community=community, published_at__isnull=False).distinct()
         if on_date is not None:
             cycles = cycles.filter(announcement_date__lte=on_date, submission_end_date__gte=on_date)
         return cycles
+
+
+def _validate_single_community_plots(sender, instance, action, pk_set, **kwargs):
+    if action != "pre_add" or not pk_set:
+        return
+    Plot = apps.get_model("plots", "Plot")
+    query = Q(pk__in=pk_set)
+    if instance.pk:
+        query |= Q(submission_cycles=instance)
+    community_ids = set(Plot.objects.filter(query).values_list("community_id", flat=True).distinct())
+    if len(community_ids) > 1:
+        raise ValidationError(
+            "Όλα τα οικόπεδα μιας γνωστοποίησης πρέπει να ανήκουν στην ίδια Κοινότητα (Ενότ. 4, 6, 7)."
+        )
+    if instance.is_active:
+        busy_q = Q(submission_cycles__stage__in=SubmissionCycle.ACTIVE_STAGES)
+        if instance.pk:
+            busy_q &= ~Q(submission_cycles=instance)
+        busy = list(
+            Plot.objects.filter(pk__in=pk_set)
+            .filter(busy_q | Q(allocations__status="active"))
+            .distinct()
+            .order_by("id")
+        )
+        if busy:
+            labels = ", ".join(p.row_label for p in busy)
+            raise ValidationError(
+                f"Το οικόπεδο ({labels}) δεν είναι διαθέσιμο γιατί περιλαμβάνεται ήδη σε ενεργή γνωστοποίηση ή έχει ενεργή κατανομή."
+            )
+
+
+m2m_changed.connect(_validate_single_community_plots, sender=SubmissionCycle.plots.through)
 
 
 class SubmissionCyclePublication(AuditedModel):

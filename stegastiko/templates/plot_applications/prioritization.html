@@ -11,7 +11,7 @@
 
 <div class="page-header">
     <h1>Προτεραιοποίηση αιτήσεων παραχώρησης οικοπέδου</h1>
-    <p class="page-header__lead">Όλες οι πλήρεις ανοικτές αιτήσεις της Κοινότητας, δικαιούχοι και μη. Οι δικαιούχοι προηγούνται και κατατάσσονται από το λογισμικό κατά τόπο διαμονής (Ενότ. 11.1) και σύνθεση οικογένειας (Ενότ. 11.2). Τον Προκαταρκτικό Κατάλογο τον καταρτίζει η Επιτροπή Εξέτασης Αιτήσεων (Ενότ. 6).</p>
+    <p class="page-header__lead">Όλες οι πλήρεις ανοικτές αιτήσεις της Κοινότητας, δικαιούχοι και μη. Οι δικαιούχοι προηγούνται και κατατάσσονται από το λογισμικό κατά τόπο διαμονής (Ενότ. 11.1) και σύνθεση οικογένειας (Ενότ. 11.2). Η Επιτροπή Εξέτασης Αιτήσεων αλλάζει τη σειρά και, όπου χρειάζεται, το αποτέλεσμα (Δικαιούχος / Μη δικαιούχος) και εκδίδει τον Προκαταρκτικό Κατάλογο Δικαιούχων (Ενότ. 6). Μετά την περίοδο ενστάσεων (Ενότ. 7) εκδίδεται ο Τελικός Κατάλογος, με τον οποίο οι πρώτοι δικαιούχοι, όσα και τα οικόπεδα, παίρνουν οικόπεδο και οι υπόλοιποι είναι επιλαχόντες (Ενότ. 8).</p>
 </div>
 
 <div class="card">
@@ -34,18 +34,123 @@
 {% if not community %}
 <p class="text-muted">Δεν υπάρχουν πλήρεις ανοικτές αιτήσεις για προτεραιοποίηση.</p>
 {% else %}
+<div class="card" data-beneficiary-list-phase="{{ phase }}">
+    <h2 class="card__title"><span data-ui-text>Στάδιο καταλόγου:</span> <span data-ui-text>{{ lists.phase_label }}</span></h2>
+    <dl class="detail-grid">
+        <div><dt>Γνωστοποίηση (Ενότ. 4)</dt><dd>{% if lists.cycle %}{{ lists.cycle.announcement_date|date:"d/m/Y" }}{% else %}—{% endif %}</dd></div>
+        <div><dt>Διαθέσιμα οικόπεδα (Ενότ. 8)</dt><dd data-plots-count>{{ lists.plots_count }}</dd></div>
+        <div><dt>Προκαταρκτικός Κατάλογος Δικαιούχων</dt><dd data-preliminary-issued>{% if lists.preliminary %}<span data-ui-text>Εκδόθηκε στις</span> {{ lists.preliminary.finalized_at|date:"d/m/Y H:i" }}{% if lists.preliminary.notifications_sent_at %} · <span data-ui-text>γνωστοποιήθηκε στους αιτητές</span> {{ lists.preliminary.notifications_sent_at|date:"d/m/Y H:i" }}{% endif %}{% else %}<span data-ui-text>Δεν έχει εκδοθεί</span>{% endif %}</dd></div>
+        <div><dt>Λήξη περιόδου ενστάσεων (Ενότ. 7)</dt><dd data-objection-deadline>{% if lists.objection_deadline %}{{ lists.objection_deadline|date:"d/m/Y" }}{% if phase == phases.objections %} — {% if objections_open %}<span data-ui-text>σε εξέλιξη</span>{% else %}<span data-ui-text>έληξε</span>{% endif %}{% endif %}{% else %}—{% endif %}</dd></div>
+        <div><dt>Τελικός Κατάλογος Δικαιούχων</dt><dd>{% if lists.final %}<span data-ui-text>Εκδόθηκε στις</span> {{ lists.final.finalized_at|date:"d/m/Y H:i" }}{% elif lists.preliminary %}<span data-ui-text>Υπό κατάρτιση — δεν έχει εκδοθεί</span>{% else %}<span data-ui-text>Δεν έχει εκδοθεί</span>{% endif %}</dd></div>
+    </dl>
+    {% if phase == phases.objections %}
+    <p class="helptext">Ο Προκαταρκτικός Κατάλογος δεν αλλάζει μετά την έκδοσή του. Αφού εξεταστούν οι ενστάσεις (Στάδιο 3), στο Στάδιο 4 «Τελικός Κατάλογος Δικαιούχων» διαμορφώνεται ο <strong>Τελικός Κατάλογος</strong> (Ενότ. 7(ε)): αλλάζει η σειρά ή το αποτέλεσμα <strong>μόνο των αιτήσεων με ένσταση</strong> (π.χ. όταν η ένσταση ικανοποιήθηκε)· οι υπόλοιπες αιτήσεις διατηρούν τη μεταξύ τους σειρά. Κάθε αλλαγή καταγράφεται στο ιστορικό και φαίνεται στην καρτέλα «Αλλαγές έναντι Προκαταρκτικού».</p>
+    {% endif %}
+    {% if blockers %}
+    <div class="alert alert--warning" data-list-blockers>
+        <span data-ui-text>Για την έκδοση καταλόγου πρέπει πρώτα να κριθούν ή να απορριφθούν οι αιτήσεις με «Εκκρεμεί έλεγχος» και οι ελλιπείς αιτήσεις της Κοινότητας:</span>
+        {% for app in blockers %}<a href="{% url 'plot_applications:detail' app.pk %}">{{ app.protocol_number }}</a> ({{ app.application_stage_label }}){% if not forloop.last %}, {% endif %}{% endfor %}.
+    </div>
+    {% endif %}
+    {% if can_edit_lists %}
+    <div class="toolbar">
+        <div class="toolbar__group">
+            {% if phase == phases.committee %}
+            <form method="post" action="{% url 'plot_applications:preliminary_list_issue' %}" class="inline-form"
+                  data-confirm="Έκδοση του Προκαταρκτικού Καταλόγου Δικαιούχων με την τρέχουσα σειρά; Θα ξεκινήσει η περίοδος ενστάσεων.">
+                {% csrf_token %}
+                <input type="hidden" name="community_id" value="{{ community.pk }}">
+                <button type="submit" class="btn btn-primary" data-preliminary-list-issue {% if blockers %}disabled{% endif %}>Έκδοση Προκαταρκτικού Καταλόγου Δικαιούχων</button>
+            </form>
+            {% elif phase == phases.objections %}
+            {% if not list_edit_locked_reason %}
+            <form method="post" action="{% url 'plot_applications:final_list_issue' %}" class="inline-form"
+                  data-confirm="Έκδοση του Τελικού Καταλόγου Δικαιούχων; Οι πρώτοι {{ lists.plots_count }} δικαιούχοι παίρνουν οικόπεδο, οι υπόλοιποι γίνονται επιλαχόντες και οι μη δικαιούχοι απορρίπτονται.">
+                {% csrf_token %}
+                <input type="hidden" name="community_id" value="{{ community.pk }}">
+                <button type="submit" class="btn btn-primary" data-final-list-issue
+                        {% if objections_open and not lists.objections_closed or blockers %}disabled{% endif %}
+                        {% if objections_open and not lists.objections_closed %}title="Η περίοδος ενστάσεων λήγει στις {{ lists.objection_deadline|date:'d/m/Y' }}"{% endif %}>
+                    Έκδοση Τελικού Καταλόγου Δικαιούχων
+                </button>
+            </form>
+            {% endif %}
+            {% if lists.can_revoke_preliminary %}
+            <form method="post" action="{% url 'plot_applications:preliminary_list_revoke' %}" class="inline-form"
+                  data-confirm="Ανάκληση του Προκαταρκτικού Καταλόγου; Οι αιτήσεις επιστρέφουν στο στάδιο «Επιλογή και προτεραιοποίηση».">
+                {% csrf_token %}
+                <input type="hidden" name="community_id" value="{{ community.pk }}">
+                <button type="submit" class="btn btn-secondary" data-preliminary-list-revoke>Ανάκληση Προκαταρκτικού Καταλόγου</button>
+            </form>
+            {% endif %}
+            {% else %}
+            <form method="post" action="{% url 'plot_applications:final_list_revoke' %}" class="inline-form"
+                  data-confirm="Ανάκληση του Τελικού Καταλόγου; Οι αιτήσεις επιστρέφουν στην περίοδο ενστάσεων.">
+                {% csrf_token %}
+                <input type="hidden" name="community_id" value="{{ community.pk }}">
+                <button type="submit" class="btn btn-secondary" data-final-list-revoke>Ανάκληση Τελικού Καταλόγου</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+    {% if phase == phases.objections and lists.preliminary_locked_reason %}
+    <p class="helptext" data-preliminary-locked>{{ lists.preliminary_locked_reason }}</p>
+    {% endif %}
+    {% if list_edit_locked_reason %}
+    <div class="alert alert--warning" data-list-edit-locked>{{ list_edit_locked_reason }}</div>
+    {% endif %}
+    {% if lists.cycle.objections_closed_early and phase == phases.objections %}
+    <div class="alert alert--error" data-objections-closed-early><span data-ui-text>Η περίοδος ενστάσεων έκλεισε στις</span> {{ lists.cycle.objections_closed_on|date:"d/m/Y" }}, <span data-ui-text>πριν από τη λήξη της προθεσμίας</span> ({{ lists.objection_deadline|date:"d/m/Y" }}), <span data-ui-text>κατόπιν αποδοχής της προειδοποίησης (Ενότ. 7(α)).</span></div>
+    {% endif %}
+</div>
+
+{% if list_view %}
+<nav class="list-tabs" aria-label="Κατάλογοι Δικαιούχων" data-list-tabs>
+    <a href="?community_id={{ community.pk }}&amp;list={{ list_views.preliminary }}"
+       class="list-tabs__item{% if list_view == list_views.preliminary %} is-current{% endif %}"
+       {% if list_view == list_views.preliminary %}aria-current="page"{% endif %}
+       data-list-tab="{{ list_views.preliminary }}">
+        <span data-ui-text>Προκαταρκτικός Κατάλογος</span> <span class="text-muted">({{ lists.preliminary.finalized_at|date:"d/m/Y" }})</span>
+    </a>
+    <a href="?community_id={{ community.pk }}&amp;list={{ list_views.final }}"
+       class="list-tabs__item{% if list_view == list_views.final %} is-current{% endif %}"
+       {% if list_view == list_views.final %}aria-current="page"{% endif %}
+       data-list-tab="{{ list_views.final }}">
+        <span data-ui-text>Τελικός Κατάλογος</span> <span class="text-muted">({% if lists.final %}{{ lists.final.finalized_at|date:"d/m/Y" }}{% else %}<span data-ui-text>υπό κατάρτιση</span>{% endif %})</span>
+    </a>
+    <a href="?community_id={{ community.pk }}&amp;list={{ list_views.changes }}"
+       class="list-tabs__item{% if list_view == list_views.changes %} is-current{% endif %}"
+       {% if list_view == list_views.changes %}aria-current="page"{% endif %}
+       data-list-tab="{{ list_views.changes }}">
+        <span data-ui-text>Αλλαγές έναντι Προκαταρκτικού</span> <span class="badge badge--{% if changes %}pending{% else %}pass{% endif %}" data-changes-count>{{ changes|length }}</span>
+    </a>
+</nav>
+{% endif %}
+
 <div class="toolbar">
     <div class="toolbar__group">
-        {% if can_export %}
-        <a href="{% url 'plot_applications:prioritization_report_pdf' %}?community_id={{ community.pk }}"
+        {% if can_export and list_view != list_views.changes %}
+        <a href="{% url 'plot_applications:prioritization_report_pdf' %}?community_id={{ community.pk }}{% if list_view %}&amp;list={{ list_view }}{% endif %}"
            class="btn btn-secondary"
            data-prioritization-report-pdf-link>
-            Εξαγωγή PDF καταλόγου
+            {% if list_view == list_views.preliminary %}Εξαγωγή PDF Προκαταρκτικού Καταλόγου{% elif phase == phases.final %}Εξαγωγή PDF Τελικού Καταλόγου{% elif phase == phases.objections %}Εξαγωγή PDF σχεδίου Τελικού Καταλόγου{% else %}Εξαγωγή PDF καταλόγου{% endif %}
         </a>
         {% endif %}
+        <button type="button"
+                class="btn btn-secondary"
+                data-history-timeline-open="{% url 'plot_applications:prioritization_history' %}?community_id={{ community.pk }}"
+                data-history-timeline-title="Προτεραιοποίηση — {{ community.name }}"
+                data-history-timeline-lead="Χρονολόγιο των αλλαγών στον πίνακα προτεραιοποίησης και στις αιτήσεις της Κοινότητας (§Β.1.3)."
+                data-prioritization-history-btn
+                aria-controls="history-timeline-dialog">
+            Ιστορικό αλλαγών
+        </button>
     </div>
-    {% if can_reorder and prioritization.has_manual_order %}
-    <div class="toolbar__group toolbar__group--end">
+    {% if can_reorder and phase == phases.committee %}
+    <div class="toolbar__group toolbar__group--end"
+         data-prioritization-reset-wrap
+         {% if not prioritization.has_manual_order %}hidden{% endif %}>
         <form method="post" action="{% url 'plot_applications:prioritization_reset' %}" class="inline-form"
               data-confirm="Επαναφορά του καταλόγου στη σειρά του λογισμικού;">
             {% csrf_token %}
@@ -56,10 +161,86 @@
     {% endif %}
 </div>
 
+{% if list_view == list_views.changes %}
+<div class="card" data-list-changes>
+    <h2 class="card__title">Αλλαγές του Τελικού Καταλόγου{% if not lists.final %} (υπό κατάρτιση){% endif %} έναντι του Προκαταρκτικού (Ενότ. 7)</h2>
+    <p class="helptext"><span data-ui-text>Οι αιτήσεις των οποίων το αποτέλεσμα ή η θέση διαφέρει από τον Προκαταρκτικό Κατάλογο, όπως εκδόθηκε στις</span> {{ lists.preliminary.finalized_at|date:"d/m/Y H:i" }}. <span data-ui-text>Ποιος έκανε κάθε αλλαγή και πότε φαίνεται στο «Ιστορικό αλλαγών».</span></p>
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead>
+            <tr>
+                <th>Αρ. Πρωτοκόλλου</th>
+                <th>Αιτητής/τρια</th>
+                <th>Αλλαγή</th>
+                <th>Προκαταρκτικός Κατάλογος</th>
+                <th>Τελικός Κατάλογος{% if not lists.final %} (υπό κατάρτιση){% endif %}</th>
+                <th>Αιτία</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for change in changes %}
+            <tr data-list-change="{{ change.application.pk }}">
+                <td>
+                    {% if access.plot_applications.view %}<a href="{% url 'plot_applications:detail' change.application.pk %}"><strong>{{ change.application.protocol_number }}</strong></a>{% else %}<strong>{{ change.application.protocol_number }}</strong>{% endif %}
+                </td>
+                <td>{{ change.application.applicant.first_name }} {{ change.application.applicant.last_name }}</td>
+                <td><span data-ui-text>{{ change.kind }}</span>{% if not change.is_direct %}<br><span class="text-muted" data-ui-text>έμμεση</span>{% endif %}</td>
+                <td><span class="badge badge--{{ change.preliminary_badge }}">{{ change.preliminary_text }}</span></td>
+                <td><span class="badge badge--{{ change.final_badge }}">{{ change.final_text }}</span></td>
+                <td>{% for reason in change.reasons %}<div>{{ reason }}</div>{% empty %}—{% endfor %}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6" class="text-muted">Ο Τελικός Κατάλογος δεν διαφέρει από τον Προκαταρκτικό.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+{% if list_view == list_views.final %}
+<div class="card" data-final-list-objections>
+    <h2 class="card__title">Ενστάσεις και αποφάσεις της Επιτροπής Εξέτασης Ενστάσεων (Ενότ. 7)</h2>
+    <p class="helptext">Με βάση αυτές τις αποφάσεις διαμορφώνεται ο Τελικός Κατάλογος· αλλάζουν μόνο οι αιτήσεις με ένσταση.</p>
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead>
+            <tr>
+                <th>Αρ. Πρωτοκόλλου</th>
+                <th>Αιτητής/τρια</th>
+                <th>Προκαταρκτικός Κατάλογος</th>
+                <th>Είδος ένστασης</th>
+                <th>Αιτιολόγηση</th>
+                <th>Απόφαση</th>
+                <th>Σκεπτικό απόφασης</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for obj in objections %}
+            <tr data-final-list-objection="{{ obj.pk }}">
+                <td>{% if access.plot_applications.view %}<a href="{% url 'plot_applications:detail' obj.application.pk %}"><strong>{{ obj.application.protocol_number }}</strong></a>{% else %}<strong>{{ obj.application.protocol_number }}</strong>{% endif %}</td>
+                <td>{{ obj.application.applicant.first_name }} {{ obj.application.applicant.last_name }}</td>
+                <td>{% if obj.preliminary_entry %}{% if obj.preliminary_entry.status == 'rejected' %}<span data-ui-text>ΜΗ ΔΙΚΑΙΟΥΧΟΣ</span>{% else %}<span data-ui-text>ΔΙΚΑΙΟΥΧΟΣ — θέση</span> {{ obj.preliminary_entry.proposed_rank }}{% endif %}{% else %}—{% endif %}</td>
+                <td>{{ obj.get_objection_type_display }}<br><span class="text-muted">{{ obj.submitted_on|date:"d/m/Y" }}</span></td>
+                <td>{{ obj.grounds }}</td>
+                <td><span class="badge {% if obj.status == 'upheld' %}badge--pass{% elif obj.status == 'dismissed' %}badge--fail{% else %}badge--pending{% endif %}">{{ obj.get_status_display }}</span>{% if obj.decided_on %}<br><span class="text-muted">{{ obj.decided_on|date:"d/m/Y" }}</span>{% endif %}</td>
+                <td>{{ obj.decision_notes|default:"—" }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="7" class="text-muted">Δεν υποβλήθηκαν ενστάσεις.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
 <div class="card" data-prioritization-card>
-    <h2 class="card__title">Δικαιούχοι κατά σειρά προτεραιότητας (Ενότ. 10, 11)</h2>
-    {% if movable_beneficiaries %}
-    <p class="helptext">Σύρετε τις γραμμές (drag &amp; drop) ή χρησιμοποιήστε τα βέλη για να αλλάξετε τη σειρά. Οι δικαιούχοι παραμένουν πάντα πριν από τους μη δικαιούχους.</p>
+    <h2 class="card__title">{% if list_view == list_views.preliminary %}Προκαταρκτικός Κατάλογος — Δικαιούχοι κατά σειρά προτεραιότητας, όπως εκδόθηκε (Ενότ. 6){% elif is_final %}Τελικός Κατάλογος — Δικαιούχοι κατά σειρά προτεραιότητας (Ενότ. 8){% elif list_view %}Τελικός Κατάλογος (υπό κατάρτιση) — Δικαιούχοι κατά σειρά προτεραιότητας (Ενότ. 7, 11){% else %}Δικαιούχοι κατά σειρά προτεραιότητας (Ενότ. 10, 11){% endif %}</h2>
+    {% if list_view == list_views.preliminary %}
+    <p class="helptext">Ο Προκαταρκτικός Κατάλογος όπως εκδόθηκε και γνωστοποιήθηκε στους αιτητές· δεν αλλάζει. Οι αλλαγές της περιόδου ενστάσεων φαίνονται στον Τελικό Κατάλογο.</p>
+    {% elif movable_beneficiaries and phase == phases.objections %}
+    <p class="helptext">Μετακινούνται μόνο οι αιτήσεις με ένσταση (σύρετε τη γραμμή ή χρησιμοποιήστε τα βέλη)· οι υπόλοιπες διατηρούν τη μεταξύ τους σειρά. Για αλλαγή από Μη δικαιούχο σε Δικαιούχο (ή αντίστροφα) μετά από ένσταση χρησιμοποιήστε το «Αλλαγή αποτελέσματος».</p>
+    {% elif movable_beneficiaries %}
+    <p class="helptext">Σύρετε τις γραμμές (drag &amp; drop) ή χρησιμοποιήστε τα βέλη για να αλλάξετε τη σειρά. Οι δικαιούχοι παραμένουν πάντα πριν από τους μη δικαιούχους. Για αλλαγή από Δικαιούχο σε Μη δικαιούχο (ή αντίστροφα) χρησιμοποιήστε το «Αλλαγή αποτελέσματος».</p>
     {% endif %}
     <div class="table-wrap">
         <table class="data-table" data-prioritization-table>
@@ -71,7 +252,7 @@
                 <th>Τόπος διαμονής (Ενότ. 11.1)</th>
                 <th>Σύνθεση οικογένειας (Ενότ. 11.2)</th>
                 <th>Τέκνα (10.Α)</th>
-                <th>Σειρά λογισμικού</th>
+                <th>{% if list_view == list_views.preliminary %}Αποτέλεσμα{% elif is_final %}Αποτέλεσμα (Ενότ. 8){% else %}Σειρά λογισμικού{% endif %}</th>
                 <th>Παρατηρήσεις</th>
                 <th>Ενέργειες</th>
             </tr>
@@ -88,7 +269,7 @@
 </div>
 
 <div class="card" data-prioritization-card>
-    <h2 class="card__title">Μη δικαιούχοι / εκκρεμείς (Ενότ. 6, 10, 20)</h2>
+    <h2 class="card__title">{% if list_view == list_views.preliminary %}Προκαταρκτικός Κατάλογος — Μη δικαιούχοι (Ενότ. 6){% elif is_final %}Τελικός Κατάλογος — Μη δικαιούχοι: απόρριψη από την Επιτροπή (Ενότ. 6, 7){% elif list_view %}Τελικός Κατάλογος (υπό κατάρτιση) — Μη δικαιούχοι (Ενότ. 7){% else %}Μη δικαιούχοι / εκκρεμείς (Ενότ. 6, 10, 20){% endif %}</h2>
     <div class="table-wrap">
         <table class="data-table" data-prioritization-table>
             <thead>
@@ -111,6 +292,7 @@
         </table>
     </div>
 </div>
+{% endif %}
 <p class="helptext" data-reorder-status hidden></p>
 
 {% if can_reorder %}
@@ -121,6 +303,7 @@
     const reorderUrl = "{% url 'plot_applications:prioritization_reorder' %}";
     const communityId = "{{ community.pk }}";
     const statusEl = document.querySelector("[data-reorder-status]");
+    const resetWrap = document.querySelector("[data-prioritization-reset-wrap]");
 
     function csrfToken() {
         const input = document.querySelector('input[name="csrfmiddlewaretoken"]');
@@ -146,7 +329,13 @@
         statusEl.textContent = text;
     }
 
-    function saveOrder(tbody) {
+    function restoreOrder(tbody, previous) {
+        if (!previous) return;
+        previous.forEach((row) => tbody.appendChild(row));
+        refreshNumbers(tbody);
+    }
+
+    function saveOrder(tbody, previous) {
         setStatus("Αποθήκευση σειράς…");
         fetch(reorderUrl, {
             method: "POST",
@@ -161,21 +350,33 @@
                 order: rows(tbody).map((row) => row.dataset.applicationId),
             }),
         })
-            .then((response) => {
-                if (!response.ok) throw new Error(String(response.status));
-                return response.json();
+            .then((response) => response.json().catch(() => ({})).then((data) => ({ response, data })))
+            .then(({ response, data }) => {
+                if (!response.ok || !data.ok) {
+                    restoreOrder(tbody, previous);
+                    setStatus(data.message || "Η αποθήκευση της σειράς απέτυχε.");
+                    return;
+                }
+                setStatus("Η σειρά αποθηκεύτηκε.");
+                if (resetWrap && typeof data.has_manual_order === "boolean") {
+                    resetWrap.hidden = !data.has_manual_order;
+                }
             })
-            .then(() => setStatus("Η σειρά αποθηκεύτηκε."))
-            .catch(() => setStatus("Η αποθήκευση της σειράς απέτυχε."));
+            .catch(() => {
+                restoreOrder(tbody, previous);
+                setStatus("Η αποθήκευση της σειράς απέτυχε.");
+            });
     }
 
     document.querySelectorAll("[data-prioritization-sortable]").forEach((tbody) => {
         let draggedRow = null;
+        let orderBeforeDrag = null;
 
         tbody.addEventListener("click", (event) => {
             const button = event.target.closest("[data-priority-move]");
             if (!button) return;
             const row = button.closest("tr[data-sortable-row]");
+            const previous = rows(tbody);
             if (button.dataset.priorityMove === "up" && row.previousElementSibling) {
                 row.previousElementSibling.before(row);
             } else if (button.dataset.priorityMove === "down" && row.nextElementSibling) {
@@ -184,13 +385,14 @@
                 return;
             }
             refreshNumbers(tbody);
-            saveOrder(tbody);
+            saveOrder(tbody, previous);
         });
 
         tbody.addEventListener("dragstart", (event) => {
             const row = event.target.closest("tr[data-sortable-row]");
             if (!row) return;
             draggedRow = row;
+            orderBeforeDrag = rows(tbody);
             row.classList.add("is-dragging");
             if (event.dataTransfer) {
                 event.dataTransfer.effectAllowed = "move";
@@ -215,7 +417,7 @@
         tbody.addEventListener("drop", (event) => {
             if (!draggedRow) return;
             event.preventDefault();
-            saveOrder(tbody);
+            saveOrder(tbody, orderBeforeDrag);
         });
 
         tbody.addEventListener("dragend", () => {
@@ -228,5 +430,6 @@
 })();
 </script>
 {% endif %}
+{% include "core/_history_timeline_dialog.html" with timeline_subject=community.name timeline_lead="Χρονολόγιο των αλλαγών στον πίνακα προτεραιοποίησης και στις αιτήσεις της Κοινότητας (§Β.1.3)." %}
 {% endif %}
 {% endblock %}

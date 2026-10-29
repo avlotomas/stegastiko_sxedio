@@ -16,9 +16,9 @@
 
 <div class="page-header">
     <h1><span data-ui-text>Υπόθεση</span> {{ case.case_number }}</h1>
-    <p class="page-header__lead" data-ui-skip>
+    <p class="page-header__lead">
         {{ case.community.name }} ({{ case.community.district }}) ·
-        {{ case.get_case_type_display }} · έναρξη {{ case.start_date }}
+        <span data-ui-text>{{ case.get_case_type_display }}</span> · <span data-ui-text>έναρξη</span> {{ case.start_date }}
     </p>
 </div>
 
@@ -208,7 +208,7 @@
         {% endfor %}
     </ul>
     {% else %}
-    <p class="form-readonly">Δεν έχουν επισυναφθεί αρχεία.</p>
+    <p class="form-readonly" data-ui-text>Δεν έχουν επισυναφθεί αρχεία.</p>
     {% endif %}
     <h3 class="form-section-title">{% case_subsection_heading "4.5" %}</h3>
     {% case_detail_fields case "section4_comments" %}
@@ -393,7 +393,7 @@
             <dt>Ολοκλήρωση</dt>
             <dd>
                 {% if case.is_completed %}
-                <span class="badge badge--pass">Ολοκληρώθηκε {{ case.completed_at }}</span>
+                <span class="badge badge--pass" data-ui-suffix=" {{ case.completed_at }}">Ολοκληρώθηκε {{ case.completed_at }}</span>
                 {% if case.completed_by %}<span class="text-muted">({{ case.completed_by.get_username }})</span>{% endif %}
                 {% else %}
                 <span class="badge badge--pending">Σε εξέλιξη</span>
@@ -405,7 +405,7 @@
             <dd>
                 {{ generated_plots_count }}
                 {% if generated_plots_count and access.plots.view %}
-                · <a href="{% url 'plots:list' %}?source_case={{ case.pk }}">Προβολή στα Οικόπεδα</a>
+                · <a href="{% url 'plots:list' %}?source_case={{ case.pk }}" data-ui-text>Προβολή στα Οικόπεδα</a>
                 {% endif %}
             </dd>
         </div>

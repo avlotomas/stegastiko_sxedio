@@ -63,7 +63,6 @@ def create_announcement(form) -> SubmissionCycle:
         cycle = form.save(commit=False)
         cycle.save()
         form.save_m2m()
-        cycle.communities.set(form.communities)
     return cycle
 
 
@@ -74,5 +73,7 @@ def publish_announcement(cycle: SubmissionCycle) -> SubmissionCycle:
     if not cycle.plots.exists():
         raise ValidationError("Η γνωστοποίηση δεν προσφέρει κανένα οικόπεδο (9.1).")
     cycle.published_at = timezone.now()
+    if cycle.stage == SubmissionCycle.Stage.DETAILS:
+        cycle.stage = SubmissionCycle.Stage.SUBMISSION
     cycle.save()
     return cycle

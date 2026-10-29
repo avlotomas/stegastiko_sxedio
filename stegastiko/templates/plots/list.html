@@ -41,6 +41,15 @@
             </select>
         </div>
         <div>
+            <label for="availability">Διαθεσιμότητα για γνωστοποίηση</label>
+            <select name="availability" id="availability">
+                <option value="">Όλα</option>
+                {% for value, label in availabilities %}
+                    <option value="{{ value }}" {% if availability == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
             <label for="q">Αρίθμηση / τεμάχιο / αρ. υπόθεσης</label>
             <input type="text" name="q" id="q" value="{{ q }}">
         </div>
@@ -51,8 +60,8 @@
     </form>
     {% if source_case_obj %}
     <p class="text-muted">
-        Οικόπεδα της αίτησης <strong>{{ source_case_obj.case_number }}</strong> ·
-        <a href="{% url 'plots:list' %}">όλα τα οικόπεδα</a>
+        <span data-ui-text>Οικόπεδα της αίτησης</span> <strong>{{ source_case_obj.case_number }}</strong> ·
+        <a href="{% url 'plots:list' %}" data-ui-text>όλα τα οικόπεδα</a>
     </p>
     {% endif %}
 </div>
@@ -70,19 +79,20 @@
             <th>Αξία (€)</th>
             <th>Τιμή διάθεσης (€)</th>
             <th>Κατανομή</th>
+            <th>Διαθέσιμο για γνωστοποίηση</th>
             <th></th>
         </tr>
         </thead>
         <tbody>
         {% for plot in plots %}
-            <tr>
+            <tr data-plot-row="{{ plot.pk }}">
                 <td><a href="{% url 'plots:detail' plot.pk %}"><strong>{{ plot.row_label }}</strong></a></td>
                 <td>{{ plot.community.name }}</td>
                 <td>
                     {% if plot.source_case %}
                     <a href="{% url 'cases:detail' plot.source_case.pk %}">{{ plot.source_case.case_number }}</a>
                     {% else %}
-                    <span class="text-muted">Χειροκίνητη καταχώριση</span>
+                    <span class="text-muted" data-ui-text>Χειροκίνητη καταχώριση</span>
                     {% endif %}
                 </td>
                 <td>{{ plot.parcel_number|default:"—" }}</td>
@@ -90,11 +100,29 @@
                 <td>{{ plot.final_area_sqm|default_if_none:"—" }}</td>
                 <td>{{ plot.valuation_amount|default_if_none:"—" }}</td>
                 <td>{{ plot.disposal_price|default_if_none:"—" }}</td>
-                <td>{% if plot.allocations.all %}<span class="badge badge--pass">ΝΑΙ</span>{% else %}—{% endif %}</td>
+                <td>{% if plot.is_allocated %}<span class="badge badge--pass">ΝΑΙ</span>{% else %}—{% endif %}</td>
+                <td data-plot-availability="{{ plot.pk }}">
+                    {% if plot.is_available_for_announcement %}
+                    <span class="badge badge--pass" data-plot-available="yes">ΝΑΙ</span>
+                    {% elif plot.is_allocated %}
+                    <span class="badge badge--fail" data-plot-available="no">ΟΧΙ</span>
+                    <span class="text-muted" data-ui-text>Έχει κατανομή</span>
+                    {% elif plot.active_announcement %}
+                    <span class="badge badge--pending" data-plot-available="no">ΟΧΙ</span>
+                    {% if access.announcements.view %}
+                    <a href="{% url 'announcements:detail' plot.active_announcement.pk %}" class="text-muted" data-ui-suffix=" ({{ plot.active_announcement.announcement_date|date:'d/m/Y' }})" data-ui-text>Σε ενεργή γνωστοποίηση ({{ plot.active_announcement.announcement_date|date:"d/m/Y" }})</a>
+                    {% else %}
+                    <span class="text-muted" data-ui-suffix=" ({{ plot.active_announcement.announcement_date|date:'d/m/Y' }})" data-ui-text>Σε ενεργή γνωστοποίηση ({{ plot.active_announcement.announcement_date|date:"d/m/Y" }})</span>
+                    {% endif %}
+                    {% else %}
+                    <span class="badge badge--fail" data-plot-available="no">ΟΧΙ</span>
+                    <span class="text-muted" data-ui-text>Εκκρεμεί αξία/τιμή διάθεσης</span>
+                    {% endif %}
+                </td>
                 <td><a href="{% url 'plots:detail' plot.pk %}" class="btn btn-ghost btn-sm">Άνοιγμα</a></td>
             </tr>
         {% empty %}
-            <tr><td colspan="10">Δεν υπάρχουν οικόπεδα.</td></tr>
+            <tr><td colspan="11">Δεν υπάρχουν οικόπεδα.</td></tr>
         {% endfor %}
         </tbody>
     </table>
@@ -104,7 +132,7 @@
     {% if page_obj.has_previous %}
     <a href="?{% if filter_query %}{{ filter_query }}&amp;{% endif %}page={{ page_obj.previous_page_number }}" class="btn btn-ghost btn-sm" rel="prev">« Προηγούμενη</a>
     {% endif %}
-    <span class="text-muted">Σελίδα {{ page_obj.number }} από {{ page_obj.paginator.num_pages }} · {{ page_obj.paginator.count }} οικόπεδα</span>
+    <span class="text-muted"><span data-ui-text>Σελίδα</span> {{ page_obj.number }} <span data-ui-text>από</span> {{ page_obj.paginator.num_pages }} · {{ page_obj.paginator.count }} <span data-ui-text>οικόπεδα</span></span>
     {% if page_obj.has_next %}
     <a href="?{% if filter_query %}{{ filter_query }}&amp;{% endif %}page={{ page_obj.next_page_number }}" class="btn btn-ghost btn-sm" rel="next">Επόμενη »</a>
     {% endif %}

@@ -6,7 +6,7 @@
 <nav class="breadcrumb" aria-label="Πλοήγηση">
     <a href="{% url 'plots:list' %}">Οικόπεδα</a>
     <span>/</span>
-    <span>{% if is_create %}Νέο οικόπεδο{% else %}{{ plot.row_label }}{% endif %}</span>
+    <span{% if not is_create %} data-ui-skip{% endif %}>{% if is_create %}Νέο οικόπεδο{% else %}{{ plot.row_label }}{% endif %}</span>
 </nav>
 
 <div class="page-header">
@@ -15,7 +15,7 @@
         {% if is_create %}
         Χειροκίνητη καταχώριση οικοπέδου που δεν προέρχεται από αίτηση διαχωρισμού.
         {% elif plot.source_case %}
-        Προήλθε από την αίτηση διαχωρισμού
+        <span data-ui-text>Προήλθε από την αίτηση διαχωρισμού</span>
         <a href="{% url 'cases:detail' plot.source_case.pk %}">{{ plot.source_case.case_number }}</a>.
         {% else %}
         Χειροκίνητη καταχώριση.
@@ -45,7 +45,7 @@
         </div>
         <div>
             <dt>Τιμή διάθεσης (€)</dt>
-            <dd>{{ plot.disposal_price|default_if_none:"—" }} <span class="text-muted">(προεπιλογή: 25% της αξίας)</span></dd>
+            <dd>{{ plot.disposal_price|default_if_none:"—" }} <span class="text-muted" data-ui-text>(προεπιλογή: 25% της αξίας)</span></dd>
         </div>
         <div>
             <dt>Γνωστοποιήσεις</dt>
@@ -58,6 +58,21 @@
         <div>
             <dt>Κατανομή</dt>
             <dd>{% if allocations %}<span class="badge badge--pass">ΝΑΙ</span>{% else %}—{% endif %}</dd>
+        </div>
+        <div>
+            <dt>Διαθέσιμο για γνωστοποίηση</dt>
+            <dd data-plot-detail-availability>
+                {% if plot.is_available_for_announcement %}
+                <span class="badge badge--pass" data-plot-available="yes">ΝΑΙ</span>
+                {% elif plot.is_allocated %}
+                <span class="badge badge--fail" data-plot-available="no">ΟΧΙ</span> <span class="text-muted" data-ui-text>Έχει κατανομή</span>
+                {% elif plot.active_announcement %}
+                <span class="badge badge--pending" data-plot-available="no">ΟΧΙ</span>
+                <span class="text-muted"><span data-ui-text>Σε ενεργή γνωστοποίηση</span> ({{ plot.active_announcement.announcement_date|date:"d/m/Y" }})</span>
+                {% else %}
+                <span class="badge badge--fail" data-plot-available="no">ΟΧΙ</span> <span class="text-muted" data-ui-text>Εκκρεμεί αξία/τιμή διάθεσης</span>
+                {% endif %}
+            </dd>
         </div>
     </dl>
     {% if plot.source_case %}

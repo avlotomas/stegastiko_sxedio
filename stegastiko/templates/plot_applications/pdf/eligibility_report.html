@@ -172,7 +172,7 @@
     </tr>
     {% if outcome.is_rejected_incomplete %}
     <tr>
-        <td class="label">Αιτιολογία απόρριψης λόγω ελλείψεων (Ενότ. 5(β))</td>
+        <td class="label">Λόγος απόρριψης</td>
         <td>{% if application.incomplete_rejected_on %}{{ application.incomplete_rejected_on|date:"d/m/Y" }}: {% endif %}{{ application.incomplete_rejection_reason|linebreaksbr }}</td>
     </tr>
     {% endif %}
@@ -207,21 +207,27 @@
 <table class="kv">
     <tr>
         <td class="label">Δικαιούχος</td>
+        {% if outcome.beneficiary_label %}
         <td class="status-{{ outcome.beneficiary_status }}">
             <span class="badge badge--{{ outcome.beneficiary_status }}">{{ outcome.beneficiary_label }}</span>
         </td>
+        {% else %}<td>—</td>{% endif %}
     </tr>
     <tr>
         <td class="label">Παραχώρηση οικοπέδου</td>
+        {% if outcome.plot_allocation_label %}
         <td class="status-{{ outcome.plot_allocation_badge }}">
             <span class="badge badge--{{ outcome.plot_allocation_badge }}">{{ outcome.plot_allocation_label }}</span>
         </td>
+        {% else %}<td>—</td>{% endif %}
     </tr>
     <tr>
         <td class="label">Αποτέλεσμα επιλεξιμότητας</td>
+        {% if outcome.eligibility_label %}
         <td class="status-{{ outcome.eligibility_overall }}">
             <span class="badge badge--{{ outcome.eligibility_overall }}">{{ outcome.eligibility_label }}</span>
         </td>
+        {% else %}<td>—</td>{% endif %}
     </tr>
     <tr>
         <td class="label">Αποτέλεσμα λογισμικού</td>
@@ -235,10 +241,6 @@
         <td>{{ outcome.eligibility_override_label }}: {{ outcome.eligibility_override_reason|linebreaksbr }}</td>
     </tr>
     {% endif %}
-    <tr>
-        <td class="label">Κατηγορία προτεραιότητας (Ενότ. 11)</td>
-        <td>{{ outcome.priority_label|default:"—" }}</td>
-    </tr>
     <tr>
         <td class="label">Μέλη οικογένειας</td>
         <td>{{ outcome.family_members_count }} ({{ outcome.recognized_children_count }} από {{ outcome.children_count }} τέκνα κατά 10.Α)</td>

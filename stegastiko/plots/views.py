@@ -18,16 +18,19 @@ from plots.models import Plot
 PLOT_LIST_PAGE_SIZE = 50
 ORIGIN_CASE = "case"
 ORIGIN_MANUAL = "manual"
+AVAILABILITY_AVAILABLE = "available"
+AVAILABILITY_UNAVAILABLE = "unavailable"
 
 
 @access_required("plots")
 def plot_list(request):
     plots = Plot.objects.select_related("community", "source_case").prefetch_related(
-        "allocations"
+        "allocations", "submission_cycles"
     )
     community_id = request.GET.get("community_id") or ""
     source_case = request.GET.get("source_case") or ""
     origin = request.GET.get("origin") or ""
+    availability = request.GET.get("availability") or ""
     q = (request.GET.get("q") or "").strip()
     if community_id:
         plots = plots.filter(community_id=community_id)
@@ -37,6 +40,10 @@ def plot_list(request):
         plots = plots.filter(source_case__isnull=False)
     elif origin == ORIGIN_MANUAL:
         plots = plots.filter(source_case__isnull=True)
+    if availability == AVAILABILITY_AVAILABLE:
+        plots = plots.available()
+    elif availability == AVAILABILITY_UNAVAILABLE:
+        plots = plots.exclude(pk__in=Plot.objects.available().values("pk"))
     if q:
         plots = plots.filter(
             Q(design_number__icontains=q)
@@ -63,6 +70,11 @@ def plot_list(request):
             else None,
             "origin": origin,
             "origins": ((ORIGIN_CASE, "Από αίτηση διαχωρισμού"), (ORIGIN_MANUAL, "Χειροκίνητη καταχώριση")),
+            "availability": availability,
+            "availabilities": (
+                (AVAILABILITY_AVAILABLE, "Διαθέσιμα για γνωστοποίηση"),
+                (AVAILABILITY_UNAVAILABLE, "Μη διαθέσιμα για γνωστοποίηση"),
+            ),
             "q": q,
         },
     )
@@ -87,7 +99,7 @@ def plot_detail(request, pk):
     plot = get_object_or_404(
         Plot.objects.select_related(
             "community", "source_case", "source_design_plot", "field", "valuation_referral"
-        ),
+        ).prefetch_related("allocations", "submission_cycles"),
         pk=pk,
     )
     can_edit = has_access(request.user, "plots", EDIT)
@@ -111,7 +123,7 @@ def plot_detail(request, pk):
             "is_create": False,
             "can_edit": can_edit,
             "can_delete": has_access(request.user, "plots", DELETE),
-            "submission_cycles": plot.submission_cycles.prefetch_related("communities"),
+            "submission_cycles": plot.submission_cycles.prefetch_related("plots__community"),
             "allocations": plot.allocations.select_related("application"),
         },
     )
