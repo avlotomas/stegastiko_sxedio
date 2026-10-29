@@ -65,6 +65,10 @@ scp stegastiko.tar.gz ubuntu@<IP>:~
 
 (Για Lightsail, το SSH key κατεβαίνει από *Account → SSH keys*.)
 
+> **Συντόμευση για τα βήματα 4–5:** `sh deploy/server-setup.sh` δημιουργεί `.env` για
+> `<IP>.sslip.io` με τυχαία secrets, ξεκινά το stack και αντικαθιστά τον κωδικό `admin`/`1234`
+> με τυχαίο (στο `~/admin-password.txt`). Τρέξ' το αφού συνδεθεί η static IP.
+
 ## 4. Ρυθμίσεις (`.env`)
 
 ```bash
