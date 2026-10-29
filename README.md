@@ -16,7 +16,7 @@
 
 ```bash
 cd stegastiko
-python -m pip install -r requirements.txt
+python -m pip install -r requirements-dev.txt
 python manage.py migrate
 python manage.py runserver
 ```
