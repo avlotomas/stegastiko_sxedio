@@ -97,8 +97,13 @@ def record_user_changes(user, previous=None, password_changed=False):
 
 
 @receiver(pre_save)
-def audited_pre_save(sender, instance, **kwargs):
+def audited_pre_save(sender, instance, raw=False, **kwargs):
     if not _is_audited_instance(instance):
+        return
+    if raw:
+        # loaddata restores rows (and their history) as-is; m2m links set afterwards
+        # on the same instance are part of that restore too.
+        instance._audit_raw = True
         return
     if instance._state.adding:
         return
@@ -113,8 +118,8 @@ def audited_pre_save(sender, instance, **kwargs):
 
 
 @receiver(post_save)
-def audited_post_save(sender, instance, created, **kwargs):
-    if not _is_audited_instance(instance):
+def audited_post_save(sender, instance, created, raw=False, **kwargs):
+    if raw or not _is_audited_instance(instance):
         return
     if created:
         _persist_history(instance, ActionHistory.ActionType.CREATE)
@@ -148,7 +153,7 @@ def audited_m2m_changed(sender, instance, action, reverse, model, pk_set, **kwar
     """Many-to-many links are not concrete fields, so they need their own audit event."""
     if action not in {"post_add", "post_remove", "post_clear"}:
         return
-    if not _is_audited_instance(instance):
+    if not _is_audited_instance(instance) or getattr(instance, "_audit_raw", False):
         return
     field_name = sender._meta.db_table
     for field in instance._meta.many_to_many:
