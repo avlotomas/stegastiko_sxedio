@@ -1,0 +1,15 @@
+**/__pycache__
+*.py[cod]
+*.sqlite3
+.env
+.env.*
+.pytest_cache
+.venv
+venv
+media
+staticfiles
+e2e
+tests
+*.png
+.ssh
+.cloudflared-tunnel.log

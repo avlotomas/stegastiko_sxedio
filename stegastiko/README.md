@@ -6,7 +6,7 @@ Milestone 1 foundation for the Housing Scheme system (Django).
 
 1. Install Python 3.13+.
 2. Install dependencies:
-   - `python -m pip install -r requirements.txt`
+   - `python -m pip install -r requirements-dev.txt` (includes the test tools; `requirements.txt` is the production set)
 3. Apply migrations:
    - `python manage.py migrate`
 4. Sign in to the application at `/login/` (or Django admin at `/admin/`) with username `admin` and password `1234` (created on first migrate if no `admin` user exists). Change the password immediately in admin.
@@ -36,3 +36,7 @@ Change the default `admin` password before exposing the app.
 
 - Local development defaults to SQLite.
 - Production is intended to use PostgreSQL via `DATABASE_URL`.
+
+## Deploy (AWS)
+
+Single-server Docker setup (Django + gunicorn, PostgreSQL, Caddy for HTTPS): see [`deploy/DEPLOY.md`](deploy/DEPLOY.md).
