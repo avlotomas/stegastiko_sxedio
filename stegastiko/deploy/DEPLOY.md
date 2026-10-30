@@ -109,14 +109,16 @@ scp data.json ubuntu@<IP>:~/nantia/stegastiko/
 scp -r media ubuntu@<IP>:~/nantia/stegastiko/media-upload
 ```
 
-Στον server (η βάση πρέπει να είναι μόλις δημιουργημένη, μετά το βήμα 5):
+Στον server (κάνει πρώτα backup της τωρινής βάσης στο `~/backup-before-import-*.sql.gz`,
+μετά `flush` + `loaddata` και αντιγραφή των media):
 
 ```bash
-docker compose cp data.json web:/tmp/data.json
-docker compose exec web python manage.py flush --noinput
-docker compose exec web python manage.py loaddata /tmp/data.json
-docker compose cp media-upload/. web:/data/media/
+sh deploy/import-data.sh data.json media.tar.gz   # media: tar -czf media.tar.gz -C media .
 ```
+
+Αν το `loaddata` αποτύχει με «ContentType matching query does not exist», η τοπική βάση έχει
+δικαιώματα χρηστών για μοντέλα που δεν υπάρχουν πια· τρέξε τοπικά
+`python manage.py remove_stale_contenttypes` και ξανακάνε την εξαγωγή.
 
 Μετά το `loaddata` ισχύουν οι κωδικοί χρηστών της τοπικής βάσης.
 
