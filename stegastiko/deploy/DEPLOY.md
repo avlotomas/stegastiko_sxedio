@@ -143,6 +143,58 @@ git pull                        # ή νέο tar.gz όπως στο βήμα 3
 docker compose up -d --build    # τα migrations τρέχουν αυτόματα
 ```
 
+## 9. Αυτόματο deploy σε κάθε push στο `main` (GitHub Actions)
+
+Το [.github/workflows/deploy.yml](../../.github/workflows/deploy.yml), σε κάθε push στο `main`:
+
+1. τρέχει τις δοκιμές (`pytest tests`)· αν αποτύχουν, **δεν** γίνεται deploy,
+2. συνδέεται με SSH στον server, που εκτελεί **μόνο** την εντολή deploy:
+   `git checkout origin/main` → backup βάσης (`~/backups/pre-deploy-*.sql.gz`, κρατά τα 10
+   τελευταία) → `docker compose up -d --build` → τα migrations εφαρμόζονται αυτόματα
+   ([deploy.sh](deploy.sh)),
+3. ελέγχει ότι το site απαντά.
+
+Χειροκίνητη εκτέλεση: GitHub → *Actions* → *Deploy* → *Run workflow*.
+
+### Ρύθμιση (μία φορά)
+
+**α. Κλειδί SSH** (τοπικά, χωρίς passphrase):
+
+```bash
+ssh-keygen -t ed25519 -N "" -C github-deploy -f github-deploy
+```
+
+**β. Δημόσιο κλειδί στον server, περιορισμένο στην εντολή deploy** — στον server:
+
+```bash
+echo 'command="cd ~/nantia && git fetch -q origin main && git checkout -q -f -B main origin/main && sh stegastiko/deploy/deploy.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty <περιεχόμενο του github-deploy.pub>' >> ~/.ssh/authorized_keys
+```
+
+Με το `command="…"`, ακόμη κι αν διαρρεύσει το κλειδί, το μόνο που επιτρέπει είναι ένα deploy
+του `origin/main`.
+
+**γ. Ιδιωτικό κλειδί ως secret στο GitHub** — από τον φάκελο του repo:
+
+```bash
+gh secret set DEPLOY_SSH_KEY < github-deploy
+```
+
+(ή GitHub → *Settings → Secrets and variables → Actions → New repository secret*). Μετά σβήσε
+τα τοπικά αρχεία `github-deploy` / `github-deploy.pub`.
+
+Αν αλλάξει η IP ή το domain, ενημέρωσε τα `DEPLOY_HOST` / `SITE_URL` στην αρχή του workflow.
+
+### Αν αποτύχει migration
+
+Το deploy σταματά με σφάλμα στο GitHub Actions και τυπώνει την εντολή επαναφοράς του backup που
+πάρθηκε λίγο πριν. Διόρθωσε τη migration, κάνε push ξανά· ή επανάφερε τη βάση με:
+
+```bash
+gunzip -c ~/backups/pre-deploy-<ημερομηνία>.sql.gz | docker compose exec -T db psql -U stegastiko stegastiko
+```
+
+(για καθαρή επαναφορά, πρώτα `docker compose exec -T db psql -U stegastiko -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" stegastiko`).
+
 ## Χρήσιμες εντολές
 
 ```bash
