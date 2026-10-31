@@ -138,7 +138,7 @@ def test_export_button_is_on_the_detail_page(staff_client):
     cycle = _cycle((_community("Α"), 1))
     html = staff_client.get(reverse("announcements:detail", args=[cycle.pk])).content.decode()
     assert reverse("announcements:export", args=[cycle.pk]) in html
-    assert ">Export<" in html
+    assert "data-export-announcement" in html
 
 
 def test_export_needs_login(client):

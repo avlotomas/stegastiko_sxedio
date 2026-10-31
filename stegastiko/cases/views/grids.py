@@ -88,7 +88,7 @@ def case_utility_services(case):
 
 def completeness_check_grid_context(case):
     return {
-        "completeness_checks": case.completeness_checks.all(),
+        "completeness_checks": case.completeness_checks.prefetch_related("communications"),
         "smtp_ready": smtp_is_configured(),
     }
 

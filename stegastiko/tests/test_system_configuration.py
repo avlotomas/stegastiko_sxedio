@@ -151,7 +151,6 @@ def test_section_label_appears_in_page_title_and_sidebar(staff_client):
     case = Case.objects.create(
         community=community,
         case_number="CASE-LABEL-01",
-        case_type=Case.CaseType.NEW_DIVISION,
         start_date=date(2026, 1, 1),
         contact_email=community.contact_email,
     )
@@ -209,7 +208,6 @@ def test_subsection_label_appears_on_section_edit_screen(staff_client):
     case = Case.objects.create(
         community=community,
         case_number="CASE-SUB-01",
-        case_type=Case.CaseType.NEW_DIVISION,
         start_date=date(2026, 1, 1),
         contact_email=community.contact_email,
     )

@@ -3,13 +3,6 @@
 <aside class="case-work-layout__aside" aria-label="Ενέργειες υπόθεσης">
     <div class="card case-actions-sidebar">
         <h2 class="card__title case-actions-sidebar__title">Ενέργειες υπόθεσης</h2>
-        <p class="text-muted case-actions-sidebar__hint">
-            {% if case.is_new_division %}
-            Νέο αίτημα διαχωρισμού: ισχύουν οι Ενότητες 1–7.
-            {% else %}
-            Αδιάθετα οικόπεδα: διαθέσιμες οι σχετικές ενότητες.
-            {% endif %}
-        </p>
         <nav class="case-actions-nav">
             {% for item in case_nav %}
             <a

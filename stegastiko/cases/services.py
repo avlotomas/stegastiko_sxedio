@@ -323,7 +323,7 @@ def section8_completion(case: Case) -> dict:
     )
     all_valued = bool(parcels) and all(parcel.valuation_amount is not None for parcel in parcels)
     all_priced = bool(parcels) and all(parcel.disposal_price is not None for parcel in parcels)
-    surveying_done = not case.is_new_division or bool(case.dls_response_date)
+    surveying_done = bool(case.dls_response_date)
     return {
         "parcels_count": len(parcels),
         "all_valued": all_valued,
@@ -341,20 +341,32 @@ def completion_readiness(case: Case) -> dict:
             plot_type=ApprovedDesignPlot.PlotType.DIVISION_PLOT
         )
     )
-    if case.is_new_division:
-        latest_check = case.latest_infrastructure_check
-        works_ready = bool(latest_check and latest_check.is_ready_for_submission_cycle)
-        final_areas = bool(parcels) and all(
-            parcel.final_area_sqm is not None for parcel in parcels
-        )
-    else:
-        # §Α.3.3 An unallocated-plots case registers its plots directly in 8.2.
-        works_ready = True
-        final_areas = bool(parcels)
+    latest_check = case.latest_infrastructure_check
+    works_ready = bool(latest_check and latest_check.is_ready_for_submission_cycle)
+    final_areas = bool(parcels) and all(parcel.final_area_sqm is not None for parcel in parcels)
+    # `target` is where the row is fixed: "plots" opens the 7.3 plots workspace, "#…" is an
+    # element of the section 7 screen.
     rows = [
-        ("Απαιτούμενο στάδιο εργασιών (7.6)", works_ready),
-        ("Αίτηση στο ΤΚΧ (7.7)", completion["surveying_done"]),
-        ("Τελικά εμβαδά", final_areas),
-        ("Καθορισμένη αξία / τιμή", completion["all_valued"] and completion["all_priced"]),
+        {"label": "Υπό διαχωρισμό οικόπεδα (7.3)", "ready": bool(parcels), "target": "plots"},
+        {
+            "label": "Απαιτούμενο στάδιο εργασιών (7.6)",
+            "ready": works_ready,
+            "target": "#subsection-7-6",
+        },
+        {
+            "label": "Αίτηση στο ΤΚΧ (7.7)",
+            "ready": completion["surveying_done"],
+            "target": "#id_dls_response_date",
+        },
+        {"label": "Τελικά εμβαδά", "ready": final_areas, "target": "plots"},
+        {
+            "label": "Καθορισμένη αξία / τιμή",
+            "ready": completion["all_valued"] and completion["all_priced"],
+            "target": "plots",
+        },
     ]
-    return {"rows": rows, "ready": all(ready for _, ready in rows)}
+    return {
+        "rows": rows,
+        "ready": all(row["ready"] for row in rows),
+        "missing": [row["label"] for row in rows if not row["ready"]],
+    }

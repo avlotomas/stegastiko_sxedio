@@ -187,4 +187,9 @@ urlpatterns = [
         name="attachment_download",
     ),
     path("<int:pk>/complete/", views.case_complete, name="complete"),
+    path(
+        "<int:pk>/completion-readiness/",
+        views.case_completion_readiness,
+        name="completion_readiness",
+    ),
 ]

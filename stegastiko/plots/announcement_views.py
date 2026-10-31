@@ -269,6 +269,7 @@ def _workspace_context(cycle: SubmissionCycle) -> dict:
     days_remaining = cycle.submission_days_remaining()
     warning_days = parameter("plotApp.submissionDeadlineWarningDays")
     all_emails, emails_by_stage = announcement_communications(cycle, state=state)
+    # Το Στάδιο 1 δεν στέλνει email (τα email αιτήσεων καταγράφονται από το Στάδιο 2 και μετά).
     stage_email_groups = [
         {
             "code": code,
@@ -277,6 +278,7 @@ def _workspace_context(cycle: SubmissionCycle) -> dict:
             "count": len(emails_by_stage.get(code, [])),
         }
         for code, label in STAGE_STEPPER
+        if code != SubmissionCycle.Stage.DETAILS
     ]
 
     return {
@@ -423,6 +425,7 @@ def announcement_detail(request, pk):
     steps, selected = _stage_tabs(
         cycle, context["stage_index"], requested, context["emails_by_stage"]
     )
+    selected_pos = next(i for i, step in enumerate(steps) if step["selected"])
     return render(
         request,
         "plots/announcement_detail.html",
@@ -436,6 +439,8 @@ def announcement_detail(request, pk):
             "selected_stage_label": dict(STAGE_STEPPER).get(selected, ""),
             "selected_stage_emails": context["emails_by_stage"].get(selected, []),
             "selected_stage_template": STAGE_TEMPLATES[selected],
+            "prev_stage": steps[selected_pos - 1] if selected_pos > 0 else None,
+            "next_stage": steps[selected_pos + 1] if selected_pos + 1 < len(steps) else None,
         },
         status=400 if forms_args else 200,
     )

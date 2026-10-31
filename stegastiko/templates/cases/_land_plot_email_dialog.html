@@ -4,7 +4,6 @@ section form because forms cannot nest; the row button fills the action, subject
 {% endcomment %}
 <dialog id="land-plot-email-dialog" class="modal" aria-labelledby="land-plot-email-dialog-title">
     <form method="post" action="" class="app-form" data-email-form novalidate
-          data-email-log-target="[data-land-plot-email-log]"
           data-email-grid-target="[data-land-plot-grid]"
           data-email-status-target="[data-land-plot-status]">
         {% csrf_token %}

@@ -1,0 +1,16 @@
+{% comment %}
+Grid cell that shows / hides the nested email records of its row (2.2 checks, 3.1 plots).
+Requires: owner (row object with `emails`).
+{% endcomment %}
+{% with emails=owner.emails %}
+{% if emails %}
+<button type="button"
+        class="btn-link nested-toggle"
+        data-nested-toggle
+        aria-expanded="true">
+    {{ emails|length }} email
+</button>
+{% else %}
+<span class="text-muted">Δεν έχει σταλεί</span>
+{% endif %}
+{% endwith %}

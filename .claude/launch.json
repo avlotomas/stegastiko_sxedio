@@ -9,6 +9,26 @@
         "cd /d stegastiko && python manage.py runserver 127.0.0.1:8000"
       ],
       "port": 8000
+    },
+    {
+      "name": "stegastiko-alt",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "cd /d stegastiko && python manage.py runserver 127.0.0.1:8010"
+      ],
+      "port": 8010,
+      "autoPort": false
+    },
+    {
+      "name": "stegastiko-alt2",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "cd /d stegastiko && python manage.py runserver 127.0.0.1:8020"
+      ],
+      "port": 8020,
+      "autoPort": false
     }
   ]
 }

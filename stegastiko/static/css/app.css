@@ -1032,6 +1032,64 @@ body.is-embed .page {
     min-height: auto;
 }
 
+/* Nested records under a grid row (2.2 check emails, 3.1 plot emails). */
+.nested-toggle {
+    white-space: nowrap;
+    text-decoration: none;
+}
+
+.nested-toggle::before {
+    content: "▸ ";
+    display: inline-block;
+    transition: transform 0.15s ease;
+}
+
+.nested-toggle[aria-expanded="true"]::before {
+    content: "▾ ";
+}
+
+.data-table tbody tr.data-table__nested-row,
+.data-table tbody tr.data-table__nested-row:hover {
+    background: #f8fafc;
+}
+
+/* The parent row and its nested records read as one block. */
+.data-table tbody tr:has(+ tr.data-table__nested-row:not([hidden])) > td {
+    border-bottom-color: transparent;
+}
+
+.data-table tbody tr:has(+ tr.data-table__nested-row) {
+    background: #f8fafc;
+}
+
+.data-table tr.data-table__nested-row > td {
+    padding: 0 0.9rem 0.8rem 2.5rem;
+}
+
+.nested-records {
+    position: sticky;
+    left: 2.5rem;
+    max-width: min(100%, 60rem);
+    border-left: 3px solid var(--color-primary);
+    border-radius: 0 6px 6px 0;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+.data-table--nested {
+    font-size: 0.85rem;
+}
+
+.data-table--nested th,
+.data-table--nested td {
+    padding: 0.45rem 0.7rem;
+}
+
+.data-table--nested th {
+    background: #fff;
+    font-size: 0.7rem;
+}
+
 .visually-hidden {
     position: absolute;
     width: 1px;
@@ -2155,6 +2213,96 @@ tr[data-sortable-row].is-dragging {
     opacity: 0.65;
 }
 
+/* Γνωστοποίηση — πλοήγηση wizard μεταξύ σταδίων (‹ προηγούμενο · Αποθήκευση · επόμενο ›) */
+.stage-wizard-nav {
+    position: sticky;
+    bottom: 0;
+    z-index: 40;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 1.25rem;
+    padding: 0.7rem 1rem;
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(6px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    box-shadow: 0 -4px 12px rgba(15, 23, 42, 0.06);
+}
+
+.stage-wizard-nav__side {
+    display: flex;
+    min-width: 0;
+}
+
+.stage-wizard-nav__side--end {
+    justify-content: flex-end;
+}
+
+.stage-wizard-nav__link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-width: 0;
+    padding: 0.35rem 0.6rem;
+    border-radius: var(--radius-sm);
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+.stage-wizard-nav__link:hover:not(.is-disabled) {
+    background: var(--color-primary-soft);
+}
+
+.stage-wizard-nav__link.is-disabled {
+    color: var(--color-text-muted);
+    cursor: not-allowed;
+    opacity: 0.65;
+}
+
+.stage-wizard-nav__side--end .stage-wizard-nav__text {
+    text-align: right;
+}
+
+.stage-wizard-nav__text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    line-height: 1.25;
+}
+
+.stage-wizard-nav__text small {
+    color: var(--color-text-muted);
+    font-size: 0.75rem;
+}
+
+.stage-wizard-nav__text span {
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.stage-wizard-nav__arrow {
+    font-size: 1.6rem;
+    line-height: 1;
+}
+
+@media (max-width: 640px) {
+    .stage-wizard-nav__text span {
+        display: none;
+    }
+}
+
+.page-header--with-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
 .announcement-summary-header {
     padding: 0.65rem 1rem;
     margin-bottom: 0.85rem;
@@ -2734,6 +2882,93 @@ body.ui-edit-mode .ui-edit-icon:focus-visible {
 
 .completeness-panel__docs-btn {
     width: 100%;
+}
+
+/* ——— Case screens: left readiness panel of «Ολοκλήρωση αίτησης» ——— */
+body.case-work .page:has(.case-work-layout__readiness) {
+    max-width: 1640px;
+}
+
+.case-work-layout:has(> .case-work-layout__readiness) {
+    grid-template-columns: minmax(240px, 280px) minmax(0, 1fr) minmax(240px, 300px);
+}
+
+.case-work-layout__readiness {
+    position: sticky;
+    top: calc(var(--header-h) + 0.75rem);
+    max-height: calc(100vh - var(--header-h) - 1.5rem);
+    overflow-y: auto;
+}
+
+.completeness-panel__check {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.45rem;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.completeness-panel__check:hover,
+.completeness-panel__check:focus-visible {
+    text-decoration: none;
+    box-shadow: 0 0 0 2px var(--color-primary);
+}
+
+.completeness-panel__check.is-fail {
+    background: #fee4e2;
+    border-color: #f97066;
+    color: #b42318;
+}
+
+.completeness-panel__check.is-pass {
+    background: #dcfce7;
+    border-color: #4ade80;
+    color: #166534;
+}
+
+.completeness-panel__mark {
+    flex: none;
+    font-weight: 700;
+}
+
+span.completeness-panel__check {
+    cursor: default;
+}
+
+/* Element reached from a readiness check: clear the sticky header, flash once. */
+body.case-work [id] {
+    scroll-margin-top: calc(var(--header-h) + 1rem);
+}
+
+.is-readiness-target {
+    animation: readiness-target-flash 1.6s ease-out;
+}
+
+@keyframes readiness-target-flash {
+    0%, 40% { box-shadow: 0 0 0 4px rgba(217, 45, 32, 0.45); }
+    100% { box-shadow: 0 0 0 4px rgba(217, 45, 32, 0); }
+}
+
+@media (max-width: 1180px) {
+    .case-work-layout:has(> .case-work-layout__readiness) {
+        grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
+    }
+
+    .case-work-layout__readiness {
+        grid-column: 1 / -1;
+        position: static;
+        max-height: none;
+    }
+}
+
+@media (max-width: 960px) {
+    .case-work-layout:has(> .case-work-layout__readiness) {
+        grid-template-columns: 1fr;
+    }
+
+    .case-work-layout__readiness {
+        order: -2;
+    }
 }
 
 @media (max-width: 960px) {

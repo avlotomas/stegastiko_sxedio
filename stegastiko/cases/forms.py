@@ -159,7 +159,6 @@ class CaseCreateForm(StyledFormMixin, forms.ModelForm):
         model = Case
         fields = [
             "community",
-            "case_type",
             "submitted_at",
             "contact_email",
             "priority_turkish_cypriot_properties",
@@ -178,8 +177,7 @@ class CaseCreateForm(StyledFormMixin, forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["community"].queryset = Community.objects.filter(is_active=True)
         self.fields["community"].label = "Κοινότητα / Δ.Δ."
-        self.fields["case_type"].label = "Τύπος διαδικασίας"
-        self.fields["submitted_at"].required = False
+        self.fields["submitted_at"].required = True
 
     def _apply_community_contact_email_default(self):
         """Pre-fill from community before required-field validation (create screen JS does the same)."""
@@ -202,24 +200,10 @@ class CaseCreateForm(StyledFormMixin, forms.ModelForm):
 
     def clean(self):
         cleaned_data = super().clean()
-        case_type = cleaned_data.get("case_type")
         if not (cleaned_data.get("contact_email") or "").strip():
             self.add_error(
                 "contact_email",
                 "Απαιτείται ηλεκτρονική διεύθυνση επικοινωνίας Κ.Σ./Δ.Δ. (1.1).",
-            )
-        if case_type == Case.CaseType.UNALLOCATED_PLOTS:
-            cleaned_data["submitted_at"] = None
-            cleaned_data["priority_turkish_cypriot_properties"] = False
-            cleaned_data["priority_protection_zones"] = False
-            cleaned_data["priority_nuisance_developments"] = False
-            cleaned_data["priority_limited_private_land"] = False
-            cleaned_data["priority_other"] = ""
-            cleaned_data["priority_documentation"] = ""
-        elif case_type == Case.CaseType.NEW_DIVISION and not cleaned_data.get("submitted_at"):
-            self.add_error(
-                "submitted_at",
-                "Για νέο αίτημα διαχωρισμού απαιτείται η ημερομηνία υποβολής (1.1).",
             )
         return cleaned_data
 
@@ -248,30 +232,8 @@ class Section1Form(StyledFormMixin, forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        case = self.instance
         self.fields["contact_email"].required = True
-        self.fields["submitted_at"].required = case.is_new_division
-        if not case.is_new_division:
-            self.fields.pop("submitted_at", None)
-            for name in (
-                "priority_turkish_cypriot_properties",
-                "priority_protection_zones",
-                "priority_nuisance_developments",
-                "priority_limited_private_land",
-                "priority_other",
-                "priority_documentation",
-            ):
-                self.fields.pop(name, None)
-
-    def clean(self):
-        cleaned_data = super().clean()
-        case = self.instance
-        if case.is_new_division and not cleaned_data.get("submitted_at"):
-            self.add_error(
-                "submitted_at",
-                "Για νέο αίτημα διαχωρισμού απαιτείται η ημερομηνία υποβολής (1.1).",
-            )
-        return cleaned_data
+        self.fields["submitted_at"].required = True
 
 
 class Section2Form(StyledFormMixin, forms.ModelForm):

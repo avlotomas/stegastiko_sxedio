@@ -21,10 +21,10 @@ class YesNo(models.TextChoices):
     NO = "no", "ΟΧΙ"
 
 
-# §Α.3.3 A new-division case runs every section; an unallocated-plots case has no
-# Αίτηση Α, so its plots are registered straight into the 7.3 grid. Announcements
-# (Ενότητα 9) are a separate flow over the completed plots, not a case section.
-SECTION_KEYS_NEW_DIVISION = (
+# Every case is a division request (Ενότ. 2§2) and runs every section; Αδιάθετα Οικόπεδα are
+# registered straight into «Οικόπεδα». Announcements (Ενότητα 9) are a separate flow over the
+# completed plots, not a case section.
+CASE_SECTION_KEYS = (
     refs.SECTION_1,
     refs.SECTION_2,
     refs.SECTION_3,
@@ -33,7 +33,6 @@ SECTION_KEYS_NEW_DIVISION = (
     refs.SECTION_6,
     refs.SECTION_7,
 )
-SECTION_KEYS_UNALLOCATED = (refs.SECTION_1,)
 
 class CommunicationStatus:
     """Values of `core.Communication.status` used by the 2.2 deficiency emails."""
@@ -104,10 +103,6 @@ class CaseManager(AuditedModel.AuditedManager):
 
 
 class Case(AuditedModel):
-    class CaseType(models.TextChoices):
-        NEW_DIVISION = "new_division", "Νέο αίτημα διαχωρισμού"
-        UNALLOCATED_PLOTS = "unallocated_plots", "Αδιάθετα οικόπεδα"
-
     class DesignStatus(models.TextChoices):
         PENDING = "pending", "Εκκρεμεί"
         COMPLETED = "completed", "Ολοκληρώθηκε"
@@ -123,7 +118,6 @@ class Case(AuditedModel):
 
     community = models.ForeignKey(Community, on_delete=models.PROTECT, related_name="cases")
     case_number = models.CharField(max_length=64, unique=True, help_text="1.1 Μοναδικός αριθμός υπόθεσης")
-    case_type = models.CharField(max_length=32, choices=CaseType.choices, default=CaseType.NEW_DIVISION)
     start_date = models.DateField(help_text="1.1 Ημερομηνία έναρξης διαδικασίας")
     submitted_at = models.DateField(
         null=True, blank=True, help_text="1.1 Ημερομηνία υποβολής αίτησης Κ.Σ./Δ.Δ."
@@ -316,10 +310,6 @@ class Case(AuditedModel):
         return self.infrastructure_checks.first()
 
     @property
-    def is_new_division(self):
-        return self.case_type == self.CaseType.NEW_DIVISION
-
-    @property
     def is_completed(self):
         return self.completed_at is not None
 
@@ -359,10 +349,7 @@ class Case(AuditedModel):
 
     @property
     def applicable_sections(self):
-        """§Α.3.3 Which sections apply depends on the case type."""
-        if self.is_new_division:
-            return SECTION_KEYS_NEW_DIVISION
-        return SECTION_KEYS_UNALLOCATED
+        return CASE_SECTION_KEYS
 
 
 class CompletenessCheck(AuditedModel):
@@ -400,11 +387,17 @@ class CompletenessCheck(AuditedModel):
     @property
     def can_delete(self):
         """Checks with sent (or in-flight) emails stay immutable for traceability."""
-        return not self.communications.exclude(status=CommunicationStatus.FAILED).exists()
+        # Checked in Python so a prefetched `communications` serves the whole grid.
+        return all(c.status == CommunicationStatus.FAILED for c in self.communications.all())
 
     @property
     def sent_emails_count(self):
-        return self.communications.filter(status=CommunicationStatus.SENT).count()
+        return sum(1 for c in self.communications.all() if c.status == CommunicationStatus.SENT)
+
+    @property
+    def emails(self):
+        """2.2 Emails of this check, oldest first, nested under its grid row."""
+        return sorted(self.communications.all(), key=lambda c: (c.created_at, c.pk))
 
     SEQUENCE_ATTEMPTS = 5
 
@@ -594,6 +587,11 @@ class LandPlot(AuditedModel):
     def sent_emails_count(self):
         # Counted in Python so a prefetched `communications` serves the whole grid.
         return sum(1 for c in self.communications.all() if c.status == CommunicationStatus.SENT)
+
+    @property
+    def emails(self):
+        """3.1 Emails about this plot, oldest first, nested under its grid row."""
+        return sorted(self.communications.all(), key=lambda c: (c.created_at, c.pk))
 
     def linked_design_plots(self):
         """7.3 plots that name this parcel as their origin; while any exist it is not deleted."""

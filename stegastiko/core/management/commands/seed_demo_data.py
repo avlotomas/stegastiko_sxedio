@@ -583,24 +583,6 @@ def case_gourri() -> Case:
     return case
 
 
-def case_alampra() -> Case:
-    """Αδιάθετα οικόπεδα παλαιού διαχωρισμού (2009): μόνο Ενότητα 1 και 7.3."""
-    case = new_case(
-        "ΑΛΑΜΠΡΑ",
-        "2026-06-01",
-        case_type=Case.CaseType.UNALLOCATED_PLOTS,
-        submitted_at=d("2026-05-25"),
-        contact_email="alampra.dd@example.com",
-        comments="Τέσσερα αδιάθετα οικόπεδα του στεγαστικού διαχωρισμού του 2009 (οδός Αγίου Ιωάννη).",
-    )
-    design_plots(
-        case, "31/12", [612, 587, 640, 603],
-        rate=55, first_parcel=902, title_from=27741, numbering=Numbering.TITLE_DEED,
-    )
-    finish(case, "2026-07-10")
-    return case
-
-
 def manual_plots(community_name, sheet_plan, specs, rate, comments=""):
     """Οικόπεδα που καταχωρίζονται χειροκίνητα (χωρίς αίτηση διαχωρισμού)."""
     plots = []
@@ -1194,8 +1176,12 @@ class Command(BaseCommand):
 
             cases = [
                 case_akaki(), case_astromeritis(), case_agioi_trimithias(), case_deneia(),
-                case_kakopetria(), case_gourri(), case_alampra(),
+                case_kakopetria(), case_gourri(),
             ]
+            manual_plots("ΑΛΑΜΠΡΑ", "31/12", [
+                ("902", "27741", 612, True), ("903", "27742", 587, True),
+                ("904", "27743", 640, True), ("905", "27744", 603, True),
+            ], rate=55, comments="Αδιάθετα οικόπεδα του στεγαστικού διαχωρισμού του 2009 (οδός Αγίου Ιωάννη).")
             manual_plots("ΕΡΓΑΤΕΣ", "30/27", [
                 ("611", "33102", 585, True), ("612", "33103", 602, True), ("613", "33104", 574, True),
                 ("618", "33109", 630, True), ("619", "33110", 548, True),
@@ -1220,7 +1206,7 @@ class Command(BaseCommand):
         self.stdout.write("")
         for case in cases:
             self.stdout.write(
-                f"{case.case_number:<16} {case.community.name:<18} {case.get_case_type_display():<24} "
+                f"{case.case_number:<16} {case.community.name:<18} "
                 f"οικόπεδα: {case.plots.count()}"
             )
         self.stdout.write(f"Χειροκίνητα οικόπεδα: {Plot.objects.filter(source_case__isnull=True).count()}")

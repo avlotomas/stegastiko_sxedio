@@ -64,11 +64,10 @@ def smtp_configured(db):
     set_setting("smtpFromEmail", "stegastiko@example.org")
 
 
-def _make_case(community, case_type=Case.CaseType.NEW_DIVISION, number="CASE-ABG-01"):
+def _make_case(community, number="CASE-ABG-01"):
     return Case.objects.create(
         community=community,
         case_number=number,
-        case_type=case_type,
         start_date=date(2026, 1, 1),
         contact_email=community.contact_email,
     )
@@ -113,39 +112,6 @@ def _make_case_ready_for_announcement(community, number="CASE-ABG-01"):
 
 
 # --- Scenario 1: two parallel cases of different type in the same community ---
-
-
-@pytest.mark.django_db
-def test_same_community_holds_both_case_types(community):
-    new_division = _make_case(community, number="CASE-ABG-02")
-    unallocated = _make_case(
-        community, case_type=Case.CaseType.UNALLOCATED_PLOTS, number="CASE-ABG-01"
-    )
-    assert new_division.is_new_division
-    assert not unallocated.is_new_division
-    assert community.cases.count() == 2
-
-
-@pytest.mark.django_db
-def test_unallocated_case_skips_sections_2_to_7(community):
-    """§Α.3.3 An unallocated-plots case only has section 1 (plots are entered in 7.3)."""
-    unallocated = _make_case(community, case_type=Case.CaseType.UNALLOCATED_PLOTS)
-    assert unallocated.applicable_sections == ("1",)
-    for skipped in ("2", "3", "4", "5", "6", "7", "8", "9"):
-        assert skipped not in unallocated.applicable_sections
-
-
-@pytest.mark.django_db
-def test_unallocated_case_blocks_section_screen(community, staff_client):
-    unallocated = _make_case(community, case_type=Case.CaseType.UNALLOCATED_PLOTS)
-    blocked = staff_client.get(
-        reverse("cases:section_edit", args=[unallocated.pk, "3"])
-    )
-    assert blocked.status_code == 404
-    blocked8 = staff_client.get(
-        reverse("cases:section_edit", args=[unallocated.pk, "8"])
-    )
-    assert blocked8.status_code == 404
 
 
 # --- Scenario 6: Ενότητα 2 — multiple checks, current result by latest check date ---
@@ -441,20 +407,64 @@ def test_case_screens_render(community, staff_client):
 
 
 @pytest.mark.django_db
-def test_section_2_uses_21_22_23_structure(community, staff_client):
+def test_section_2_is_a_single_section(community, staff_client):
     case = _make_case(community)
     html = staff_client.get(reverse("cases:section_edit", args=[case.pk, "2"])).content.decode()
-    assert "2.1 Έλεγχοι πληρότητας" in html
-    assert "2.2 Ελλείψεις και επικοινωνία" in html
-    assert "2.3 Σχόλια / Παρατηρήσεις" in html
+    for old_heading in ("2.1 ", "2.2 ", "2.3 ", "Ιστορικό απεσταλμένων email"):
+        assert old_heading not in html
     assert "data-completeness-check-grid" in html
     assert 'data-completeness-sort="date"' in html
     assert reverse("cases:completeness_check_create", args=[case.pk]) in html
+    assert 'name="section2_comments"' in html
 
     detail = staff_client.get(reverse("cases:detail", args=[case.pk])).content.decode()
-    assert "2.1 Έλεγχοι πληρότητας" in detail
     assert "Πίνακας ελέγχων πληρότητας" in detail
-    assert "2.3 Σχόλια / Παρατηρήσεις" in detail
+    assert "Ιστορικό απεσταλμένων email ελλείψεων" not in detail
+
+
+@pytest.mark.django_db
+def test_section_2_nests_each_checks_emails_under_its_row(
+    community, staff_client, smtp_configured
+):
+    case = _make_case(community)
+    first = _make_check(case)
+    second = _make_check(case, check_date=date(2026, 2, 1))
+    communication = send_deficiency_email(first, "Ελλείψεις", "Κείμενο.")
+    html = staff_client.get(reverse("cases:section_edit", args=[case.pk, "2"])).content.decode()
+
+    def row_block(check):
+        """The check's row plus its nested records, up to the next check row."""
+        start = html.index(f'data-sort-sequence="{check.sequence}"')
+        ends = [html.find(marker, start + 1) for marker in ("data-sort-sequence=", "</tbody>")]
+        return html[start : min(end for end in ends if end != -1)]
+
+    detail_url = reverse("cases:communication_detail", args=[case.pk, communication.pk])
+    first_block = row_block(first)
+    assert "data-nested-toggle" in first_block
+    assert "data-nested-row" in first_block
+    assert detail_url in first_block
+    assert "Ελλείψεις" in first_block and "Απεστάλη" in first_block
+    second_block = row_block(second)
+    assert "data-nested-row" not in second_block
+    assert "Δεν έχει σταλεί" in second_block
+
+    detail = staff_client.get(reverse("cases:detail", args=[case.pk])).content.decode()
+    assert detail_url in detail
+    assert "data-nested-row" in detail
+
+
+@pytest.mark.django_db
+def test_section_3_nests_each_plots_emails_under_its_row(
+    community, staff_client, smtp_configured
+):
+    case = _make_case(community)
+    plot = LandPlot.objects.create(case=case, parcel_number="58", sheet_plan="36/18")
+    communication = send_land_plot_email(plot, "Τεμάχιο 58", "Κείμενο.")
+    html = staff_client.get(reverse("cases:section_edit", args=[case.pk, "3"])).content.decode()
+    assert "Ιστορικό απεσταλμένων email τεμαχίων" not in html
+    grid = html[html.index("data-land-plot-grid") :]
+    assert "data-nested-row" in grid
+    assert reverse("cases:communication_detail", args=[case.pk, communication.pk]) in grid
 
 
 @pytest.mark.django_db
@@ -463,7 +473,8 @@ def test_case_create_includes_section_11_and_12(community, staff_client):
     assert "1.1 Βασικά στοιχεία" in html
     assert "1.2 Χαρακτηριστικά Κοινότητας για σκοπούς προτεραιότητας" in html
     assert "Μεγάλες εκτάσεις τουρκοκυπριακών περιουσιών" in html
-    assert 'id="priority-section"' in html
+    assert 'name="case_type"' not in html
+    assert "Τύπος διαδικασίας" not in html
 
 
 @pytest.mark.django_db
@@ -479,7 +490,6 @@ def test_case_create_requires_contact_email(community, staff_client):
         reverse("cases:create"),
         {
             "community": community_no_email.pk,
-            "case_type": Case.CaseType.NEW_DIVISION,
             "submitted_at": "2026-01-15",
             "contact_email": "",
         },
@@ -494,7 +504,6 @@ def test_case_create_persists_section_12_priority(community, staff_client):
         reverse("cases:create"),
         {
             "community": community.pk,
-            "case_type": Case.CaseType.NEW_DIVISION,
             "submitted_at": "2026-01-15",
             "contact_email": community.contact_email,
             "priority_turkish_cypriot_properties": "on",
@@ -513,20 +522,10 @@ def test_section_1_splits_readonly_11_and_editable_12(community, staff_client):
     html = staff_client.get(reverse("cases:section_edit", args=[case.pk, "1"])).content.decode()
     assert "1.1 Βασικά στοιχεία" in html
     assert "1.2 Χαρακτηριστικά Κοινότητας για σκοπούς προτεραιότητας" in html
-    assert "Τύπος διαδικασίας" in html
-    assert "1.1 Τύπος διαδικασίας" not in html
+    assert "Τύπος διαδικασίας" not in html
     assert "Μεγάλες εκτάσεις τουρκοκυπριακών περιουσιών" in html
     assert "1.2 Μεγάλες εκτάσεις" not in html
     assert case.case_number in html
-
-
-@pytest.mark.django_db
-def test_section_1_unallocated_hides_12_and_submission_date(community, staff_client):
-    case = _make_case(community, case_type=Case.CaseType.UNALLOCATED_PLOTS)
-    html = staff_client.get(reverse("cases:section_edit", args=[case.pk, "1"])).content.decode()
-    assert "1.1 Βασικά στοιχεία" in html
-    assert "1.2 Χαρακτηριστικά Κοινότητας" not in html
-    assert 'name="submitted_at"' not in html
 
 
 @pytest.mark.django_db
@@ -637,14 +636,6 @@ def test_stored_section_7_titles_move_tender_heading_to_7_5():
 
 
 @pytest.mark.django_db
-def test_case_detail_unallocated_shows_only_applicable_sections(community, staff_client):
-    case = _make_case(community, case_type=Case.CaseType.UNALLOCATED_PLOTS)
-    main = _detail_main_html(staff_client, case)
-    assert main.count('<h2 class="card__title">') == 2
-    assert "2 Έλεγχος πληρότητας" not in main
-
-
-@pytest.mark.django_db
 def test_section_2_grid_rows_show_email_action_for_each_check(community, staff_client):
     case = _make_case(community)
     url = reverse("cases:section_edit", args=[case.pk, "2"])
@@ -653,7 +644,7 @@ def test_section_2_grid_rows_show_email_action_for_each_check(community, staff_c
     html = staff_client.get(url).content.decode()
     assert reverse("cases:deficiency_email_send", args=[case.pk, first.pk]) in html
     assert reverse("cases:deficiency_email_send", args=[case.pk, second.pk]) in html
-    assert html.count("Αποστολή Email") == 2
+    assert html.count('data-dialog-open="deficiency-email-dialog"') == 2
     # A check without deficiencies can still open the email dialog and send.
     assert f'data-copy-text="{second.deficiencies}"' in html
 
@@ -707,7 +698,9 @@ def test_deficiency_email_send_endpoint(community, staff_client, smtp_configured
     data = response.json()
     assert data["ok"]
     assert community.contact_email in data["message"]
-    assert "Απεστάλη" in data["log_html"]
+    # The sent email shows inside its check's row in the refreshed grid.
+    assert "Απεστάλη" in data["grid_html"]
+    assert "log_html" not in data
     assert len(mail.outbox) == 1
 
     response = staff_client.post(
@@ -800,9 +793,7 @@ def test_sent_email_grid_links_to_detail_endpoint(community, staff_client, smtp_
     assert detail_url in html
     assert "data-communication-view" in html
     assert "data-communication-detail-url" in html
-    assert 'data-communication-sort="sent-at"' in html
     assert "communication-email-view-dialog" in html
-    assert "Προβολή" in html
 
 
 @pytest.mark.django_db
@@ -830,23 +821,6 @@ def test_communication_detail_rejects_other_case(community, staff_client, smtp_c
     communication = send_deficiency_email(_make_check(case_a), "Θέμα", "Κείμενο")
     url = reverse("cases:communication_detail", args=[case_b.pk, communication.pk])
     assert staff_client.get(url, HTTP_ACCEPT="application/json").status_code == 404
-
-
-@pytest.mark.django_db
-def test_deficiency_email_send_rejected_for_unallocated_case(
-    community, staff_client, smtp_configured
-):
-    case = _make_case(community, case_type=Case.CaseType.UNALLOCATED_PLOTS)
-    fake_check = CompletenessCheck.objects.create(
-        case=_make_case(community, number="CASE-ABG-02"),
-        check_date=date(2026, 1, 20),
-        result=YesNo.NO,
-        deficiencies="Κείμενο",
-    )
-    url = reverse("cases:deficiency_email_send", args=[case.pk, fake_check.pk])
-    response = staff_client.post(url, {"subject": "Θέμα", "body": "Κείμενο"})
-    assert response.status_code == 404
-    assert mail.outbox == []
 
 
 @pytest.mark.django_db
@@ -1105,14 +1079,6 @@ def test_plot_evaluation_modal_is_scoped_to_its_case(community, staff_client):
     assert staff_client.get(url, **JSON).status_code == 404
     assert staff_client.post(url, _evaluation_values(), **JSON).status_code == 404
 
-    unallocated = _make_case(
-        community, case_type=Case.CaseType.UNALLOCATED_PLOTS, number="CASE-ABG-03"
-    )
-    plot = unallocated.land_plots.create(parcel_number="1")
-    url = reverse("cases:land_plot_evaluation", args=[unallocated.pk, plot.pk])
-    assert staff_client.get(url, **JSON).status_code == 404
-
-
 @pytest.mark.django_db
 def test_section_4_blank_pdf_export(community, staff_client):
     case = _make_case(community)
@@ -1202,13 +1168,6 @@ def test_section_6_report_pdf_export(community, staff_client):
     assert response["Content-Type"] == "application/pdf"
     assert response.content.startswith(b"%PDF")
     assert "pinakes_aksiologisis_" in response["Content-Disposition"]
-
-
-@pytest.mark.django_db
-def test_section_6_report_pdf_not_available_for_unallocated_plots(community, staff_client):
-    case = _make_case(community, case_type=Case.CaseType.UNALLOCATED_PLOTS)
-    response = staff_client.get(reverse("cases:section_6_report_pdf", args=[case.pk]))
-    assert response.status_code == 404
 
 
 @pytest.mark.django_db
@@ -1744,13 +1703,6 @@ def test_utility_service_modal_is_scoped_to_its_case(community, staff_client):
     delete_url = reverse("cases:utility_service_delete", args=[case.pk, service.pk])
     assert staff_client.post(delete_url, **JSON).status_code == 404
     assert other_case.utility_services.count() == 1
-
-    unallocated = _make_case(
-        community, case_type=Case.CaseType.UNALLOCATED_PLOTS, number="CASE-ABG-03"
-    )
-    url = reverse("cases:utility_service_create", args=[unallocated.pk])
-    assert staff_client.get(url, **JSON).status_code == 404
-
 
 @pytest.mark.django_db
 def test_inactive_service_is_kept_on_existing_rows_only(community, staff_client):
@@ -2290,15 +2242,6 @@ def test_approved_design_plot_modal_is_scoped_to_its_case(community, staff_clien
     assert staff_client.post(delete_url, **JSON).status_code == 404
     assert other_case.approved_design_plots.count() == 1
 
-    unallocated = _make_case(
-        community, case_type=Case.CaseType.UNALLOCATED_PLOTS, number="CASE-ABG-03"
-    )
-    edit_unallocated_url = reverse(
-        "cases:approved_design_plot_edit", args=[unallocated.pk, plot.pk]
-    )
-    assert staff_client.get(edit_unallocated_url, **JSON).status_code == 404
-
-
 @pytest.mark.django_db
 def test_approved_design_plot_needs_section_7_edit_access(community, client, make_user):
     case = _make_case(community)
@@ -2364,8 +2307,8 @@ def test_section_7_saves_7_7_dls_application_and_attachments(community, staff_cl
 
 
 @pytest.mark.django_db
-def test_unallocated_case_can_add_plot(community, staff_client):
-    case = _make_case(community, case_type=Case.CaseType.UNALLOCATED_PLOTS)
+def test_case_can_add_plot(community, staff_client):
+    case = _make_case(community)
     url = reverse("cases:approved_design_plot_create", args=[case.pk])
     form = staff_client.get(url, **JSON)
     assert form.status_code == 200
@@ -2733,7 +2676,9 @@ def test_land_plot_email_is_sent_to_the_11_address_and_kept_in_history(
     data = response.json()
     assert data["ok"]
     assert community.contact_email in data["message"]
-    assert "Απεστάλη" in data["log_html"]
+    # The sent email is nested under its plot's row in the refreshed grid.
+    assert "Απεστάλη" in data["grid_html"]
+    assert "log_html" not in data
     assert len(mail.outbox) == 1
     assert mail.outbox[0].to == [case.contact_email]
 

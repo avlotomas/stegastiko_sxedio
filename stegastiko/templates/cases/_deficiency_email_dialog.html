@@ -4,7 +4,7 @@
 <dialog id="deficiency-email-dialog" class="modal" aria-labelledby="deficiency-email-dialog-title">
     <form method="post" action="" class="app-form" data-email-form novalidate>
         {% csrf_token %}
-        <h2 class="card__title" id="deficiency-email-dialog-title">2.2 Αποστολή email ελλείψεων</h2>
+        <h2 class="card__title" id="deficiency-email-dialog-title">Αποστολή email ελλείψεων</h2>
         <p class="helptext" data-email-check-label></p>
 
         {% if not smtp_ready %}

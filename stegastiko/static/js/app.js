@@ -575,14 +575,41 @@ bindFilePickers(document);
     // Reorders `rowSelector` rows of `tbody` by their data-sort-<key> cells; `compare` sorts ascending.
     function reorderRows(tbody, rowSelector, key, dir, compare) {
         const rows = Array.from(tbody.querySelectorAll(rowSelector));
+        // A nested records row (e.g. the emails of a check) moves together with its parent.
+        const nested = new Map();
+        rows.forEach(function (row) {
+            const next = row.nextElementSibling;
+            if (next && next.matches("[data-nested-row]")) {
+                nested.set(row, next);
+            }
+        });
         rows.sort(function (a, b) {
             const order = compare(sortValue(a, key), sortValue(b, key));
             return dir === "asc" ? order : -order;
         });
         rows.forEach(function (row) {
             tbody.appendChild(row);
+            if (nested.has(row)) {
+                tbody.appendChild(nested.get(row));
+            }
         });
     }
+
+    // Show / hide the nested records row right below the toggle's row.
+    document.addEventListener("click", function (event) {
+        const toggle = event.target.closest("[data-nested-toggle]");
+        if (!toggle) {
+            return;
+        }
+        const nestedRow = toggle.closest("tr").nextElementSibling;
+        if (!nestedRow || !nestedRow.matches("[data-nested-row]")) {
+            return;
+        }
+        event.preventDefault();
+        const expanded = toggle.getAttribute("aria-expanded") === "true";
+        toggle.setAttribute("aria-expanded", expanded ? "false" : "true");
+        nestedRow.hidden = expanded;
+    });
 
     // Ascending comparator on transform(value).
     function compareBy(transform) {
@@ -1286,11 +1313,13 @@ bindFilePickers(document);
 
                         }
 
-                        // 2.2 is the default; the 3.1 land plot dialog names its own targets.
-                        replaceOuterHtml(
-                            form.dataset.emailLogTarget || "[data-deficiency-email-log]",
-                            data.log_html
-                        );
+                        // 2.2 lists its emails inside the check grid; the other email dialogs
+                        // also refresh a separate log and name their own targets.
+                        if (data.log_html) {
+
+                            replaceOuterHtml(form.dataset.emailLogTarget, data.log_html);
+
+                        }
 
                         if (data.grid_html) {
 
@@ -1911,6 +1940,69 @@ bindFilePickers(document);
                 );
             });
     });
+
+    // Case readiness panel (left of the case screens): re-rendered whenever a dialog closes,
+    // since the plots workspace and the 7.6 checks save in place.
+    function refreshCaseReadiness() {
+        const panel = document.querySelector("[data-case-readiness]");
+        if (!panel) {
+            return;
+        }
+        requestJson(panel.dataset.caseReadinessUrl)
+            .then(function (data) {
+                if (data.ok) {
+                    replaceOuterHtml("[data-case-readiness]", data.html);
+                }
+            })
+            .catch(function () {});
+    }
+
+    document.addEventListener("close", function (event) {
+        if (event.target instanceof HTMLDialogElement) {
+            refreshCaseReadiness();
+        }
+    }, true);
+
+    // A readiness check links to "#<id>" of the section screen: scroll there, focus, flash.
+    function focusReadinessTarget() {
+        if (!window.location.hash || !document.querySelector("[data-case-readiness]")) {
+            return;
+        }
+        let target = null;
+        try {
+            target = document.querySelector(window.location.hash);
+        } catch (error) {
+            return;
+        }
+        if (!target) {
+            return;
+        }
+        const container = target.closest(".form-field") || target;
+        container.scrollIntoView({ behavior: "smooth", block: "center" });
+        if (target.matches("input, select, textarea") && !target.disabled) {
+            target.focus({ preventScroll: true });
+        }
+        container.classList.remove("is-readiness-target");
+        void container.offsetWidth;
+        container.classList.add("is-readiness-target");
+    }
+
+    document.addEventListener("click", function (event) {
+        const jump = event.target.closest("[data-case-readiness-jump]");
+        if (!jump || jump.pathname !== window.location.pathname) {
+            return;
+        }
+        event.preventDefault();
+        history.replaceState(null, "", jump.hash);
+        focusReadinessTarget();
+    });
+
+    window.addEventListener("hashchange", focusReadinessTarget);
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", focusReadinessTarget);
+    } else {
+        focusReadinessTarget();
+    }
 
     // History timeline modal: load on open for both PlotApplication and Case.
     if (!window.__historyTimelineBound) {

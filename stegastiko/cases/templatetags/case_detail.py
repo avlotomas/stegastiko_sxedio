@@ -1,5 +1,7 @@
 from django import template
+from django.urls import reverse
 
+from cases import section_refs as refs
 from cases.detail_display import case_field_rows
 from cases.services import approved_design_plot_section, completion_readiness
 from cases.section_labels import case_section_heading as build_case_section_heading
@@ -61,8 +63,43 @@ def case_completion_panel(context, case):
         "show_case_completion": True,
         "case": case,
         "readiness": readiness,
-        "missing": [label for label, ready in readiness["rows"] if not ready],
+        "missing": readiness["missing"],
         "can_complete": has_access(user, "case_completion", EDIT),
         "plots_count": case.plots.count(),
         "csrf_token": context.get("csrf_token"),
     }
+
+
+def case_readiness_context(user, case) -> dict:
+    """Left panel of the case screens: the readiness checks, each linked to where it is fixed."""
+    if not has_access(user, "case_completion", VIEW):
+        return {"show_case_readiness": False}
+    readiness = completion_readiness(case)
+    plot_section = approved_design_plot_section(case)
+    can_open_plots = has_access(user, case_section_function(plot_section), VIEW)
+    section_href = None
+    if refs.SECTION_7 in case.applicable_sections and has_access(
+        user, case_section_function(refs.SECTION_7), VIEW
+    ):
+        section_href = reverse("cases:section_edit", args=[case.pk, refs.SECTION_7])
+    checks = []
+    for row in readiness["rows"]:
+        check = {"label": row["label"], "ready": row["ready"], "href": None, "plots_url": None}
+        if row["target"] == "plots":
+            if can_open_plots:
+                check["plots_url"] = reverse("cases:approved_design_plot_grid", args=[case.pk])
+        elif section_href:
+            check["href"] = section_href + row["target"]
+        checks.append(check)
+    return {
+        "show_case_readiness": True,
+        "case": case,
+        "readiness": readiness,
+        "checks": checks,
+        "plots_count": case.plots.count(),
+    }
+
+
+@register.inclusion_tag("cases/_case_readiness_panel.html", takes_context=True)
+def case_readiness_panel(context, case):
+    return case_readiness_context(context["request"].user, case)

@@ -339,11 +339,7 @@ def _cases_dashboard_data() -> dict:
             phase_badge = "fail"
         else:
             active_count += 1
-            if not c.is_new_division:
-                phase_counts["works"] += 1
-                phase_label = "7. Καταχώριση αδιάθετων οικοπέδων"
-                phase_badge = "pending"
-            elif comp_res != YesNo.YES:
+            if comp_res != YesNo.YES:
                 phase_counts["completeness"] += 1
                 phase_label = "1–2. Έλεγχος πληρότητας Κ.Σ."
                 phase_badge = "fail" if comp_res == YesNo.NO else "pending"
@@ -367,9 +363,6 @@ def _cases_dashboard_data() -> dict:
         elif infra and infra.stage:
             infra_label = infra.stage
             infra_badge = "pending"
-        elif not c.is_new_division:
-            infra_label = "Αδιάθετα οικόπεδα"
-            infra_badge = "pass"
         else:
             infra_label = "—"
             infra_badge = "pending"

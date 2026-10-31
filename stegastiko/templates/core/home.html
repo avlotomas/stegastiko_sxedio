@@ -389,7 +389,6 @@
                 <tr>
                     <th>Αρ. Υπόθεσης</th>
                     <th>Κοινότητα</th>
-                    <th>Τύπος διαδικασίας</th>
                     <th>Τρέχουσα Φάση</th>
                     <th>Πληρότητα (Ενότ. 2)</th>
                     <th>Απόφαση ΥΠΕΣ (Ενότ. 6)</th>
@@ -403,12 +402,9 @@
                 <tr data-dashboard-case-row="{{ item.case.pk }}">
                     <td><a href="{% url 'cases:detail' item.case.pk %}"><strong>{{ item.case.case_number }}</strong></a></td>
                     <td>{{ item.case.community.name }}</td>
-                    <td>{{ item.case.get_case_type_display }}</td>
                     <td><span class="badge badge--{{ item.phase_badge }}">{{ item.phase_label }}</span></td>
                     <td>
-                        {% if not item.case.is_new_division %}
-                        <span class="text-muted" data-ui-text>Δεν εφαρμόζεται</span>
-                        {% elif item.case.completeness_result == 'yes' %}
+                        {% if item.case.completeness_result == 'yes' %}
                         <span class="badge badge--pass">Ναι</span>
                         {% elif item.case.completeness_result == 'no' %}
                         <span class="badge badge--fail">Όχι</span>
@@ -417,9 +413,7 @@
                         {% endif %}
                     </td>
                     <td>
-                        {% if not item.case.is_new_division %}
-                        <span class="text-muted" data-ui-text>Δεν εφαρμόζεται</span>
-                        {% elif item.case.list_ministry_decision == 'approved' %}
+                        {% if item.case.list_ministry_decision == 'approved' %}
                         <span class="badge badge--pass">{{ item.case.latest_ministry_decision_display }}</span>
                         {% elif item.case.list_ministry_decision == 'rejected' %}
                         <span class="badge badge--fail">{{ item.case.latest_ministry_decision_display }}</span>
@@ -438,7 +432,7 @@
                     </td>
                 </tr>
                 {% empty %}
-                <tr><td colspan="9" class="text-muted">Δεν έχουν καταχωριστεί αιτήσεις διαχωρισμού.</td></tr>
+                <tr><td colspan="8" class="text-muted">Δεν έχουν καταχωριστεί αιτήσεις διαχωρισμού.</td></tr>
                 {% endfor %}
             </tbody>
         </table>

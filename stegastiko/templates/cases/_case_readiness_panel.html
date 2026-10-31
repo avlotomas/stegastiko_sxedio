@@ -1,0 +1,59 @@
+{% comment %}
+Αριστερό πάνελ των οθονών της υπόθεσης: ο έλεγχος ετοιμότητας της «Ολοκλήρωσης αίτησης»,
+κόκκινο όσο κάτι εκκρεμεί, πράσινο όταν όλα περνούν. Κάθε έλεγχος οδηγεί στο σημείο όπου
+διορθώνεται (Ενότητα 7 ή πίνακας οικοπέδων). Ανανεώνεται μέσω cases:completion_readiness.
+{% endcomment %}
+{% if show_case_readiness %}
+<aside class="case-work-layout__readiness"
+       aria-label="Έλεγχος ετοιμότητας ολοκλήρωσης"
+       data-case-readiness
+       data-case-readiness-url="{% url 'cases:completion_readiness' case.pk %}">
+    <div class="card completeness-panel {% if readiness.ready %}is-complete{% else %}is-incomplete{% endif %}">
+        <div class="completeness-panel__header">
+            <h2 class="completeness-panel__title">Ετοιμότητα ολοκλήρωσης</h2>
+            <span class="badge {% if readiness.ready %}badge--pass{% else %}badge--fail{% endif %}" data-ui-skip>
+                {% if readiness.ready %}ΕΤΟΙΜΗ{% else %}ΕΚΚΡΕΜΕΙ{% endif %}
+            </span>
+        </div>
+        <p class="completeness-panel__summary" data-ui-skip>
+            {% if readiness.ready %}
+            Όλοι οι έλεγχοι περνούν· η αίτηση μπορεί να ολοκληρωθεί.
+            {% else %}
+            Εκκρεμούν {{ readiness.missing|length }} από {{ checks|length }} ελέγχους. Επιλέξτε έναν
+            για να μεταβείτε στο σημείο όπου συμπληρώνεται.
+            {% endif %}
+        </p>
+        <ul class="completeness-panel__list" data-ui-skip>
+            {% for check in checks %}
+            <li class="completeness-panel__item">
+                {% if check.href %}
+                <a class="completeness-panel__jump completeness-panel__check {% if check.ready %}is-pass{% else %}is-fail{% endif %}"
+                   href="{{ check.href }}"
+                   data-case-readiness-jump>
+                {% elif check.plots_url %}
+                <button type="button"
+                        class="completeness-panel__jump completeness-panel__check {% if check.ready %}is-pass{% else %}is-fail{% endif %}"
+                        data-approved-design-plots-workspace-open="{{ check.plots_url }}">
+                {% else %}
+                <span class="completeness-panel__jump completeness-panel__check {% if check.ready %}is-pass{% else %}is-fail{% endif %}">
+                {% endif %}
+                    <span class="completeness-panel__mark" aria-hidden="true">{% if check.ready %}✓{% else %}✗{% endif %}</span>
+                    <span>{{ check.label }}</span>
+                    <span class="visually-hidden">{% if check.ready %}(ΝΑΙ){% else %}(ΟΧΙ){% endif %}</span>
+                {% if check.href %}</a>{% elif check.plots_url %}</button>{% else %}</span>{% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+        <div class="completeness-panel__section">
+            <p class="completeness-panel__summary" data-ui-skip>
+                {% if case.is_completed %}
+                <span class="badge badge--pass">Ολοκληρώθηκε</span> {{ case.completed_at|date:"d/m/Y" }} ·
+                {{ plots_count }} οικόπεδα
+                {% else %}
+                <span class="badge badge--pending">Σε εξέλιξη</span>
+                {% endif %}
+            </p>
+        </div>
+    </div>
+</aside>
+{% endif %}

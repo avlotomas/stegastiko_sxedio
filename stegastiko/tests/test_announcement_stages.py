@@ -307,6 +307,18 @@ class TestAnnouncementEmailsPerStage:
             assert expected_body_snippet in html
             assert 'id="announcement-emails-dialog"' in html
 
+        # Στάδιο 1 (Στοιχεία γνωστοποίησης) has no emails, so no emails card
+        details_html = staff_client.get(
+            reverse("announcements:detail", args=[cycle.pk]), {"stage": "details"}
+        ).content.decode()
+        assert "data-stage-emails-card" not in details_html
+        # ... and no Στάδιο 1 group in the «Απεσταλμένα Email» dialog of the other stages
+        submission_html = staff_client.get(
+            reverse("announcements:detail", args=[cycle.pk]), {"stage": "submission"}
+        ).content.decode()
+        assert 'data-announcement-emails-stage-group="submission"' in submission_html
+        assert 'data-announcement-emails-stage-group="details"' not in submission_html
+
         # Also verify the individual application detail page and JSON modal endpoint return sender + stage
         app_detail_html = staff_client.get(
             reverse("plot_applications:detail", args=[apps["first"].pk])

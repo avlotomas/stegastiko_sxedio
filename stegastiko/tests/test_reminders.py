@@ -32,7 +32,6 @@ def _case_with_consultation(due_date):
     case = Case.objects.create(
         community=community,
         case_number=f"CASE-REM-{due_date:%d%m%y}",
-        case_type=Case.CaseType.NEW_DIVISION,
         start_date=date(2026, 1, 1),
         contact_email=community.contact_email,
     )

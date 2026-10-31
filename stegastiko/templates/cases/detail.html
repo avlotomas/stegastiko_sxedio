@@ -12,13 +12,14 @@
 </nav>
 
 <div class="case-work-layout">
+{% case_readiness_panel case %}
 <div class="case-work-layout__main">
 
 <div class="page-header">
     <h1><span data-ui-text>Υπόθεση</span> {{ case.case_number }}</h1>
     <p class="page-header__lead">
         {{ case.community.name }} ({{ case.community.district }}) ·
-        <span data-ui-text>{{ case.get_case_type_display }}</span> · <span data-ui-text>έναρξη</span> {{ case.start_date }}
+        <span data-ui-text>έναρξη</span> {{ case.start_date }}
     </p>
 </div>
 
@@ -31,10 +32,6 @@
     <h2 class="card__title">{% case_section_heading "1" %}</h2>
     <h3 class="form-section-title">{% case_subsection_heading "1.1" %}</h3>
     <dl class="detail-grid">
-        <div>
-            <dt>Τύπος διαδικασίας</dt>
-            <dd>{{ case.get_case_type_display }}</dd>
-        </div>
         <div>
             <dt>Κοινότητα / Δ.Δ.</dt>
             <dd>{{ case.community.name }}</dd>
@@ -51,34 +48,28 @@
             <dt>Ημερομηνία έναρξης διαδικασίας</dt>
             <dd>{{ case.start_date }}</dd>
         </div>
-        {% if case.is_new_division %}
         <div>
             <dt>Ημερομηνία υποβολής αίτησης Κ.Σ./Δ.Δ.</dt>
             <dd>{{ case.submitted_at|default:"—" }}</dd>
         </div>
-        {% endif %}
         <div>
             <dt>Ηλεκτρονική διεύθυνση επικοινωνίας Κ.Σ./Δ.Δ.</dt>
             <dd>{{ case.contact_email|default:"—" }}</dd>
         </div>
     </dl>
 
-    {% if case.is_new_division %}
     <h3 class="form-section-title">{% case_subsection_heading "1.2" %}</h3>
     {% case_detail_fields case "priority_turkish_cypriot_properties" "priority_protection_zones" "priority_nuisance_developments" "priority_limited_private_land" "priority_other" "priority_documentation" %}
-    {% endif %}
 
     <h3 class="form-section-title">{% case_subsection_heading "1.3" %}</h3>
     {% case_detail_fields case "comments" %}
 </section>
 {% endif %}
 
-{% if case.is_new_division %}
 {% if access.case_section_2.view %}
 <section class="card">
     <h2 class="card__title">{% case_section_heading "2" %}</h2>
 
-    <h3 class="form-section-title">{% case_subsection_heading "2.1" %}</h3>
     <dl class="detail-grid">
         <div>
             <dt>Αποτέλεσμα</dt>
@@ -107,6 +98,7 @@
                 <th>Ημερομηνία ελέγχου</th>
                 <th>Αποτέλεσμα</th>
                 <th>Ελλείψεις</th>
+                <th>Email ελλείψεων</th>
             </tr>
             </thead>
             <tbody>
@@ -124,18 +116,16 @@
                         {% endif %}
                     </td>
                     <td>{{ check.deficiencies|default:"—"|linebreaksbr }}</td>
+                    <td>{% include "cases/_nested_emails_toggle.html" with owner=check %}</td>
                 </tr>
+                {% include "cases/_nested_email_rows.html" with owner=check colspan=5 %}
             {% empty %}
-                <tr><td colspan="4">Δεν έχουν καταχωριστεί έλεγχοι πληρότητας.</td></tr>
+                <tr><td colspan="5">Δεν έχουν καταχωριστεί έλεγχοι πληρότητας.</td></tr>
             {% endfor %}
             </tbody>
         </table>
     </div>
 
-    <h3 class="form-section-title">Ιστορικό απεσταλμένων email ελλείψεων</h3>
-    {% include "cases/_case_communication_email_table.html" %}
-
-    <h3 class="form-section-title">{% case_subsection_heading "2.3" %}</h3>
     {% case_detail_fields case "section2_comments" %}
 </section>
 {% endif %}
@@ -363,7 +353,6 @@
     {% case_detail_fields case "dls_comments" %}
 </section>
 {% endif %}
-{% endif %}
 
 {% if access.case_completion.view %}
 <section class="card" id="completion">
@@ -375,10 +364,10 @@
     </p>
     <h3 class="form-section-title">Έλεγχος ετοιμότητας (αυτόματο, ενημερωτικός)</h3>
     <dl class="detail-grid">
-        {% for label, ready in readiness.rows %}
+        {% for row in readiness.rows %}
         <div>
-            <dt>{{ label }}</dt>
-            <dd>{% if ready %}<span class="badge badge--pass">ΝΑΙ</span>{% else %}<span class="badge badge--fail">ΟΧΙ</span>{% endif %}</dd>
+            <dt>{{ row.label }}</dt>
+            <dd>{% if row.ready %}<span class="badge badge--pass">ΝΑΙ</span>{% else %}<span class="badge badge--fail">ΟΧΙ</span>{% endif %}</dd>
         </div>
         {% endfor %}
         <div>

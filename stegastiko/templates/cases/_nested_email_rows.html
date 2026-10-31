@@ -1,0 +1,54 @@
+{% comment %}
+Nested email records under a grid row (2.2 checks, 3.1 plots); «Προβολή» opens the read-only
+view modal. Sorting the grid keeps this row right below its parent. Requires: case, owner
+(row object with `emails`), colspan.
+{% endcomment %}
+{% with emails=owner.emails %}
+{% if emails %}
+<tr class="data-table__nested-row" data-nested-row>
+    <td colspan="{{ colspan }}">
+        <div class="nested-records">
+            <table class="data-table data-table--nested">
+                <thead>
+                <tr>
+                    <th>Απεστάλη</th>
+                    <th>Παραλήπτης</th>
+                    <th>Αποστολέας (Χρήστης)</th>
+                    <th>Θέμα</th>
+                    <th>Κατάσταση</th>
+                    <th><span class="visually-hidden">Ενέργειες</span></th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for communication in emails %}
+                <tr>
+                    <td>{{ communication.sent_at|default:communication.created_at|date:"d/m/Y H:i" }}</td>
+                    <td>{{ communication.recipient }}</td>
+                    <td>{{ communication.sender_label }}</td>
+                    <td>{{ communication.subject }}</td>
+                    <td>
+                        {% if communication.status == "sent" %}
+                        <span class="badge badge--pass">Απεστάλη</span>
+                        {% elif communication.status == "failed" %}
+                        <span class="badge badge--fail">Αποτυχία αποστολής</span>
+                        {% else %}
+                        <span class="badge badge--pending">Σε αποστολή</span>
+                        {% endif %}
+                    </td>
+                    <td class="data-table__actions">
+                        <button type="button"
+                                class="btn btn-secondary btn-sm"
+                                data-communication-view
+                                data-communication-detail-url="{% url 'cases:communication_detail' case.pk communication.pk %}">
+                            Προβολή
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </td>
+</tr>
+{% endif %}
+{% endwith %}

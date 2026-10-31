@@ -34,7 +34,6 @@ def case(db):
     return Case.objects.create(
         community=community,
         case_number="CASE-ACL-01",
-        case_type=Case.CaseType.NEW_DIVISION,
         start_date=date(2026, 1, 1),
         contact_email=community.contact_email,
     )

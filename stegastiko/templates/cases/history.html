@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load case_detail %}
 
 {% block title %}Ιστορικό — {{ case.case_number }}{% endblock %}
 {% block body_class %}case-work{% endblock %}
@@ -13,6 +14,7 @@
 </nav>
 
 <div class="case-work-layout">
+{% case_readiness_panel case %}
 <div class="case-work-layout__main">
 
 <div class="page-header">

@@ -77,11 +77,10 @@ def _role_client(client, make_user, username, grants):
     return client
 
 
-def _make_case(community, case_type=Case.CaseType.NEW_DIVISION, number="CASE-ABG-01", **extra):
+def _make_case(community, number="CASE-ABG-01", **extra):
     return Case.objects.create(
         community=community,
         case_number=number,
-        case_type=case_type,
         start_date=date(2026, 1, 1),
         contact_email=community.contact_email,
         **extra,
@@ -120,7 +119,6 @@ def _allocate(plot, community):
 def _create_payload(community):
     return {
         "community": community.pk,
-        "case_type": Case.CaseType.NEW_DIVISION,
         "submitted_at": "2026-01-15",
         "contact_email": community.contact_email,
     }
@@ -744,8 +742,8 @@ def test_delete_views_require_delete_access(community, client, make_user, kind):
 
 
 @pytest.mark.django_db
-def test_unallocated_case_plots_are_deleted_with_section_7_access(community, client, make_user):
-    case = _make_case(community, case_type=Case.CaseType.UNALLOCATED_PLOTS)
+def test_division_plots_are_deleted_with_section_7_access(community, client, make_user):
+    case = _make_case(community)
     plot = ApprovedDesignPlot.objects.create(case=case, plot_type="division_plot")
     url = reverse("cases:approved_design_plot_delete", args=[case.pk, plot.pk])
     viewer = _role_client(
@@ -857,16 +855,16 @@ def test_case_list_is_paginated_and_keeps_filters(community, staff_client):
 
     for index in range(CASE_LIST_PAGE_SIZE + 3):
         _make_case(community, number=f"CASE-P-{index:03d}")
-    html = staff_client.get(reverse("cases:list"), {"case_type": "new_division"}).content.decode()
+    html = staff_client.get(reverse("cases:list"), {"community_id": community.pk}).content.decode()
     assert html.count('class="btn btn-ghost btn-sm">Άνοιγμα</a>') == CASE_LIST_PAGE_SIZE
-    assert "case_type=new_division&amp;page=2" in html
-    page_2 = staff_client.get(reverse("cases:list"), {"case_type": "new_division", "page": 2})
+    assert f"community_id={community.pk}&amp;page=2" in html
+    page_2 = staff_client.get(reverse("cases:list"), {"community_id": community.pk, "page": 2})
     assert page_2.content.decode().count('class="btn btn-ghost btn-sm">Άνοιγμα</a>') == 3
 
 
 @pytest.mark.django_db
 def test_plot_owner_is_a_foreign_key_loaded_without_a_query_per_plot(community, staff_client):
-    case = _make_case(community, case_type=Case.CaseType.UNALLOCATED_PLOTS)
+    case = _make_case(community)
     for index in range(5):
         ApprovedDesignPlot.objects.create(
             case=case, plot_type="division_plot", owner=_make_person(f"ID-{index}")
@@ -1008,3 +1006,17 @@ def test_migration_0027_preserves_owner_and_comments():
     finally:
         executor = MigrationExecutor(connection)
         executor.migrate(executor.loader.graph.leaf_nodes())
+
+
+@pytest.mark.django_db
+def test_announcement_stages_have_wizard_prev_next_navigation(community, staff_client):
+    cycle = _cycle(community, published=True)
+    url = reverse("announcements:detail", args=[cycle.pk])
+    details = staff_client.get(url, {"stage": "details"}).content.decode()
+    assert "data-stage-prev" not in details
+    assert 'data-stage-next="submission"' in details
+    assert 'form="announcement-details-form"' in details
+    submission = staff_client.get(url, {"stage": "submission"}).content.decode()
+    assert 'data-stage-prev="details"' in submission
+    assert "data-stage-next-disabled" in submission
+    assert "data-save-announcement-details" not in submission

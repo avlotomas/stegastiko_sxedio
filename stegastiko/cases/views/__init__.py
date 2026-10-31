@@ -15,7 +15,7 @@ from cases.views.communications import (
     case_deficiency_email_send,
     land_plot_email_send,
 )
-from cases.views.completion import case_complete
+from cases.views.completion import case_complete, case_completion_readiness
 from cases.views.folder import case_create, case_detail, case_history, case_list
 from cases.views.grids import (
     CONSULTATION_GRIDS,
@@ -52,6 +52,7 @@ __all__ = [
     "case_attachment_download",
     "case_communication_detail",
     "case_complete",
+    "case_completion_readiness",
     "case_create",
     "case_deficiency_email_send",
     "case_detail",

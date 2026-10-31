@@ -7,37 +7,28 @@
     </div>
     {% endif %}
 
-    <form method="post" action="{% url 'announcements:detail' cycle.pk %}?stage=details" class="app-form" novalidate data-scroll-anchor="details">
+    <form method="post" action="{% url 'announcements:detail' cycle.pk %}?stage=details" class="app-form" id="announcement-details-form" novalidate data-scroll-anchor="details">
         {% csrf_token %}
 
         <div class="card">
-            <h2 class="card__title">1. Στοιχεία γνωστοποίησης (9.1){% if stage_done.details %} <span class="badge badge--pass">Ολοκληρώθηκε</span>{% endif %}</h2>
+            <h2 class="card__title">Στοιχεία γνωστοποίησης</h2>
             {% if cycle_form.non_field_errors %}
             <div class="alert alert--error">
                 {% for error in cycle_form.non_field_errors %}{{ error }}{% endfor %}
             </div>
             {% endif %}
-            <div class="form-grid">
+            <div class="form-grid form-grid--align-inputs">
                 {% include "includes/form_field.html" with field=cycle_form.announcement_date %}
                 {% include "includes/form_field.html" with field=cycle_form.submission_months %}
             </div>
             <h3 class="form-section-title">Οικόπεδα της γνωστοποίησης</h3>
             {% include "plots/_plot_picker.html" with form=cycle_form %}
         </div>
-
-        <div class="card">
-            <div class="form-actions" style="margin-top: 0; padding-top: 0; border-top: none;">
-                {% if access.announcements.edit %}
-                <button type="submit" class="btn btn-primary" data-save-announcement-details>Αποθήκευση</button>
-                {% endif %}
-                <a href="{% url 'announcements:export' cycle.pk %}" class="btn btn-secondary">Export</a>
-                <a href="{% url 'announcements:list' %}" class="btn btn-secondary" data-embed-skip>Πίσω στις γνωστοποιήσεις</a>
-            </div>
-        </div>
+        {# Η «Αποθήκευση» βρίσκεται στη μπάρα πλοήγησης σταδίων (plots/_stage_wizard_nav.html). #}
     </form>
 
     <div class="card" data-publication-container>
-        <h2 class="card__title">9.2 Τρόποι δημοσίευσης / γνωστοποίησης</h2>
+        <h2 class="card__title">Τρόποι δημοσίευσης / γνωστοποίησης</h2>
         <p class="helptext">Για τους τέσσερις τρόπους ορίστε απευθείας στον πίνακα την ημερομηνία (προαιρετικά, μία φορά ο καθένας)· «Άλλο» μπορεί να προστεθεί πολλές φορές, με ημερομηνία και σχόλια.</p>
         <div data-publication-status></div>
         {% include "plots/_publication_grid.html" %}
@@ -52,7 +43,7 @@
     {% if not cycle.is_published %}
     {% if access.announcements.edit or access.announcements.publish %}
     <div class="card" data-scroll-anchor="publish">
-        <h2 class="card__title">Ενέργειες ανακοίνωσης (9.3)</h2>
+        <h2 class="card__title">Ενέργειες ανακοίνωσης</h2>
         <div class="toolbar">
             {% if access.announcements.publish %}
             <form method="post" action="{% url 'announcements:publish' cycle.pk %}">

@@ -11,7 +11,6 @@ from cases import section_refs as refs
 from cases.forms import CaseCreateForm
 from cases.models import ApprovedDesignPlot, Case, Consultation
 from cases.services import (
-    case_communications,
     completion_readiness,
     create_case,
     section8_completion,
@@ -33,12 +32,9 @@ def case_list(request):
     cases = Case.objects.with_list_data()
     communities = Community.objects.filter(is_active=True).order_by("name")
     community_id = request.GET.get("community_id") or ""
-    case_type = request.GET.get("case_type") or ""
     q = (request.GET.get("q") or "").strip()
     if community_id:
         cases = cases.filter(community_id=community_id)
-    if case_type:
-        cases = cases.filter(case_type=case_type)
     if q:
         cases = cases.filter(case_number__icontains=q)
     page = Paginator(cases, CASE_LIST_PAGE_SIZE).get_page(request.GET.get("page"))
@@ -54,8 +50,6 @@ def case_list(request):
             "filter_query": filter_query.urlencode(),
             "communities": communities,
             "community_id": community_id,
-            "case_type": case_type,
-            "case_types": Case.CaseType.choices,
             "q": q,
         },
     )
@@ -98,8 +92,8 @@ def case_detail(request, pk):
         {
             "case": case,
             "case_nav": case_nav_items(case, request.user),
-            "suitability_summary": suitability_summary(case) if case.is_new_division else None,
-            "completeness_checks": case.completeness_checks.all(),
+            "suitability_summary": suitability_summary(case),
+            "completeness_checks": case.completeness_checks.prefetch_related("communications"),
             "land_plots": case.land_plots.prefetch_related("attachments"),
             "utility_services": case_utility_services(case),
             "technical_attachments": case.attachments.filter(
@@ -122,7 +116,6 @@ def case_detail(request, pk):
             "completion": section8_completion(case),
             "readiness": completion_readiness(case),
             "generated_plots_count": case.plots.count(),
-            "communications": case_communications(case),
             "ministry_decision_rounds": case.ministry_decision_rounds.prefetch_related(
                 "attachments"
             ),

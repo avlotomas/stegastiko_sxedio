@@ -154,7 +154,6 @@
     <tr><td class="label">Κοινότητα / Δ.Δ.</td><td>{{ case.community.name }}</td></tr>
     <tr><td class="label">Επαρχία</td><td>{{ case.community.district|default:"—" }}</td></tr>
     <tr><td class="label">Αρ. υπόθεσης</td><td>{{ case.case_number }}</td></tr>
-    <tr><td class="label">Τύπος διαδικασίας</td><td>{{ case.get_case_type_display }}</td></tr>
 </table>
 
 {% if inc.6_1 %}

@@ -10,25 +10,10 @@
     <span>{{ cycle.communities_label }} — {{ cycle.announcement_date }}</span>
 </nav>
 
-<div class="page-header">
+<div class="page-header page-header--with-actions">
     <h1>Γνωστοποίηση έναρξης αιτήσεων</h1>
-    {% if selected_stage == 'details' %}
-    <p class="page-header__lead">
-        {{ cycle.communities_label }} · <span data-ui-text>γνωστοποίηση</span> {{ cycle.announcement_date }} · <span data-ui-text>προθεσμία</span>
-        {{ cycle.submission_months }} <span data-ui-text>μήνες, έως</span> {{ cycle.submission_end_date }} · <span data-ui-text>διαθέσιμα οικόπεδα</span>
-        {{ cycle.available_plots_count }}
-        ·
-        {% if cycle.is_published %}
-        <span class="badge badge--pass" data-ui-suffix=" {{ cycle.published_at }}">Εκδόθηκε {{ cycle.published_at }}</span>
-        {% else %}
-        <span class="badge badge--pending">Προσχέδιο</span>
-        {% endif %}
-        ·
-        <span class="badge badge--{% if cycle.stage == 'closed' %}pass{% else %}pending{% endif %}" data-announcement-stage-badge>
-            {{ cycle.get_stage_display }}
-        </span>
-    </p>
-    {% endif %}
+    {# Export της ανακοίνωσης: αφορά όλη τη γνωστοποίηση, όχι μόνο το Στάδιο 1. #}
+    <a href="{% url 'announcements:export' cycle.pk %}" class="btn btn-secondary" data-export-announcement>Export ανακοίνωσης</a>
 </div>
 
 {% if selected_stage != 'details' %}
@@ -50,6 +35,10 @@
 </ol>
 
 {% include selected_stage_template %}
+{% if selected_stage != 'details' %}
+{# Το στάδιο 1 δεν έχει email: τα email αιτήσεων καταγράφονται από το στάδιο 2 και μετά. #}
 {% include "plots/_stage_emails_card.html" %}
 {% include "plots/_announcement_emails_dialog.html" %}
+{% endif %}
+{% include "plots/_stage_wizard_nav.html" %}
 {% endblock %}

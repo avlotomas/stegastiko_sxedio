@@ -183,6 +183,26 @@ def test_completion_is_allowed_when_the_case_is_not_ready(community):
 
 
 @pytest.mark.django_db
+def test_readiness_panel_links_each_pending_check(community, staff_client):
+    case = _ready_case(community, plots=())
+    readiness = completion_readiness(case)
+    assert "Υπό διαχωρισμό οικόπεδα (7.3)" in readiness["missing"]
+
+    section_7 = reverse("cases:section_edit", args=[case.pk, "7"])
+    page = staff_client.get(section_7).content.decode()
+    assert "data-case-readiness" in page
+    assert "completeness-panel is-incomplete" in page
+    assert f'href="{section_7}#subsection-7-6"' in page
+    assert 'id="subsection-7-6"' in page
+    assert reverse("cases:approved_design_plot_grid", args=[case.pk]) in page
+
+    _design_plot(case, "1")
+    response = staff_client.get(reverse("cases:completion_readiness", args=[case.pk]))
+    assert response.json()["ok"]
+    assert "completeness-panel is-complete" in response.json()["html"]
+
+
+@pytest.mark.django_db
 def test_completion_view(community, staff_client):
     case = _ready_case(community)
     detail = staff_client.get(reverse("cases:detail", args=[case.pk])).content.decode()

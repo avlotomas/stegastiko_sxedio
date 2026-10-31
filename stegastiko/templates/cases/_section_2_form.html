@@ -1,18 +1,15 @@
-{% comment %}Ενότητα 2 — πολλοί έλεγχοι, email ανά έλεγχο, σχόλια στην υπόθεση.{% endcomment %}
-{% load case_detail %}
-
-<h3 class="form-section-title">{% case_subsection_heading "2.1" %}</h3>
+{% comment %}
+Ενότητα 2 — ένα ενιαίο section: οι έλεγχοι πληρότητας με τα email ελλείψεων ως nested
+εγγραφές κάτω από κάθε γραμμή, και τα σχόλια της υπόθεσης από κάτω.
+{% endcomment %}
+<p class="helptext">
+    Καταχωρίστε κάθε έλεγχο πληρότητας. Όταν το αποτέλεσμα είναι ΟΧΙ, στείλτε τις ελλείψεις με
+    «Αποστολή Email» στη γραμμή του ελέγχου· τα απεσταλμένα email του εμφανίζονται ακριβώς
+    κάτω από αυτήν.
+</p>
 {% include "cases/_completeness_check_grid.html" %}
 <div data-completeness-check-status></div>
 
-<h3 class="form-section-title">{% case_subsection_heading "2.2" %}</h3>
-<p class="helptext">
-    Τα email ελλείψεων στέλνονται από τη γραμμή του αντίστοιχου ελέγχου (όταν το αποτέλεσμα είναι ΟΧΙ).
-</p>
-<h3 class="form-section-title">Ιστορικό απεσταλμένων email ελλείψεων</h3>
-{% include "cases/_deficiency_email_log.html" %}
-
-<h3 class="form-section-title">{% case_subsection_heading "2.3" %}</h3>
 <div class="form-grid form-span-all">
     {% include "includes/form_field.html" with field=form.section2_comments wide=True %}
 </div>

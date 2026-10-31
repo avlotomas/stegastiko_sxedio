@@ -1,0 +1,40 @@
+{# Πλοήγηση wizard μεταξύ των σταδίων της γνωστοποίησης: ‹ προηγούμενο · [Αποθήκευση στο Στάδιο 1] · επόμενο ›. #}
+<nav class="stage-wizard-nav" aria-label="Πλοήγηση σταδίων" data-stage-wizard-nav>
+    <div class="stage-wizard-nav__side">
+        {% if prev_stage %}
+        <a href="{% url 'announcements:detail' cycle.pk %}?stage={{ prev_stage.code }}" class="stage-wizard-nav__link" data-stage-prev="{{ prev_stage.code }}">
+            <span class="stage-wizard-nav__arrow" aria-hidden="true">&lsaquo;</span>
+            <span class="stage-wizard-nav__text">
+                <small data-ui-text>Προηγούμενο</small>
+                <span>{{ prev_stage.label }}</span>
+            </span>
+        </a>
+        {% endif %}
+    </div>
+    <div class="stage-wizard-nav__center">
+        {% if selected_stage == 'details' and access.announcements.edit %}
+        <button type="submit" form="announcement-details-form" class="btn btn-primary" data-save-announcement-details>Αποθήκευση</button>
+        {% endif %}
+    </div>
+    <div class="stage-wizard-nav__side stage-wizard-nav__side--end">
+        {% if next_stage %}
+        {% if next_stage.available %}
+        <a href="{% url 'announcements:detail' cycle.pk %}?stage={{ next_stage.code }}" class="stage-wizard-nav__link" data-stage-next="{{ next_stage.code }}">
+            <span class="stage-wizard-nav__text">
+                <small data-ui-text>Επόμενο</small>
+                <span>{{ next_stage.label }}</span>
+            </span>
+            <span class="stage-wizard-nav__arrow" aria-hidden="true">&rsaquo;</span>
+        </a>
+        {% else %}
+        <span class="stage-wizard-nav__link is-disabled" aria-disabled="true" title="Ενεργοποιείται μόλις ολοκληρωθεί το τρέχον στάδιο" data-stage-next-disabled>
+            <span class="stage-wizard-nav__text">
+                <small data-ui-text>Επόμενο</small>
+                <span>{{ next_stage.label }}</span>
+            </span>
+            <span class="stage-wizard-nav__arrow" aria-hidden="true">&rsaquo;</span>
+        </span>
+        {% endif %}
+        {% endif %}
+    </div>
+</nav>

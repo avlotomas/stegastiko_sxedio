@@ -5,7 +5,6 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
-from django.template.loader import render_to_string
 from django.utils import formats, timezone
 
 from cases import section_refs as refs
@@ -51,16 +50,11 @@ def case_deficiency_email_send(request, pk, check_id):
     if wants_json(request):
         if not communication:
             return JsonResponse({"ok": False, "errors": errors}, status=400)
-        log_html = render_to_string(
-            "cases/_deficiency_email_log.html",
-            {"case": case, "communications": case_communications(case)},
-            request=request,
-        )
+        # The emails are listed inside their check's row, so the grid is the whole refresh.
         return JsonResponse(
             {
                 "ok": True,
                 "message": message,
-                "log_html": log_html,
                 "grid_html": COMPLETENESS_CHECKS.grid_html(request, case),
             }
         )
@@ -92,11 +86,7 @@ def land_plot_email_send(request, pk, plot_id):
     except ValidationError as exc:
         return JsonResponse({"ok": False, "errors": exc.messages}, status=400)
 
-    log_html = render_to_string(
-        "cases/_land_plot_email_log.html",
-        {"case": case, "land_plot_communications": land_plot_communications(case)},
-        request=request,
-    )
+    # The emails are nested under their plot's row, so the grid is the whole refresh.
     return JsonResponse(
         {
             "ok": True,
@@ -104,7 +94,6 @@ def land_plot_email_send(request, pk, plot_id):
                 f"Το email για το τεμάχιο {plot.parcel_number} στάλθηκε στο "
                 f"{communication.recipient}."
             ),
-            "log_html": log_html,
             "grid_html": LAND_PLOTS.grid_html(request, case),
         }
     )

@@ -1,6 +1,7 @@
 {% comment %}
 3.1 Land plot grid of the section 3 screen; re-rendered after every add/edit/delete/email.
-A rejected plot («Απορρίφθηκε» ΝΑΙ) stays listed but struck out.
+A rejected plot («Απορρίφθηκε» ΝΑΙ) stays listed but struck out. The emails about a plot are
+nested records right below its row.
 {% endcomment %}
 <div class="table-wrap" data-land-plot-grid>
     <table class="data-table">
@@ -39,7 +40,7 @@ A rejected plot («Απορρίφθηκε» ΝΑΙ) stays listed but struck out.
                     {% empty %}—{% endfor %}
                 </td>
                 <td>{{ plot.get_rejected_display }}</td>
-                <td>{{ plot.sent_emails_count }}</td>
+                <td>{% include "cases/_nested_emails_toggle.html" with owner=plot %}</td>
                 <td class="data-table__actions">
                     {% if access.case_section_3.edit %}
                     <button type="button" class="btn btn-secondary btn-sm"
@@ -75,6 +76,7 @@ A rejected plot («Απορρίφθηκε» ΝΑΙ) stays listed but struck out.
                     {% endif %}
                 </td>
             </tr>
+            {% include "cases/_nested_email_rows.html" with owner=plot colspan=13 %}
         {% empty %}
             <tr><td colspan="13">Δεν έχουν καταχωριστεί τεμάχια.</td></tr>
         {% endfor %}
