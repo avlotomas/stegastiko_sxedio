@@ -1,7 +1,7 @@
 #!/bin/sh
 # Server side of the automatic deploy (.github/workflows/deploy.yml). Runs after the checkout
-# has been moved to origin/main: backs up the database, rebuilds the containers, waits for the
-# migrations (run by deploy/entrypoint.sh) to finish.
+# has been moved to the release tag: backs up the database, rebuilds the containers, waits for
+# the migrations (run by deploy/entrypoint.sh) to finish.
 set -e
 cd "$(dirname "$0")/.."
 
@@ -31,4 +31,4 @@ until docker compose exec -T web python manage.py migrate --check >/dev/null 2>&
 done
 
 docker image prune -f >/dev/null
-echo "Deployed $(git rev-parse --short HEAD)"
+echo "Deployed $(git describe --tags --always)"

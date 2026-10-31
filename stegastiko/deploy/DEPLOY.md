@@ -143,18 +143,29 @@ git pull                        # ή νέο tar.gz όπως στο βήμα 3
 docker compose up -d --build    # τα migrations τρέχουν αυτόματα
 ```
 
-## 9. Αυτόματο deploy σε κάθε push στο `main` (GitHub Actions)
+## 9. Αυτόματο deploy με tag έκδοσης (GitHub Actions)
 
-Το [.github/workflows/deploy.yml](../../.github/workflows/deploy.yml), σε κάθε push στο `main`:
+Το [.github/workflows/deploy.yml](../../.github/workflows/deploy.yml):
 
-1. τρέχει τις δοκιμές (`pytest tests`)· αν αποτύχουν, **δεν** γίνεται deploy,
-2. συνδέεται με SSH στον server, που εκτελεί **μόνο** την εντολή deploy:
-   `git checkout origin/main` → backup βάσης (`~/backups/pre-deploy-*.sql.gz`, κρατά τα 10
-   τελευταία) → `docker compose up -d --build` → τα migrations εφαρμόζονται αυτόματα
-   ([deploy.sh](deploy.sh)),
-3. ελέγχει ότι το site απαντά.
+| Γεγονός | Δοκιμές | Deploy |
+|---|---|---|
+| push / pull request στο `main` | ✅ | ❌ |
+| tag έκδοσης `1.2.3` ή `v1.2.3` | ✅ | ✅ (μόνο αν περάσουν οι δοκιμές) |
+| tag με `beta` (π.χ. `1.2.0-beta`, `1.2.0beta1`) ή άλλη μορφή | ❌ | ❌ |
 
-Χειροκίνητη εκτέλεση: GitHub → *Actions* → *Deploy* → *Run workflow*.
+Για release:
+
+```bash
+git tag 1.2.3
+git push origin 1.2.3
+```
+
+Στο deploy ο server εκτελεί **μόνο** την εντολή deploy για το συγκεκριμένο tag:
+`git checkout <tag>` → backup βάσης (`~/backups/pre-deploy-*.sql.gz`, κρατά τα 10 τελευταία) →
+`docker compose up -d --build` → τα migrations εφαρμόζονται αυτόματα ([deploy.sh](deploy.sh)) →
+έλεγχος ότι το site απαντά.
+
+Επανάληψη deploy ενός tag: GitHub → *Actions* → *CI / Deploy* → *Run workflow* → επιλογή του tag.
 
 ### Ρύθμιση (μία φορά)
 
@@ -167,11 +178,13 @@ ssh-keygen -t ed25519 -N "" -C github-deploy -f github-deploy
 **β. Δημόσιο κλειδί στον server, περιορισμένο στην εντολή deploy** — στον server:
 
 ```bash
-echo 'command="cd ~/nantia && git fetch -q origin main && git checkout -q -f -B main origin/main && sh stegastiko/deploy/deploy.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty <περιεχόμενο του github-deploy.pub>' >> ~/.ssh/authorized_keys
+cat >> ~/.ssh/authorized_keys <<'EOF'
+command="cd ~/nantia && t=\"$SSH_ORIGINAL_COMMAND\" && echo \"$t\" | grep -Eqx 'v?[0-9]+[.][0-9]+[.][0-9]+' && git fetch -q --force --tags origin && git checkout -q -f \"refs/tags/$t\" && sh stegastiko/deploy/deploy.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty <περιεχόμενο του github-deploy.pub>
+EOF
 ```
 
-Με το `command="…"`, ακόμη κι αν διαρρεύσει το κλειδί, το μόνο που επιτρέπει είναι ένα deploy
-του `origin/main`.
+Με το `command="…"`, ακόμη κι αν διαρρεύσει το κλειδί, το μόνο που επιτρέπει είναι deploy ενός
+υπάρχοντος tag έκδοσης.
 
 **γ. Ιδιωτικό κλειδί ως secret στο GitHub** — από τον φάκελο του repo:
 
