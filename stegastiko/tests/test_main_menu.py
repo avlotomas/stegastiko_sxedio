@@ -82,3 +82,15 @@ def test_menu_labels_page_follows_branding_access(client, make_user):
 
     client.force_login(make_user("officer", "Λειτουργός καταχώρισης"))
     assert client.get(reverse("system_settings_menu_labels")).status_code == 403
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("configured", "shown"),
+    [("1.1.0", "v1.1.0"), ("v2.0.3", "v2.0.3"), ("dev", "dev")],
+)
+def test_header_shows_app_version(client, make_user, settings, configured, shown):
+    settings.APP_VERSION = configured
+    client.force_login(make_user("viewer", "Προϊστάμενος ελέγχου"))
+    nav = _nav(client.get(reverse("home")).content.decode())
+    assert f'title="Έκδοση εφαρμογής">{shown}</span>' in nav

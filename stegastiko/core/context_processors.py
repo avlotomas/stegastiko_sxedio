@@ -1,3 +1,5 @@
+from django.conf import settings
+
 from core.branding import get_app_subtitle, get_app_title
 from core.menu_labels import get_menu_labels
 from core.permissions import AccessProxy
@@ -9,6 +11,14 @@ from core.ui_texts import (
 )
 
 
+def display_version(version):
+    """Release tags (1.1.0 or v1.1.0) show as v1.1.0; anything else (dev, a commit) as is."""
+    number = version.removeprefix("v")
+    if number[:1].isdigit():
+        return f"v{number}"
+    return version
+
+
 def ui_flags(request):
     context = {
         "app_title": get_app_title(),
@@ -18,6 +28,7 @@ def ui_flags(request):
         "can_edit_ui_texts": False,
         "ui_edit_mode": False,
         "is_embed": bool(getattr(request, "is_embed", False)),
+        "app_version": display_version(settings.APP_VERSION),
     }
     if request.user.is_authenticated:
         context["access"] = AccessProxy(request.user)

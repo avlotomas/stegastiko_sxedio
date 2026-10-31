@@ -272,6 +272,13 @@ img {
     background: rgba(255, 255, 255, 0.22);
 }
 
+.site-nav__version {
+    font-size: 0.72rem;
+    opacity: 0.75;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
 @media (max-width: 900px) {
     .nav-toggle {
         display: block;

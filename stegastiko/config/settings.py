@@ -153,6 +153,9 @@ EMAIL_BACKEND = env(
     "DJANGO_EMAIL_BACKEND", default="django.core.mail.backends.smtp.EmailBackend"
 )
 
+# Release shown in the site header; deploy/deploy.sh sets it to the git tag (e.g. 1.1.0).
+APP_VERSION = env("APP_VERSION", default="dev")
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,

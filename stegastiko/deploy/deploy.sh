@@ -16,6 +16,14 @@ echo "Backup: $backup"
 # Keep the 10 most recent pre-deploy backups.
 ls -1t "$HOME"/backups/pre-deploy-*.sql.gz | tail -n +11 | xargs -r rm --
 
+# Shown in the site header (settings.APP_VERSION); kept in .env so a manual `up` keeps it.
+version=$(git describe --tags --always)
+if grep -q '^APP_VERSION=' .env; then
+    sed -i "s/^APP_VERSION=.*/APP_VERSION=$version/" .env
+else
+    echo "APP_VERSION=$version" >> .env
+fi
+
 docker compose up -d --build
 
 tries=0
